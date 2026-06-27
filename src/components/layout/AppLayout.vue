@@ -8,7 +8,6 @@ const appStore = useAppStore();
 
 <template>
   <div class="flex flex-col h-screen overflow-hidden">
-    <!-- Header -->
     <header
       class="flex items-center px-6 py-3 border-b shrink-0"
       style="border-color: var(--c-border); background: var(--c-surface);"
@@ -24,39 +23,31 @@ const appStore = useAppStore();
       </span>
 
       <div class="ml-auto flex items-center gap-2">
-        <!-- Theme toggle -->
         <button
           class="text-sm px-2 py-1 rounded cursor-pointer hover:opacity-80"
           style="color: var(--c-text-secondary);"
           @click="appStore.setTheme(appStore.resolvedTheme === 'dark' ? 'light' : 'dark')"
-          :title="appStore.resolvedTheme === 'dark' ? '☀️' : '🌙'"
         >
-          {{ appStore.resolvedTheme === 'dark' ? '☀️' : '🌙' }}
+          {{ appStore.resolvedTheme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19' }}
         </button>
-
-        <!-- Settings -->
         <button
           class="text-sm px-2 py-1 rounded cursor-pointer hover:opacity-80"
           style="color: var(--c-text-secondary);"
           @click="appStore.showSettings = true"
           :title="t('app.settings')"
         >
-          ⚙
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
         </button>
       </div>
     </header>
 
-    <!-- Content -->
-    <div class="flex flex-1 overflow-hidden">
-      <div class="w-1/2 border-r overflow-y-auto p-4" style="border-color: var(--c-border);">
-        <slot name="left" />
-      </div>
-      <div class="w-1/2 overflow-y-auto p-4" style="background: var(--c-surface);">
-        <slot name="right" />
-      </div>
+    <div class="flex-1 overflow-y-auto p-5" style="background: var(--c-bg);">
+      <slot />
     </div>
 
-    <!-- Bottom bar -->
     <div class="shrink-0">
       <slot name="bottom" />
     </div>

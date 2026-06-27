@@ -77,7 +77,7 @@ onMounted(async () => {
           </div>
           <div
             v-else
-            class="prose prose-sm max-w-none"
+            class="markdown-body"
             style="color: var(--c-text);"
             v-html="renderedHtml"
           />

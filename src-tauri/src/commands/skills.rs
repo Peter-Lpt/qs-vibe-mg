@@ -3,24 +3,24 @@ use std::fs;
 use std::path::Path;
 
 use crate::errors::VabError;
+use crate::models::dashboard::{
+    DashboardAgent, DashboardData, DashboardSkill, DashboardStats, SharedSkillInfo,
+};
 use crate::models::skill::{Skill, SkillSource};
 use crate::parsers::skill_md::parse_skill_md_full;
 use crate::utils::config::{build_agents_from_config, load_config};
 use crate::utils::fs as vab_fs;
-use crate::utils::history::{record_action};
+use crate::utils::history::record_action;
 use crate::utils::path::vab_skills_dir;
 use crate::models::history::HistoryAction;
 
-/// 扫描所有 skill 来源：~/.vab-skills/ + 各 agent 目录，合并去重
 #[tauri::command]
 pub fn list_skills() -> Result<Vec<Skill>, VabError> {
     let mut map: HashMap<String, SkillEntry> = HashMap::new();
 
-    // 1. 扫描 ~/.vab-skills/
     let vab_dir = vab_skills_dir()?;
     scan_directory(&vab_dir, "vab-lib", &mut map)?;
 
-    // 2. 扫描所有 agent 的 skills 目录
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
 
@@ -32,7 +32,6 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
         scan_directory(agent_dir, &agent.id, &mut map)?;
     }
 
-    // 3. 构建结果
     let mut skills: Vec<Skill> = map
         .into_iter()
         .map(|(id, entry)| {
@@ -59,19 +58,280 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
     Ok(skills)
 }
 
-/// 预览 SKILL.md 内容
 #[tauri::command]
-pub fn preview_skill(skill_id: String) -> Result<String, VabError> {
-    let skill_path = vab_skills_dir()?.join(&skill_id).join("SKILL.md");
-
-    if !skill_path.exists() {
-        return Err(VabError::SkillNotFound { skill_id });
+pub fn search_skills(query: String) -> Result<Vec<Skill>, VabError> {
+    let all_skills = list_skills()?;
+    if query.trim().is_empty() {
+        return Ok(all_skills);
     }
 
-    fs::read_to_string(&skill_path).map_err(VabError::Io)
+    let q = query.to_lowercase();
+    let results: Vec<Skill> = all_skills
+        .into_iter()
+        .filter(|s| s.name.to_lowercase().contains(&q))
+        .collect();
+
+    Ok(results)
 }
 
-/// 安装 skill（从外部路径复制到 ~/.vab-skills/）
+#[tauri::command]
+pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
+    let config = load_config()?;
+    let agents = build_agents_from_config(&config)?;
+    let vab_dir = vab_skills_dir()?;
+
+    let mut agent_skills: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    let mut all_skill_agents: HashMap<String, Vec<String>> = HashMap::new();
+
+    for agent in &agents {
+        if !agent.detected {
+            continue;
+        }
+        let skills_dir = Path::new(&agent.skills_dir);
+        if !skills_dir.exists() {
+            continue;
+        }
+
+        let mut skills = Vec::new();
+        collect_skills_recursive(skills_dir, skills_dir, &mut skills, &mut all_skill_agents, &agent.id);
+
+        agent_skills.insert(agent.id.clone(), skills);
+    }
+
+    let shared_skills: Vec<SharedSkillInfo> = all_skill_agents
+        .iter()
+        .filter(|(_, agent_ids)| agent_ids.len() > 1)
+        .map(|(skill_id, agent_ids)| {
+            let skill_name = agent_skills
+                .values()
+                .flatten()
+                .find(|(id, _)| id == skill_id)
+                .map(|(_, name)| name.clone())
+                .unwrap_or_else(|| skill_id.clone());
+
+            SharedSkillInfo {
+                skill_id: skill_id.clone(),
+                skill_name,
+                agent_ids: agent_ids.clone(),
+            }
+        })
+        .collect();
+
+    let mut total_skills: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut per_agent_count: HashMap<String, usize> = HashMap::new();
+
+    let dashboard_agents: Vec<DashboardAgent> = agents
+        .iter()
+        .filter(|a| a.detected)
+        .map(|agent| {
+            let skills = agent_skills.get(&agent.id).cloned().unwrap_or_default();
+            let skill_count = skills.len();
+            per_agent_count.insert(agent.id.clone(), skill_count);
+
+            let dashboard_skills: Vec<DashboardSkill> = skills
+                .iter()
+                .map(|(skill_id, skill_name)| {
+                    total_skills.insert(skill_id.clone());
+                    let shared_with: Vec<String> = all_skill_agents
+                        .get(skill_id)
+                        .map(|ids| {
+                            ids.iter()
+                                .filter(|id| *id != &agent.id)
+                                .cloned()
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    DashboardSkill {
+                        skill_id: skill_id.clone(),
+                        skill_name: skill_name.clone(),
+                        shared_with,
+                    }
+                })
+                .collect();
+
+            DashboardAgent {
+                agent_id: agent.id.clone(),
+                agent_name: agent.name.clone(),
+                skill_count,
+                skills: dashboard_skills,
+            }
+        })
+        .collect();
+
+    let mut vab_skills = Vec::new();
+    if vab_dir.exists() {
+        collect_vab_skills(&vab_dir, &mut vab_skills, &all_skill_agents, &mut total_skills);
+    }
+
+    let mut all_agents = dashboard_agents;
+    if !vab_skills.is_empty() {
+        all_agents.insert(
+            0,
+            DashboardAgent {
+                agent_id: "vab-lib".to_string(),
+                agent_name: "VAB Library".to_string(),
+                skill_count: vab_skills.len(),
+                skills: vab_skills,
+            },
+        );
+    }
+
+    let stats = DashboardStats {
+        total_skills: total_skills.len(),
+        shared_count: shared_skills.len(),
+        per_agent_count,
+    };
+
+    Ok(DashboardData {
+        agents: all_agents,
+        shared_skills,
+        stats,
+    })
+}
+
+fn collect_skills_recursive(
+    base_dir: &Path,
+    dir: &Path,
+    skills: &mut Vec<(String, String)>,
+    all_skill_agents: &mut HashMap<String, Vec<String>>,
+    agent_id: &str,
+) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if name.starts_with('.') {
+                continue;
+            }
+
+            let skill_md_path = path.join("SKILL.md");
+            if skill_md_path.exists() {
+                let id = name.clone();
+                let skill_name = parse_skill_md_full(&skill_md_path)
+                    .map(|(n, _, _, _, _, _)| n)
+                    .unwrap_or_else(|_| id.clone());
+
+                all_skill_agents
+                    .entry(id.clone())
+                    .or_default()
+                    .push(agent_id.to_string());
+                skills.push((id, skill_name));
+            } else {
+                collect_skills_recursive(base_dir, &path, skills, all_skill_agents, agent_id);
+            }
+        }
+    }
+}
+
+fn collect_vab_skills(
+    dir: &Path,
+    vab_skills: &mut Vec<DashboardSkill>,
+    all_skill_agents: &HashMap<String, Vec<String>>,
+    total_skills: &mut std::collections::HashSet<String>,
+) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let id = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if id.starts_with('.') || id == ".vab-config.json" || id == ".vab-history.json" {
+                continue;
+            }
+
+            let skill_md_path = path.join("SKILL.md");
+            if skill_md_path.exists() {
+                let name = parse_skill_md_full(&skill_md_path)
+                    .map(|(n, _, _, _, _, _)| n)
+                    .unwrap_or_else(|_| id.clone());
+
+                total_skills.insert(id.clone());
+
+                let shared_with: Vec<String> = all_skill_agents
+                    .get(&id)
+                    .map(|ids| ids.clone())
+                    .unwrap_or_default();
+
+                vab_skills.push(DashboardSkill {
+                    skill_id: id,
+                    skill_name: name,
+                    shared_with,
+                });
+            } else {
+                collect_vab_skills(&path, vab_skills, all_skill_agents, total_skills);
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub fn preview_skill(skill_id: String) -> Result<String, VabError> {
+    // 搜索所有可能的位置：vab-skills + 各 agent 目录
+    let vab_dir = vab_skills_dir()?;
+    let vab_path = vab_dir.join(&skill_id).join("SKILL.md");
+    if vab_path.exists() {
+        return fs::read_to_string(&vab_path).map_err(VabError::Io);
+    }
+
+    let config = load_config()?;
+    let agents = build_agents_from_config(&config)?;
+    for agent in &agents {
+        if !agent.detected {
+            continue;
+        }
+        let agent_path = Path::new(&agent.skills_dir).join(&skill_id).join("SKILL.md");
+        if agent_path.exists() {
+            return fs::read_to_string(&agent_path).map_err(VabError::Io);
+        }
+        // 递归搜索子目录
+        if let Ok(content) = find_skill_md_recursive(&Path::new(&agent.skills_dir), &skill_id) {
+            return Ok(content);
+        }
+    }
+
+    Err(VabError::SkillNotFound { skill_id })
+}
+
+fn find_skill_md_recursive(dir: &Path, skill_id: &str) -> Result<String, VabError> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if name == skill_id {
+            let skill_md = path.join("SKILL.md");
+            if skill_md.exists() {
+                return fs::read_to_string(&skill_md).map_err(VabError::Io);
+            }
+        }
+        if name.starts_with('.') {
+            continue;
+        }
+        if let Ok(content) = find_skill_md_recursive(&path, skill_id) {
+            return Ok(content);
+        }
+    }
+    Err(VabError::SkillNotFound {
+        skill_id: skill_id.to_string(),
+    })
+}
+
 #[tauri::command]
 pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
     let source = Path::new(&source_path);
@@ -81,7 +341,6 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
         });
     }
 
-    // 解析 SKILL.md 获取 name
     let skill_md = source.join("SKILL.md");
     if !skill_md.exists() {
         return Err(VabError::InvalidSkillMd {
@@ -92,7 +351,6 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
     let (name, description, license, compatibility, metadata, _body) =
         parse_skill_md_full(&skill_md)?;
 
-    // 使用 name 作为目录名
     let vab_dir = vab_skills_dir()?;
     let dest = vab_dir.join(&name);
 
@@ -100,13 +358,10 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
         return Err(VabError::SkillAlreadyExists { skill_id: name });
     }
 
-    // 复制整个目录
     copy_dir_all(source, &dest)?;
 
-    // 记录历史
     let _ = record_action(HistoryAction::Install, &name, None, None);
 
-    // 返回安装的 skill 信息
     let modified_at = get_modified_at(&dest);
     Ok(Skill {
         id: name.clone(),
@@ -128,7 +383,6 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
     })
 }
 
-/// 删除 skill（从 ~/.vab-skills/ 删除）
 #[tauri::command]
 pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
     let skill_path = vab_skills_dir()?.join(&skill_id);
@@ -137,7 +391,6 @@ pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
         return Err(VabError::SkillNotFound { skill_id });
     }
 
-    // 先删除所有 agent 的 symlink
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
     for agent in &agents {
@@ -147,16 +400,13 @@ pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
         }
     }
 
-    // 删除 skill 目录
     fs::remove_dir_all(&skill_path)?;
 
-    // 记录历史
     let _ = record_action(HistoryAction::Delete, &skill_id, None, None);
 
     Ok(())
 }
 
-/// 临时结构，用于合并
 struct SkillEntry {
     name: String,
     description: String,
@@ -171,7 +421,7 @@ struct SkillEntry {
     modified_at: String,
 }
 
-/// 扫描一个目录下的所有子文件夹作为 skill
+/// 递归扫描目录，找到所有包含 SKILL.md 的子目录
 fn scan_directory(
     dir: &Path,
     source_id: &str,
@@ -199,44 +449,45 @@ fn scan_directory(
         }
 
         let skill_md_path = path.join("SKILL.md");
-        let (name, description, license, compatibility, metadata, _body) =
-            if skill_md_path.exists() {
+        if skill_md_path.exists() {
+            // 找到 skill，解析并加入 map
+            let (name, description, license, compatibility, metadata, _body) =
                 parse_skill_md_full(&skill_md_path)
-                    .unwrap_or_else(|_| (id.clone(), String::new(), None, None, None, String::new()))
-            } else {
-                (id.clone(), String::new(), None, None, None, String::new())
+                    .unwrap_or_else(|_| (id.clone(), String::new(), None, None, None, String::new()));
+
+            let source = SkillSource {
+                from: source_id.to_string(),
+                path: path.to_string_lossy().to_string(),
             };
 
-        let source = SkillSource {
-            from: source_id.to_string(),
-            path: path.to_string_lossy().to_string(),
-        };
+            let modified_at = get_modified_at(&path);
 
-        let modified_at = get_modified_at(&path);
-
-        map.entry(id.clone())
-            .and_modify(|e| {
-                e.sources.push(source.clone());
-            })
-            .or_insert_with(|| SkillEntry {
-                name,
-                description,
-                path: path.to_string_lossy().to_string(),
-                sources: vec![source],
-                license,
-                compatibility,
-                metadata,
-                has_scripts: path.join("scripts").is_dir(),
-                has_references: path.join("references").is_dir(),
-                has_assets: path.join("assets").is_dir(),
-                modified_at,
-            });
+            map.entry(id.clone())
+                .and_modify(|e| {
+                    e.sources.push(source.clone());
+                })
+                .or_insert_with(|| SkillEntry {
+                    name,
+                    description,
+                    path: path.to_string_lossy().to_string(),
+                    sources: vec![source],
+                    license,
+                    compatibility,
+                    metadata,
+                    has_scripts: path.join("scripts").is_dir(),
+                    has_references: path.join("references").is_dir(),
+                    has_assets: path.join("assets").is_dir(),
+                    modified_at,
+                });
+        } else {
+            // 不是 skill 目录，递归扫描子目录
+            scan_directory(&path, source_id, map)?;
+        }
     }
 
     Ok(())
 }
 
-/// 检查指定 skill 关联了哪些 agent
 fn find_linked_agents(skill_id: &str, agents: &[crate::models::agent::Agent]) -> Vec<String> {
     let mut linked = Vec::new();
 
@@ -260,7 +511,6 @@ fn find_linked_agents(skill_id: &str, agents: &[crate::models::agent::Agent]) ->
     linked
 }
 
-/// 递归复制目录
 fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), VabError> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
@@ -276,7 +526,6 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), VabError> {
     Ok(())
 }
 
-/// 获取目录的最后修改时间
 fn get_modified_at(path: &Path) -> String {
     use std::time::UNIX_EPOCH;
 

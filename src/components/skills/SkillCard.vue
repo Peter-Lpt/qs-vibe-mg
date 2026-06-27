@@ -13,22 +13,8 @@ const props = defineProps<{
 
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
-const showDropdown = ref(false);
-const linking = ref(false);
 const showPreview = ref(false);
 const showDeleteConfirm = ref(false);
-
-async function handleLink(agentId: string) {
-  linking.value = true;
-  try {
-    await skillsStore.createLink(props.skill.id, agentId);
-  } catch (e: unknown) {
-    alert(String(e));
-  } finally {
-    linking.value = false;
-    showDropdown.value = false;
-  }
-}
 
 async function handleDelete() {
   try {
@@ -39,43 +25,41 @@ async function handleDelete() {
   }
 }
 
-const availableAgents = () =>
-  props.agents.filter(
-    (a) => a.detected && !props.skill.linked_agents.includes(a.id)
-  );
+const agentTags = () =>
+  props.skill.sources
+    .filter((s) => s.from !== "vab-lib")
+    .map((s) => {
+      const agent = props.agents.find((a) => a.id === s.from);
+      return agent ? agent.name : s.from;
+    });
 
-const sourceLabel = (from: string) => {
-  if (from === "vab-lib") return "Library";
-  const agent = props.agents.find((a) => a.id === from);
-  return agent ? agent.name : from;
-};
+const tagColors = [
+  { bg: "#dbeafe", text: "#1e40af" },
+  { bg: "#f3e8ff", text: "#7c3aed" },
+  { bg: "#dcfce7", text: "#166534" },
+  { bg: "#fef3c7", text: "#92400e" },
+  { bg: "#ffe4e6", text: "#9f1239" },
+  { bg: "#e0f2fe", text: "#075985" },
+  { bg: "#f0fdf4", text: "#166534" },
+];
 
-const isSelected = () => skillsStore.selectedIds.has(props.skill.id);
+function getTagColor(index: number) {
+  return tagColors[index % tagColors.length];
+}
 </script>
 
 <template>
   <div
-    class="rounded-lg p-4 border transition-all"
-    :style="{
-      background: isSelected() ? 'var(--c-surface-hover)' : 'var(--c-surface)',
-      borderColor: isSelected() ? 'var(--c-primary)' : 'var(--c-border)',
-    }"
+    class="rounded-lg p-4 border transition-all cursor-pointer hover:shadow-sm"
+    style="background: var(--c-surface); border-color: var(--c-border);"
+    @click="showPreview = true"
   >
     <div class="flex items-start gap-2">
-      <!-- Selection checkbox -->
-      <input
-        type="checkbox"
-        :checked="isSelected()"
-        @change="skillsStore.toggleSelect(skill.id)"
-        class="mt-1 cursor-pointer"
-      />
-
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
           <h3
-            class="text-sm font-semibold truncate cursor-pointer hover:underline"
+            class="text-sm font-semibold truncate"
             style="color: var(--c-text);"
-            @click="showPreview = true"
           >
             {{ skill.name }}
           </h3>
@@ -92,97 +76,36 @@ const isSelected = () => skillsStore.selectedIds.has(props.skill.id);
         </p>
       </div>
 
-      <!-- Actions -->
-      <div class="flex gap-1 shrink-0">
-        <button
-          class="text-xs px-1.5 py-0.5 rounded hover:opacity-80 cursor-pointer"
-          style="color: var(--c-primary);"
-          @click="showPreview = true"
-          :title="t('skills.preview')"
-        >
-          👁
-        </button>
-        <button
-          class="text-xs px-1.5 py-0.5 rounded hover:opacity-80 cursor-pointer"
-          style="color: var(--c-danger);"
-          @click="showDeleteConfirm = true"
-          :title="t('skills.delete')"
-        >
-          🗑
-        </button>
-      </div>
+      <button
+        class="text-xs px-1.5 py-0.5 rounded hover:opacity-80 cursor-pointer shrink-0"
+        style="color: var(--c-danger);"
+        @click.stop="showDeleteConfirm = true"
+        :title="t('skills.delete')"
+      >
+        &#128465;
+      </button>
     </div>
 
-    <!-- Sources -->
     <div class="flex flex-wrap gap-1 mt-2">
       <span
-        v-for="src in skill.sources"
-        :key="src.from"
+        v-for="(tag, idx) in agentTags()"
+        :key="tag"
         class="text-xs px-1.5 py-0.5 rounded"
         :style="{
-          background: src.from === 'vab-lib' ? '#dbeafe' : '#f3e8ff',
-          color: src.from === 'vab-lib' ? '#1e40af' : '#7c3aed',
+          background: getTagColor(idx).bg,
+          color: getTagColor(idx).text,
         }"
       >
-        {{ sourceLabel(src.from) }}
+        {{ tag }}
       </span>
     </div>
 
-    <!-- Linked agents -->
-    <div class="flex flex-wrap gap-1.5 mt-3">
-      <span
-        v-for="agentId in skill.linked_agents"
-        :key="agentId"
-        class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
-        style="background: #dcfce7; color: #166534;"
-      >
-        {{ agentId }}
-        <button
-          class="ml-0.5 hover:opacity-70 cursor-pointer"
-          style="color: #166534;"
-          @click="skillsStore.removeLink(skill.id, agentId)"
-          :title="t('skills.delete_link')"
-        >
-          ×
-        </button>
-      </span>
-
-      <!-- Link button -->
-      <div class="relative" v-if="availableAgents().length > 0">
-        <button
-          class="text-xs px-2 py-0.5 rounded-full border cursor-pointer hover:opacity-80"
-          style="border-color: var(--c-primary); color: var(--c-primary);"
-          @click="showDropdown = !showDropdown"
-          :disabled="linking"
-        >
-          + Link
-        </button>
-        <div
-          v-if="showDropdown"
-          class="absolute z-10 top-full left-0 mt-1 rounded-md shadow-lg border min-w-[140px]"
-          style="background: var(--c-surface); border-color: var(--c-border);"
-        >
-          <button
-            v-for="agent in availableAgents()"
-            :key="agent.id"
-            class="block w-full text-left px-3 py-1.5 text-xs hover:opacity-80 cursor-pointer"
-            style="color: var(--c-text);"
-            @click="handleLink(agent.id)"
-          >
-            {{ agent.name }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Preview dialog -->
     <SkillPreview
       v-if="showPreview"
       :skill="skill"
       @close="showPreview = false"
     />
 
-    <!-- Delete confirm dialog -->
     <ConfirmDialog
       v-if="showDeleteConfirm"
       :title="t('skills.delete')"

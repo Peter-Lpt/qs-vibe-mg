@@ -3,15 +3,11 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore, type Locale, type ThemeMode } from "../../stores/app";
 import { useAgentsStore } from "../../stores/agents";
+import { open } from "@tauri-apps/plugin-dialog";
 
 const { t } = useI18n();
 const appStore = useAppStore();
 const agentsStore = useAgentsStore();
-
-const showAddAgent = ref(false);
-const newAgentName = ref("");
-const newAgentDir = ref("");
-const addError = ref<string | null>(null);
 
 const themes: { value: ThemeMode; labelKey: string }[] = [
   { value: "system", labelKey: "settings.theme_system" },
@@ -25,6 +21,10 @@ const locales: { value: Locale; label: string }[] = [
   { value: "zh-TW", label: "繁體中文" },
 ];
 
+const showMigrateConfirm = ref(false);
+const pendingPath = ref("");
+const savingPath = ref(false);
+
 function handleThemeChange(mode: ThemeMode) {
   appStore.setTheme(mode);
 }
@@ -33,27 +33,32 @@ function handleLocaleChange(loc: Locale) {
   appStore.setLocale(loc);
 }
 
-async function handleAddAgent() {
-  addError.value = null;
-  if (!newAgentName.value.trim() || !newAgentDir.value.trim()) {
-    addError.value = "Name and path are required";
-    return;
-  }
+async function pickVabPath() {
   try {
-    await agentsStore.addCustomAgent(newAgentName.value.trim(), newAgentDir.value.trim());
-    newAgentName.value = "";
-    newAgentDir.value = "";
-    showAddAgent.value = false;
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: t("settings.pick_vab_path"),
+    });
+    if (selected) {
+      pendingPath.value = selected;
+      showMigrateConfirm.value = true;
+    }
   } catch (e: unknown) {
-    addError.value = String(e);
+    console.error("Failed to open directory picker:", e);
   }
 }
 
-async function handleRemoveAgent(agentId: string) {
+async function handleMigrate(migrate: boolean) {
+  savingPath.value = true;
   try {
-    await agentsStore.removeCustomAgent(agentId);
+    await agentsStore.setVabSkillsPath(pendingPath.value, migrate);
+    showMigrateConfirm.value = false;
+    pendingPath.value = "";
   } catch (e: unknown) {
     alert(String(e));
+  } finally {
+    savingPath.value = false;
   }
 }
 </script>
@@ -65,7 +70,7 @@ async function handleRemoveAgent(agentId: string) {
     @click.self="appStore.showSettings = false"
   >
     <div
-      class="rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto"
+      class="rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto"
       style="background: var(--c-surface); border: 1px solid var(--c-border);"
     >
       <div class="flex items-center justify-between p-4 border-b" style="border-color: var(--c-border);">
@@ -77,12 +82,11 @@ async function handleRemoveAgent(agentId: string) {
           style="color: var(--c-text-secondary);"
           @click="appStore.showSettings = false"
         >
-          ×
+          &times;
         </button>
       </div>
 
       <div class="p-4 space-y-4">
-        <!-- Theme -->
         <div>
           <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">
             {{ t('settings.theme') }}
@@ -104,7 +108,6 @@ async function handleRemoveAgent(agentId: string) {
           </div>
         </div>
 
-        <!-- Language -->
         <div>
           <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">
             {{ t('settings.language') }}
@@ -126,72 +129,56 @@ async function handleRemoveAgent(agentId: string) {
           </div>
         </div>
 
-        <!-- Custom Agents -->
         <div>
-          <div class="flex items-center justify-between mb-1.5">
-            <label class="text-xs font-medium" style="color: var(--c-text);">
-              {{ t('agents.add_custom') }}
-            </label>
-            <button
-              class="text-xs px-2 py-0.5 rounded border cursor-pointer hover:opacity-80"
-              style="border-color: var(--c-primary); color: var(--c-primary);"
-              @click="showAddAgent = !showAddAgent"
-            >
-              {{ showAddAgent ? t('settings.cancel') : '+' }}
-            </button>
-          </div>
-
-          <!-- Add agent form -->
-          <div
-            v-if="showAddAgent"
-            class="p-3 rounded-md border mb-3 space-y-2"
-            style="border-color: var(--c-border); background: var(--c-bg);"
+          <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">
+            {{ t('settings.vab_skills_path') }}
+          </label>
+          <p class="text-xs mb-2" style="color: var(--c-text-secondary);">
+            {{ t('settings.vab_skills_path_hint') }}
+          </p>
+          <button
+            class="w-full px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80 text-left"
+            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+            @click="pickVabPath"
           >
-            <input
-              v-model="newAgentName"
-              :placeholder="t('settings.agent_name_placeholder')"
-              class="w-full px-2 py-1.5 text-xs rounded border outline-none"
-              style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text);"
-            />
-            <input
-              v-model="newAgentDir"
-              :placeholder="t('settings.skills_dir_placeholder')"
-              class="w-full px-2 py-1.5 text-xs rounded border outline-none"
-              style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text);"
-            />
-            <div v-if="addError" class="text-xs" style="color: var(--c-danger);">
-              {{ addError }}
-            </div>
-            <button
-              class="px-3 py-1.5 text-xs rounded cursor-pointer hover:opacity-80"
-              style="background: var(--c-primary); color: white;"
-              @click="handleAddAgent"
-            >
-              {{ t('settings.save') }}
-            </button>
-          </div>
+            {{ t('settings.pick_vab_path') }}
+          </button>
+        </div>
+      </div>
+    </div>
 
-          <!-- Custom agent list -->
-          <div class="space-y-1.5">
-            <div
-              v-for="agent in agentsStore.agents.filter(a => !a.auto_detected)"
-              :key="agent.id"
-              class="flex items-center gap-2 px-2 py-1.5 rounded text-xs"
-              style="background: var(--c-bg);"
-            >
-              <span class="flex-1 truncate" style="color: var(--c-text);">{{ agent.name }}</span>
-              <span class="truncate text-xs" style="color: var(--c-text-secondary); max-width: 180px;">
-                {{ agent.skills_dir }}
-              </span>
-              <button
-                class="hover:opacity-70 cursor-pointer text-sm"
-                style="color: var(--c-danger);"
-                @click="handleRemoveAgent(agent.id)"
-              >
-                ×
-              </button>
-            </div>
-          </div>
+    <div
+      v-if="showMigrateConfirm"
+      class="fixed inset-0 z-50 flex items-center justify-center"
+      style="background: rgba(0, 0, 0, 0.5);"
+    >
+      <div
+        class="rounded-lg p-5 shadow-xl max-w-sm w-full mx-4"
+        style="background: var(--c-surface); border: 1px solid var(--c-border);"
+      >
+        <h3 class="text-sm font-semibold mb-2" style="color: var(--c-text);">
+          {{ t('settings.migrate_title') }}
+        </h3>
+        <p class="text-xs mb-4" style="color: var(--c-text-secondary);">
+          {{ t('settings.migrate_confirm') }}
+        </p>
+        <div class="flex justify-end gap-2">
+          <button
+            class="px-3 py-1.5 text-xs rounded-md border cursor-pointer hover:opacity-80"
+            style="border-color: var(--c-border); color: var(--c-text);"
+            @click="handleMigrate(false)"
+            :disabled="savingPath"
+          >
+            {{ t('settings.migrate_no') }}
+          </button>
+          <button
+            class="px-3 py-1.5 text-xs rounded-md cursor-pointer hover:opacity-80"
+            style="background: var(--c-primary); color: white;"
+            @click="handleMigrate(true)"
+            :disabled="savingPath"
+          >
+            {{ savingPath ? t('app.loading') : t('settings.migrate_yes') }}
+          </button>
         </div>
       </div>
     </div>

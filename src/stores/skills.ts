@@ -1,13 +1,18 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import type { Skill } from "../types";
+import type { Skill, DashboardData } from "../types";
 
 export const useSkillsStore = defineStore("skills", () => {
   const skills = ref<Skill[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
   const selectedIds = ref<Set<string>>(new Set());
+  const searchQuery = ref("");
+  const searchResults = ref<Skill[]>([]);
+  const searching = ref(false);
+  const dashboardData = ref<DashboardData | null>(null);
+  const dashboardLoading = ref(false);
 
   async function fetchSkills() {
     loading.value = true;
@@ -18,6 +23,33 @@ export const useSkillsStore = defineStore("skills", () => {
       error.value = String(e);
     } finally {
       loading.value = false;
+    }
+  }
+
+  async function searchSkills(query: string) {
+    searchQuery.value = query;
+    if (!query.trim()) {
+      searchResults.value = [];
+      return;
+    }
+    searching.value = true;
+    try {
+      searchResults.value = await invoke<Skill[]>("search_skills", { query });
+    } catch (e: unknown) {
+      error.value = String(e);
+    } finally {
+      searching.value = false;
+    }
+  }
+
+  async function getDashboardData() {
+    dashboardLoading.value = true;
+    try {
+      dashboardData.value = await invoke<DashboardData>("get_dashboard_data");
+    } catch (e: unknown) {
+      error.value = String(e);
+    } finally {
+      dashboardLoading.value = false;
     }
   }
 
@@ -108,7 +140,14 @@ export const useSkillsStore = defineStore("skills", () => {
     loading,
     error,
     selectedIds,
+    searchQuery,
+    searchResults,
+    searching,
+    dashboardData,
+    dashboardLoading,
     fetchSkills,
+    searchSkills,
+    getDashboardData,
     createLink,
     removeLink,
     installSkill,

@@ -1,20 +1,27 @@
 {
   "app": {
-    "title": "VAB Skills 管理器",
+    "title": "QS-Vab 管理",
     "settings": "設定",
     "loading": "載入中...",
     "error": "錯誤",
     "version": "v0.1"
   },
+  "tabs": {
+    "cli": "CLI 管理",
+    "skills": "Skill 列表",
+    "dashboard": "看板",
+    "symlink": "軟連結配置"
+  },
   "skills": {
-    "library": "Skills 統一庫",
+    "library": "Skill 列表",
     "install": "安裝 Skill",
     "delete": "刪除 Skill",
     "delete_confirm": "確定要刪除 skill \"{name}\" 嗎？此操作不可恢復。",
     "delete_link": "刪除關聯",
     "batch_delete": "批次刪除關聯",
     "preview": "預覽",
-    "search": "搜尋 skills...",
+    "search": "按名稱搜尋 skills...",
+    "all_cli": "全部 CLI",
     "no_skills": "暫無 Skill",
     "no_skills_hint": "在 ~/.vab-skills/ 目錄下新增 SKILL.md 檔案，或點擊安裝按鈕匯入",
     "sync_mode": "同步模式",
@@ -31,6 +38,65 @@
     "select_all": "全選",
     "deselect_all": "取消全選",
     "selected": "已選 {count} 項"
+  },
+  "cli": {
+    "title": "CLI 管理",
+    "add": "新增 CLI",
+    "edit": "編輯",
+    "remove": "移除",
+    "remove_confirm": "確定要移除 \"{name}\" 嗎？",
+    "detected": "已偵測",
+    "not_detected": "未偵測到",
+    "custom": "自訂",
+    "name": "CLI 名稱",
+    "name_placeholder": "My Custom CLI",
+    "name_hint": "作為標籤顯示在 skill 卡片上",
+    "path": "CLI 路徑",
+    "path_placeholder": "/path/to/cli",
+    "skills_dir": "Skills 目錄",
+    "skills_dir_placeholder": "/path/to/skills",
+    "skills_dir_hint": "預設為 CLI 路徑下的 skills 目錄",
+    "skill_count": "{count} skills",
+    "pick_folder": "選擇資料夾",
+    "name_required": "請輸入 CLI 名稱",
+    "skills_dir_required": "請輸入 Skills 目錄路徑"
+  },
+  "dashboard": {
+    "title": "看板",
+    "refresh": "重新整理",
+    "total_skills": "總計 {count} skills",
+    "shared_count": "{count} 共享",
+    "per_agent": "{agent}: {count}",
+    "shared_skills": "共享 Skill",
+    "no_data": "暫無資料",
+    "no_skills": "暫無 skill",
+    "relation_graph": "關聯圖譜",
+    "drag_hint": "拖曳節點可移動，滾輪縮放",
+    "skills": "skills",
+    "unique": "獨立",
+    "shared": "共享"
+  },
+  "symlink": {
+    "title": "軟連結配置",
+    "sync_all": "全部同步",
+    "sync_category": "同步分類",
+    "sync_single": "同步",
+    "remove_sync": "移除同步",
+    "synced": "已同步",
+    "pending": "待同步",
+    "sync_preview": "同步預覽",
+    "target_dir": "目標目錄",
+    "source_dir": "來源目錄",
+    "execute_sync": "執行同步",
+    "cancel": "取消",
+    "select_agent": "選擇一個 Agent 查看同步設定",
+    "synced_count": "已同步 {count} 個 skill",
+    "errors": "個錯誤",
+    "no_skills": "該 Agent 暫無 skills",
+    "select_all": "全選",
+    "deselect_all": "取消全選",
+    "selected_count": "已選 {count} 項",
+    "sync_selected": "同步 ({count})"
   },
   "agents": {
     "panel": "Agent 關聯面板",
@@ -66,8 +132,8 @@
     "fallback_to_junction": "已降級為 Junction 模式",
     "fallback_to_copy": "已降級為複製模式",
     "restart_as_admin": "以管理員身分重啟",
-    "use_junction": "使用 Junction 模式",
-    "use_copy": "使用複製模式",
+    "use_junction": "使用 Junction",
+    "use_copy": "使用複製",
     "link_already_exists": "關聯已存在: {skill} → {agent}"
   },
   "settings": {
@@ -86,11 +152,13 @@
     "agent_name_placeholder": "My Custom Agent",
     "skills_dir_placeholder": "~/.custom/skills",
     "save": "儲存",
-    "cancel": "取消"
-  },
-  "drag": {
-    "drop_to_agent": "拖到 Agent 以關聯",
-    "drop_to_trash": "拖到這裡取消關聯",
-    "select_mode": "選擇關聯模式"
+    "cancel": "取消",
+    "vab_skills_path": "資料目錄路徑",
+    "vab_skills_path_hint": "skill 資料儲存位置，預設為 ~/.vab-skills/",
+    "pick_vab_path": "選擇目錄",
+    "migrate_title": "遷移資料",
+    "migrate_confirm": "是否將舊目錄中的資料遷移到新目錄？",
+    "migrate_yes": "遷移",
+    "migrate_no": "不遷移"
   }
 }

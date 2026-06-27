@@ -6,8 +6,11 @@ import { useSkillsStore } from "./stores/skills";
 import { useHistoryStore } from "./stores/history";
 import { useAppStore } from "./stores/app";
 import AppLayout from "./components/layout/AppLayout.vue";
-import SkillLibrary from "./components/skills/SkillLibrary.vue";
-import AgentPanel from "./components/agents/AgentPanel.vue";
+import TabBar from "./components/layout/TabBar.vue";
+import CLITab from "./components/cli/CLITab.vue";
+import SkillList from "./components/skills/SkillList.vue";
+import DashboardTab from "./components/dashboard/DashboardTab.vue";
+import SymlinkTab from "./components/symlink/SymlinkTab.vue";
 import HistoryBar from "./components/history/HistoryBar.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
 
@@ -17,7 +20,6 @@ const skillsStore = useSkillsStore();
 const historyStore = useHistoryStore();
 const appStore = useAppStore();
 
-// Sync locale from app store to i18n
 watch(
   () => appStore.locale,
   (newLocale) => {
@@ -37,12 +39,13 @@ onMounted(async () => {
 
 <template>
   <AppLayout>
-    <template #left>
-      <SkillLibrary />
-    </template>
-    <template #right>
-      <AgentPanel />
-    </template>
+    <TabBar v-model="appStore.activeTab" />
+
+    <CLITab v-if="appStore.activeTab === 'cli'" />
+    <SkillList v-else-if="appStore.activeTab === 'skills'" />
+    <DashboardTab v-else-if="appStore.activeTab === 'dashboard'" />
+    <SymlinkTab v-else-if="appStore.activeTab === 'symlink'" />
+
     <template #bottom>
       <HistoryBar />
     </template>

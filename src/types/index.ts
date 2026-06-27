@@ -60,3 +60,51 @@ export interface AgentConfig {
   enabled: boolean;
   auto_detected: boolean;
 }
+
+export type TabId = 'cli' | 'skills' | 'dashboard' | 'symlink';
+
+export interface DashboardData {
+  agents: DashboardAgent[];
+  shared_skills: SharedSkillInfo[];
+  stats: DashboardStats;
+}
+
+export interface DashboardAgent {
+  agent_id: string;
+  agent_name: string;
+  skill_count: number;
+  skills: DashboardSkill[];
+}
+
+export interface DashboardSkill {
+  skill_id: string;
+  skill_name: string;
+  shared_with: string[];
+}
+
+export interface SharedSkillInfo {
+  skill_id: string;
+  skill_name: string;
+  agent_ids: string[];
+}
+
+export interface DashboardStats {
+  total_skills: number;
+  shared_count: number;
+  per_agent_count: Record<string, number>;
+}
+
+export interface SkillsTreeNode {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  skill_count: number;
+  synced: boolean;
+  synced_count: number;
+  children: SkillsTreeNode[];
+}
+
+export interface SyncResult {
+  synced_count: number;
+  errors: string[];
+}

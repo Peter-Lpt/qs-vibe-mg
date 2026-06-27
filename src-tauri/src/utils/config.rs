@@ -19,6 +19,9 @@ pub struct Config {
     pub ui: UiConfig,
     #[serde(default)]
     pub history: HistoryConfig,
+    /// 自定义 vab-skills 目录路径（None 表示使用默认 ~/.vab-skills/）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vab_skills_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,7 +105,7 @@ pub fn default_agents() -> Vec<AgentConfig> {
         AgentConfig {
             id: "hermes".to_string(),
             name: "Hermes".to_string(),
-            skills_dir: "~/.hermes/skills".to_string(),
+            skills_dir: hermes_skills_dir(),
             enabled: true,
             auto_detected: true,
         },
@@ -144,6 +147,25 @@ pub fn default_agents() -> Vec<AgentConfig> {
     ]
 }
 
+/// 根据平台返回 hermes skills 目录
+fn hermes_skills_dir() -> String {
+    #[cfg(windows)]
+    {
+        // Windows: %LOCALAPPDATA%\hermes\skills
+        if let Some(local) = dirs::data_local_dir() {
+            let path = local.join("hermes").join("skills");
+            if path.exists() {
+                return path.to_string_lossy().to_string();
+            }
+        }
+        "~/.hermes/skills".to_string()
+    }
+    #[cfg(not(windows))]
+    {
+        "~/.hermes/skills".to_string()
+    }
+}
+
 /// 读取配置文件，不存在则返回默认配置
 pub fn load_config() -> Result<Config, VabError> {
     let config_path = vab_skills_dir()?.join(CONFIG_FILE);
@@ -155,6 +177,7 @@ pub fn load_config() -> Result<Config, VabError> {
             agents: default_agents(),
             ui: UiConfig::default(),
             history: HistoryConfig::default(),
+            vab_skills_path: None,
         };
         save_config(&config)?;
         return Ok(config);
@@ -192,7 +215,6 @@ pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VabError>
         let skills_dir = expand_tilde(&ac.skills_dir)?;
         let detected = skills_dir.exists();
 
-        // Scan linked skills
         let linked_skills = if detected {
             scan_linked_skills(&skills_dir)
         } else {
@@ -233,7 +255,6 @@ fn scan_linked_skills(skills_dir: &std::path::Path) -> Vec<String> {
             let path = entry.path();
             if vab_fs::is_link(&path) {
                 if let Ok(target) = vab_fs::read_link_target(&path) {
-                    // Check if target is under vab-skills dir
                     if let Ok(stripped) = target.strip_prefix(&vab_dir) {
                         if let Some(skill_id) = stripped.file_name() {
                             linked.push(skill_id.to_string_lossy().to_string());

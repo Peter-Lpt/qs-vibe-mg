@@ -1,20 +1,27 @@
 {
   "app": {
-    "title": "VAB Skills Manager",
+    "title": "QS-Vab Manager",
     "settings": "Settings",
     "loading": "Loading...",
     "error": "Error",
     "version": "v0.1"
   },
+  "tabs": {
+    "cli": "CLI",
+    "skills": "Skills",
+    "dashboard": "Dashboard",
+    "symlink": "Symlink"
+  },
   "skills": {
-    "library": "Skills Library",
+    "library": "Skill List",
     "install": "Install Skill",
     "delete": "Delete Skill",
     "delete_confirm": "Are you sure you want to delete skill \"{name}\"? This action cannot be undone.",
     "delete_link": "Remove Link",
     "batch_delete": "Batch Remove Links",
     "preview": "Preview",
-    "search": "Search skills...",
+    "search": "Search skills by name...",
+    "all_cli": "All CLIs",
     "no_skills": "No skills found",
     "no_skills_hint": "Add SKILL.md files to ~/.vab-skills/ directory, or click install to import",
     "sync_mode": "Sync mode",
@@ -31,6 +38,65 @@
     "select_all": "Select all",
     "deselect_all": "Deselect all",
     "selected": "{count} selected"
+  },
+  "cli": {
+    "title": "CLI Management",
+    "add": "Add CLI",
+    "edit": "Edit",
+    "remove": "Remove",
+    "remove_confirm": "Are you sure you want to remove \"{name}\"?",
+    "detected": "Detected",
+    "not_detected": "Not installed",
+    "custom": "Custom",
+    "name": "CLI Name",
+    "name_placeholder": "My Custom CLI",
+    "name_hint": "Displayed as a tag on skill cards",
+    "path": "CLI Path",
+    "path_placeholder": "/path/to/cli",
+    "skills_dir": "Skills Directory",
+    "skills_dir_placeholder": "/path/to/skills",
+    "skills_dir_hint": "Defaults to skills/ under CLI path",
+    "skill_count": "{count} skills",
+    "pick_folder": "Browse",
+    "name_required": "CLI name is required",
+    "skills_dir_required": "Skills directory is required"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "refresh": "Refresh",
+    "total_skills": "Total {count} skills",
+    "shared_count": "{count} shared",
+    "per_agent": "{agent}: {count}",
+    "shared_skills": "Shared Skills",
+    "no_data": "No data yet",
+    "no_skills": "No skills",
+    "relation_graph": "Relation Graph",
+    "drag_hint": "Drag nodes, scroll to zoom",
+    "skills": "skills",
+    "unique": "unique",
+    "shared": "shared"
+  },
+  "symlink": {
+    "title": "Symlink Configuration",
+    "sync_all": "Sync All",
+    "sync_category": "Sync Category",
+    "sync_single": "Sync",
+    "remove_sync": "Remove Sync",
+    "synced": "Synced",
+    "pending": "Pending",
+    "sync_preview": "Sync Preview",
+    "target_dir": "Target",
+    "source_dir": "Source",
+    "execute_sync": "Execute Sync",
+    "cancel": "Cancel",
+    "select_agent": "Select an agent to view sync configuration",
+    "synced_count": "Synced {count} skills",
+    "errors": "errors",
+    "no_skills": "No skills in this agent",
+    "select_all": "Select all",
+    "deselect_all": "Deselect all",
+    "selected_count": "{count} selected",
+    "sync_selected": "Sync ({count})"
   },
   "agents": {
     "panel": "Agent Panel",
@@ -86,11 +152,13 @@
     "agent_name_placeholder": "My Custom Agent",
     "skills_dir_placeholder": "~/.custom/skills",
     "save": "Save",
-    "cancel": "Cancel"
-  },
-  "drag": {
-    "drop_to_agent": "Drop to agent to link",
-    "drop_to_trash": "Drop here to unlink",
-    "select_mode": "Select link mode"
+    "cancel": "Cancel",
+    "vab_skills_path": "Data Directory",
+    "vab_skills_path_hint": "Where skill data is stored, default: ~/.vab-skills/",
+    "pick_vab_path": "Browse",
+    "migrate_title": "Migrate Data",
+    "migrate_confirm": "Migrate data from old directory to new location?",
+    "migrate_yes": "Migrate",
+    "migrate_no": "Don't migrate"
   }
 }

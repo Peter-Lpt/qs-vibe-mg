@@ -62,11 +62,12 @@ pub fn remove_symlink(link: &Path) -> Result<(), VabError> {
 
     let meta = link.symlink_metadata().map_err(VabError::Io)?;
     if meta.file_type().is_symlink() {
+        // symlink：通过 read_link 判断目标类型
         #[cfg(windows)]
         {
-            if meta.file_type().is_dir() {
-                fs::remove_dir(link)?;
-            } else {
+            // Windows 上 directory symlink 需要用 remove_dir
+            // 尝试 remove_dir，失败则尝试 remove_file
+            if fs::remove_dir(link).is_err() {
                 fs::remove_file(link)?;
             }
         }

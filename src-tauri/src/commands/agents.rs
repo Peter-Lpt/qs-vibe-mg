@@ -1,20 +1,22 @@
 use crate::errors::VabError;
 use crate::models::agent::Agent;
+use crate::models::sync::SkillsTreeNode;
 use crate::utils::config::{build_agents_from_config, load_config, save_config, AgentConfig};
+use crate::utils::fs as vab_fs;
+use crate::utils::path::vab_skills_dir;
+use std::fs;
+use std::path::Path;
 
-/// 获取所有 agent 列表（含检测状态）
 #[tauri::command]
 pub fn list_agents() -> Result<Vec<Agent>, VabError> {
     let config = load_config()?;
     build_agents_from_config(&config)
 }
 
-/// 添加自定义 agent
 #[tauri::command]
 pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VabError> {
     let mut config = load_config()?;
 
-    // 生成 id（小写、连字符）
     let id = name
         .to_lowercase()
         .replace(|c: char| !c.is_ascii_alphanumeric(), "-")
@@ -25,7 +27,6 @@ pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VabEr
         return Err(VabError::Config("Invalid agent name".to_string()));
     }
 
-    // 检查是否已存在
     if config.agents.iter().any(|a| a.id == id) {
         return Err(VabError::Config(format!(
             "Agent with id '{}' already exists",
@@ -58,12 +59,43 @@ pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VabEr
     })
 }
 
-/// 移除自定义 agent
+#[tauri::command]
+pub fn update_agent(
+    agent_id: String,
+    name: Option<String>,
+    skills_dir: Option<String>,
+) -> Result<Agent, VabError> {
+    let mut config = load_config()?;
+
+    let agent_config = config
+        .agents
+        .iter_mut()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| VabError::AgentNotFound {
+            agent_id: agent_id.clone(),
+        })?;
+
+    if let Some(n) = name {
+        agent_config.name = n;
+    }
+    if let Some(d) = skills_dir {
+        agent_config.skills_dir = d;
+    }
+
+    save_config(&config)?;
+
+    let updated_config = load_config()?;
+    let agents = build_agents_from_config(&updated_config)?;
+    agents
+        .into_iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| VabError::AgentNotFound { agent_id })
+}
+
 #[tauri::command]
 pub fn remove_custom_agent(agent_id: String) -> Result<(), VabError> {
     let mut config = load_config()?;
 
-    // 只能移除自定义 agent
     let idx = config
         .agents
         .iter()
@@ -76,4 +108,94 @@ pub fn remove_custom_agent(agent_id: String) -> Result<(), VabError> {
     save_config(&config)?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VabError> {
+    let config = load_config()?;
+    let agents = build_agents_from_config(&config)?;
+    let agent = agents
+        .iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| VabError::AgentNotFound {
+            agent_id: agent_id.clone(),
+        })?;
+
+    let skills_dir = Path::new(&agent.skills_dir);
+    if !skills_dir.exists() {
+        return Ok(SkillsTreeNode {
+            name: agent.name.clone(),
+            path: agent.skills_dir.clone(),
+            is_dir: true,
+            skill_count: 0,
+            synced: false,
+            synced_count: 0,
+            children: Vec::new(),
+        });
+    }
+
+    let vab_dir = vab_skills_dir()?;
+    let target_dir = vab_dir.join(&agent_id);
+
+    let root = build_tree_node(skills_dir, skills_dir, &target_dir);
+    Ok(root)
+}
+
+fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTreeNode {
+    let name = dir
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    let mut children = Vec::new();
+    let mut skill_count = 0;
+    let mut synced_count = 0;
+
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let child_name = path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if child_name.starts_with('.') {
+                continue;
+            }
+
+            let has_skill_md = path.join("SKILL.md").exists();
+
+            if has_skill_md {
+                // 这是一个 skill
+                skill_count += 1;
+                let relative = path.strip_prefix(base_dir).unwrap_or(&path);
+                let sync_target = target_dir.join(relative);
+                if vab_fs::is_link(&sync_target) {
+                    synced_count += 1;
+                }
+            } else {
+                // 这是一个分类目录
+                let child = build_tree_node(&path, base_dir, target_dir);
+                skill_count += child.skill_count;
+                synced_count += child.synced_count;
+                children.push(child);
+            }
+        }
+    }
+
+    let relative = dir.strip_prefix(base_dir).unwrap_or(dir);
+    let sync_target = target_dir.join(relative);
+    let synced = vab_fs::is_link(&sync_target) || (sync_target.exists() && synced_count > 0);
+
+    SkillsTreeNode {
+        name,
+        path: dir.to_string_lossy().to_string(),
+        is_dir: true,
+        skill_count,
+        synced,
+        synced_count,
+        children,
+    }
 }
