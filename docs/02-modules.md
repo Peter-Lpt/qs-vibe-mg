@@ -73,12 +73,15 @@
 
 ### 目录结构扩展
 ```
-~/.vab/
-├── skills/           # Skills 统一库（v0.1）
-├── plugins/          # Plugin 统一库（v0.2 预留）
-├── mcp/              # MCP 配置备份（v0.3 预留）
-├── .vab-config.json  # 全局配置
-└── .vab-history.json # 操作历史
+~/.vab-skills/                  # Skills 统一库（v0.1）
+  ├── .vab-config.json          # 全局配置
+  ├── .vab-history.json         # 操作历史
+  ├── my-skill/                 # skill 实体文件
+  └── ...
+
+# 后续扩展时，在同一目录下新增：
+# ~/.vab-skills/.vab-plugins/   # Plugin 统一库（v0.2 预留）
+# ~/.vab-skills/.vab-mcp/       # MCP 配置备份（v0.3 预留）
 ```
 
 ### 前端路由扩展

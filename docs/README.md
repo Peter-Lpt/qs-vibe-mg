@@ -6,7 +6,7 @@
 |------|------|------|
 | 01 | [开发环境搭建](01-dev-environment.md) | Rust/Node/pnpm 安装、Tauri 项目初始化、Mac/Win 环境配置 |
 | 02 | [模块规划](02-modules.md) | Skills 管理（当前）+ Plugin/MCP/Marketplace 预留 |
-| 03 | [开发需求清单](03-requirements.md) | v0.1 所有需求项（R01-R18），含依赖关系和开发顺序 |
+| 03 | [开发需求清单](03-requirements.md) | v0.1 所有需求项（R01-R21），含依赖关系和开发顺序 |
 
 ## 版本计划
 
