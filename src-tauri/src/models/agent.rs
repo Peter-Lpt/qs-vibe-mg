@@ -12,4 +12,8 @@ pub struct Agent {
     pub detected: bool,
     /// 是否启用
     pub enabled: bool,
+    /// 是否为自动检测（非用户自定义）
+    pub auto_detected: bool,
+    /// 已关联的 skill id 列表
+    pub linked_skills: Vec<String>,
 }

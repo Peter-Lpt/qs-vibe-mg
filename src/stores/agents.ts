@@ -13,12 +13,38 @@ export const useAgentsStore = defineStore("agents", () => {
     error.value = null;
     try {
       agents.value = await invoke<Agent[]>("list_agents");
-    } catch (e: any) {
+    } catch (e: unknown) {
       error.value = String(e);
     } finally {
       loading.value = false;
     }
   }
 
-  return { agents, loading, error, fetchAgents };
+  async function addCustomAgent(name: string, skillsDir: string): Promise<Agent> {
+    try {
+      const agent = await invoke<Agent>("add_custom_agent", { name, skillsDir });
+      await fetchAgents();
+      return agent;
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
+  async function removeCustomAgent(agentId: string) {
+    try {
+      await invoke("remove_custom_agent", { agentId });
+      await fetchAgents();
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
+  return {
+    agents,
+    loading,
+    error,
+    fetchAgents,
+    addCustomAgent,
+    removeCustomAgent,
+  };
 });

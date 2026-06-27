@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-**v0.0 completed.** Core skills management (display + symlink) is functional. See `docs/v0.0/01-plan.md` for the completed plan.
+**v0.1 completed.** Full feature set including install/delete, preview, batch ops, undo/redo, i18n (zh/en/zh-TW), dark mode, settings page, and custom agent management. See `docs/v0.1/01-plan.md` for the plan.
 
 ## What This Is
 
@@ -13,8 +13,8 @@ VAB Skills Manager — a cross-platform desktop app for managing AI coding agent
 ## Tech Stack
 
 - **Desktop**: Tauri 2 (Rust backend + web frontend)
-- **Frontend**: Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS 4
-- **Backend**: Rust with `thiserror` (errors), `serde_yaml` (SKILL.md parsing)
+- **Frontend**: Vue 3 + TypeScript + Vite + Pinia + Tailwind CSS 4 + vue-i18n + marked
+- **Backend**: Rust with `thiserror` (errors), `serde_yaml` (SKILL.md parsing), `uuid` (history IDs)
 - **Package manager**: pnpm 8+
 
 ## Build Commands
@@ -32,18 +32,19 @@ pnpm tauri build      # Production build
 ### Rust Backend (`src-tauri/src/`)
 
 ```
-commands/     Tauri command handlers (skills, sync, agents)
-models/       Data types (skill, agent)
+commands/     Tauri command handlers (skills, sync, agents, history, config)
+models/       Data types (skill, agent, history)
 parsers/      SKILL.md frontmatter parsing (serde_yaml)
 errors.rs     VabError enum — serialized to string for frontend
-utils/        fs, config, path helpers
+utils/        fs, config, path, history helpers
 ```
 
 ### Vue Frontend (`src/`)
 
 ```
-components/   layout/, skills/, agents/
-stores/       skills.ts, agents.ts (Pinia)
+components/   layout/, skills/, agents/, history/, settings/, common/
+stores/       skills.ts, agents.ts, app.ts, history.ts (Pinia)
+locales/      zh.json, en.json, zh-TW.json (vue-i18n)
 types/        index.ts
 ```
 
@@ -58,7 +59,7 @@ types/        index.ts
 ## Version Roadmap
 
 - **v0.0** (MVP): `docs/v0.0/01-plan.md` — Skill display + symlink management ✅
-- **v0.1** (Full): `docs/v0.1/01-plan.md` — Drag-and-drop, undo/redo, batch ops, i18n, theming
+- **v0.1** (Full): `docs/v0.1/01-plan.md` — Install/delete, preview, batch ops, undo/redo, i18n, theming, settings ✅
 
 ## Documentation Index
 

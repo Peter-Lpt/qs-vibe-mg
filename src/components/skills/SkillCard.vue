@@ -1,26 +1,41 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import type { Skill, Agent } from "../../types";
+import SkillPreview from "./SkillPreview.vue";
+import ConfirmDialog from "../common/ConfirmDialog.vue";
 
 const props = defineProps<{
   skill: Skill;
   agents: Agent[];
 }>();
 
+const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const showDropdown = ref(false);
 const linking = ref(false);
+const showPreview = ref(false);
+const showDeleteConfirm = ref(false);
 
 async function handleLink(agentId: string) {
   linking.value = true;
   try {
     await skillsStore.createLink(props.skill.id, agentId);
-  } catch (e: any) {
+  } catch (e: unknown) {
     alert(String(e));
   } finally {
     linking.value = false;
     showDropdown.value = false;
+  }
+}
+
+async function handleDelete() {
+  try {
+    await skillsStore.deleteSkill(props.skill.id);
+    showDeleteConfirm.value = false;
+  } catch (e: unknown) {
+    alert(String(e));
   }
 }
 
@@ -34,18 +49,67 @@ const sourceLabel = (from: string) => {
   const agent = props.agents.find((a) => a.id === from);
   return agent ? agent.name : from;
 };
+
+const isSelected = () => skillsStore.selectedIds.has(props.skill.id);
 </script>
 
 <template>
-  <div class="rounded-lg p-4 border" style="background: var(--c-surface); border-color: var(--c-border);">
-    <div class="flex items-start justify-between">
+  <div
+    class="rounded-lg p-4 border transition-all"
+    :style="{
+      background: isSelected() ? 'var(--c-surface-hover)' : 'var(--c-surface)',
+      borderColor: isSelected() ? 'var(--c-primary)' : 'var(--c-border)',
+    }"
+  >
+    <div class="flex items-start gap-2">
+      <!-- Selection checkbox -->
+      <input
+        type="checkbox"
+        :checked="isSelected()"
+        @change="skillsStore.toggleSelect(skill.id)"
+        class="mt-1 cursor-pointer"
+      />
+
       <div class="flex-1 min-w-0">
-        <h3 class="text-sm font-semibold truncate" style="color: var(--c-text);">
-          {{ skill.name }}
-        </h3>
+        <div class="flex items-center gap-2">
+          <h3
+            class="text-sm font-semibold truncate cursor-pointer hover:underline"
+            style="color: var(--c-text);"
+            @click="showPreview = true"
+          >
+            {{ skill.name }}
+          </h3>
+          <span
+            v-if="skill.license"
+            class="text-xs px-1.5 py-0.5 rounded shrink-0"
+            style="background: var(--c-surface-hover); color: var(--c-text-secondary);"
+          >
+            {{ skill.license }}
+          </span>
+        </div>
         <p class="text-xs mt-1 line-clamp-2" style="color: var(--c-text-secondary);">
-          {{ skill.description || "No description" }}
+          {{ skill.description || t('skills.none') }}
         </p>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-1 shrink-0">
+        <button
+          class="text-xs px-1.5 py-0.5 rounded hover:opacity-80 cursor-pointer"
+          style="color: var(--c-primary);"
+          @click="showPreview = true"
+          :title="t('skills.preview')"
+        >
+          👁
+        </button>
+        <button
+          class="text-xs px-1.5 py-0.5 rounded hover:opacity-80 cursor-pointer"
+          style="color: var(--c-danger);"
+          @click="showDeleteConfirm = true"
+          :title="t('skills.delete')"
+        >
+          🗑
+        </button>
       </div>
     </div>
 
@@ -77,7 +141,7 @@ const sourceLabel = (from: string) => {
           class="ml-0.5 hover:opacity-70 cursor-pointer"
           style="color: #166534;"
           @click="skillsStore.removeLink(skill.id, agentId)"
-          title="Remove link"
+          :title="t('skills.delete_link')"
         >
           ×
         </button>
@@ -110,5 +174,23 @@ const sourceLabel = (from: string) => {
         </div>
       </div>
     </div>
+
+    <!-- Preview dialog -->
+    <SkillPreview
+      v-if="showPreview"
+      :skill="skill"
+      @close="showPreview = false"
+    />
+
+    <!-- Delete confirm dialog -->
+    <ConfirmDialog
+      v-if="showDeleteConfirm"
+      :title="t('skills.delete')"
+      :message="t('skills.delete_confirm', { name: skill.name })"
+      :confirm-text="t('skills.delete')"
+      :danger="true"
+      @confirm="handleDelete"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>

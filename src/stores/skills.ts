@@ -7,13 +7,14 @@ export const useSkillsStore = defineStore("skills", () => {
   const skills = ref<Skill[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
+  const selectedIds = ref<Set<string>>(new Set());
 
   async function fetchSkills() {
     loading.value = true;
     error.value = null;
     try {
       skills.value = await invoke<Skill[]>("list_skills");
-    } catch (e: any) {
+    } catch (e: unknown) {
       error.value = String(e);
     } finally {
       loading.value = false;
@@ -24,7 +25,7 @@ export const useSkillsStore = defineStore("skills", () => {
     try {
       await invoke("create_link", { skillId, agentId });
       await fetchSkills();
-    } catch (e: any) {
+    } catch (e: unknown) {
       throw new Error(String(e));
     }
   }
@@ -33,10 +34,90 @@ export const useSkillsStore = defineStore("skills", () => {
     try {
       await invoke("remove_link", { skillId, agentId });
       await fetchSkills();
-    } catch (e: any) {
+    } catch (e: unknown) {
       throw new Error(String(e));
     }
   }
 
-  return { skills, loading, error, fetchSkills, createLink, removeLink };
+  async function installSkill(sourcePath: string): Promise<Skill> {
+    try {
+      const skill = await invoke<Skill>("install_skill", { sourcePath });
+      await fetchSkills();
+      return skill;
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
+  async function deleteSkill(skillId: string) {
+    try {
+      await invoke("delete_skill", { skillId });
+      selectedIds.value.delete(skillId);
+      await fetchSkills();
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
+  async function previewSkill(skillId: string): Promise<string> {
+    try {
+      return await invoke<string>("preview_skill", { skillId });
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
+  async function batchLink(skillIds: string[], agentId: string): Promise<string[]> {
+    try {
+      const errors = await invoke<string[]>("batch_link", { skillIds, agentId });
+      await fetchSkills();
+      return errors;
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
+  async function batchUnlink(skillIds: string[], agentId: string): Promise<string[]> {
+    try {
+      const errors = await invoke<string[]>("batch_unlink", { skillIds, agentId });
+      await fetchSkills();
+      return errors;
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
+  function toggleSelect(skillId: string) {
+    if (selectedIds.value.has(skillId)) {
+      selectedIds.value.delete(skillId);
+    } else {
+      selectedIds.value.add(skillId);
+    }
+  }
+
+  function selectAll() {
+    selectedIds.value = new Set(skills.value.map((s) => s.id));
+  }
+
+  function deselectAll() {
+    selectedIds.value.clear();
+  }
+
+  return {
+    skills,
+    loading,
+    error,
+    selectedIds,
+    fetchSkills,
+    createLink,
+    removeLink,
+    installSkill,
+    deleteSkill,
+    previewSkill,
+    batchLink,
+    batchUnlink,
+    toggleSelect,
+    selectAll,
+    deselectAll,
+  };
 });
