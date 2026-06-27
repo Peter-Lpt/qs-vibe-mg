@@ -1,0 +1,15 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Agent {
+    /// 唯一标识，如 claude-code
+    pub id: String,
+    /// 显示名，如 Claude Code
+    pub name: String,
+    /// skills 目录路径（绝对路径）
+    pub skills_dir: String,
+    /// 是否检测到已安装
+    pub detected: bool,
+    /// 是否启用
+    pub enabled: bool,
+}
