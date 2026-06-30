@@ -1,0 +1,219 @@
+@import "tailwindcss";
+
+:root {
+  --c-bg: #fafafa;
+  --c-surface: #ffffff;
+  --c-surface-hover: #f5f5f5;
+  --c-surface-active: #eeeeee;
+  --c-border: #e5e5e5;
+  --c-border-subtle: #f0f0f0;
+  --c-text: #171717;
+  --c-text-secondary: #737373;
+  --c-text-tertiary: #a3a3a3;
+  --c-primary: #2563eb;
+  --c-primary-hover: #1d4ed8;
+  --c-primary-light: rgba(37, 99, 235, 0.08);
+  --c-success: #16a34a;
+  --c-success-light: rgba(22, 163, 74, 0.08);
+  --c-warning: #d97706;
+  --c-warning-light: rgba(217, 119, 6, 0.08);
+  --c-danger: #dc2626;
+  --c-danger-hover: #b91c1c;
+  --c-danger-light: rgba(220, 38, 38, 0.08);
+  --c-symlink: #7c3aed;
+  --c-junction: #0891b2;
+  --c-copy: #ea580c;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+.dark {
+  --c-bg: #0a0a0a;
+  --c-surface: #171717;
+  --c-surface-hover: #262626;
+  --c-surface-active: #333333;
+  --c-border: #262626;
+  --c-border-subtle: #1f1f1f;
+  --c-text: #f5f5f5;
+  --c-text-secondary: #a3a3a3;
+  --c-text-tertiary: #525252;
+  --c-primary: #3b82f6;
+  --c-primary-hover: #60a5fa;
+  --c-primary-light: rgba(59, 130, 246, 0.12);
+  --c-success: #22c55e;
+  --c-success-light: rgba(34, 197, 94, 0.12);
+  --c-warning: #f59e0b;
+  --c-warning-light: rgba(245, 158, 11, 0.12);
+  --c-danger: #ef4444;
+  --c-danger-hover: #f87171;
+  --c-danger-light: rgba(239, 68, 68, 0.12);
+  --c-symlink: #a78bfa;
+  --c-junction: #22d3ee;
+  --c-copy: #fb923c;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--c-bg);
+  color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--c-border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--c-text-tertiary);
+}
+
+/* Selection */
+::selection {
+  background: var(--c-primary-light);
+  color: var(--c-primary);
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+}
+
+/* Transition helper */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.12s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateY(4px);
+  opacity: 0;
+}
+
+/* Button base styles */
+button {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* Input base styles */
+input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--c-primary) !important;
+  box-shadow: 0 0 0 3px var(--c-primary-light);
+}
+
+/* Markdown rendering styles */
+.markdown-body {
+  font-size: 13px;
+  line-height: 1.65;
+  word-wrap: break-word;
+  color: var(--c-text);
+}
+.markdown-body h1 { font-size: 1.4em; font-weight: 600; margin: 0.8em 0 0.4em; color: var(--c-text); }
+.markdown-body h2 { font-size: 1.25em; font-weight: 600; margin: 0.7em 0 0.3em; color: var(--c-text); }
+.markdown-body h3 { font-size: 1.1em; font-weight: 600; margin: 0.6em 0 0.3em; color: var(--c-text); }
+.markdown-body h4 { font-size: 1em; font-weight: 600; margin: 0.5em 0 0.2em; color: var(--c-text); }
+.markdown-body p { margin: 0.5em 0; }
+.markdown-body ul, .markdown-body ol { padding-left: 1.5em; margin: 0.4em 0; }
+.markdown-body li { margin: 0.15em 0; }
+.markdown-body code {
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  background: var(--c-surface-hover);
+  color: var(--c-text);
+}
+.markdown-body pre {
+  padding: 0.8em;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  margin: 0.6em 0;
+  background: var(--c-surface-hover);
+  border: 1px solid var(--c-border);
+}
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  font-size: 0.85em;
+}
+.markdown-body blockquote {
+  padding: 0.4em 0.8em;
+  margin: 0.5em 0;
+  border-left: 3px solid var(--c-primary);
+  background: var(--c-primary-light);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--c-text-secondary);
+}
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+}
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--c-border);
+  padding: 0.4em 0.6em;
+  text-align: left;
+}
+.markdown-body th {
+  background: var(--c-surface-hover);
+  font-weight: 600;
+}
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--c-border);
+  margin: 0.8em 0;
+}
+.markdown-body a {
+  color: var(--c-primary);
+  text-decoration: none;
+}
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+.markdown-body strong { font-weight: 600; }
+.markdown-body img { max-width: 100%; border-radius: var(--radius-sm); }
