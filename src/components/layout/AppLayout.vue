@@ -28,7 +28,7 @@ const appStore = useAppStore();
           style="color: var(--c-text-secondary);"
           @click="appStore.setTheme(appStore.resolvedTheme === 'dark' ? 'light' : 'dark')"
         >
-          {{ appStore.resolvedTheme === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19' }}
+          {{ appStore.resolvedTheme === 'dark' ? '☀️' : '🌙' }}
         </button>
         <button
           class="text-sm px-2 py-1 rounded cursor-pointer hover:opacity-80"

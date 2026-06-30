@@ -253,7 +253,7 @@ async function handleRemoveSync(path?: string) {
           <span class="w-4 text-center" style="color: var(--c-text-secondary);">
             {{ isFolderExpanded(item.relativePath) ? '\u25BC' : '\u25B6' }}
           </span>
-          <span style="color: var(--c-text-secondary);">\uD83D\uDCC1</span>
+          <span style="color: var(--c-text-secondary);">📁</span>
           <span class="flex-1 truncate font-medium" style="color: var(--c-text);">{{ item.node.name }}</span>
           <span
             v-if="isFolderFullySelected(item.relativePath)"
@@ -300,7 +300,7 @@ async function handleRemoveSync(path?: string) {
               borderColor: isSkillSelected(item.relativePath) ? 'var(--c-primary)' : 'var(--c-border)',
             }"
           >\u2713</span>
-          <span style="color: var(--c-text-secondary);">\uD83D\uDCC4</span>
+          <span style="color: var(--c-text-secondary);">📄</span>
           <span class="flex-1 truncate" style="color: var(--c-text);">{{ item.node.name }}</span>
           <span v-if="item.node.synced" class="text-[10px]" style="color: var(--c-success);">\u2713</span>
         </div>
@@ -321,7 +321,7 @@ async function handleRemoveSync(path?: string) {
               borderColor: isSkillSelected(item.relativePath) ? 'var(--c-primary)' : 'var(--c-border)',
             }"
           >\u2713</span>
-          <span style="color: var(--c-text-secondary);">\uD83D\uDCC4</span>
+          <span style="color: var(--c-text-secondary);">📄</span>
           <span class="flex-1 truncate" style="color: var(--c-text);">{{ item.node.name }}</span>
           <span v-if="item.node.synced" class="text-[10px]" style="color: var(--c-success);">\u2713</span>
         </div>

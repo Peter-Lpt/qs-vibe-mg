@@ -13,10 +13,10 @@ const emit = defineEmits<{
 }>();
 
 const tabs: { id: TabId; icon: string; labelKey: string }[] = [
-  { id: "cli", icon: "\uD83D\uDD27", labelKey: "tabs.cli" },
-  { id: "skills", icon: "\uD83D\uDCC1", labelKey: "tabs.skills" },
-  { id: "dashboard", icon: "\uD83D\uDCCA", labelKey: "tabs.dashboard" },
-  { id: "symlink", icon: "\uD83D\uDD17", labelKey: "tabs.symlink" },
+  { id: "cli", icon: "🔧", labelKey: "tabs.cli" },
+  { id: "skills", icon: "📁", labelKey: "tabs.skills" },
+  { id: "dashboard", icon: "📊", labelKey: "tabs.dashboard" },
+  { id: "symlink", icon: "🔗", labelKey: "tabs.symlink" },
 ];
 
 function selectTab(tab: TabId) {

@@ -172,9 +172,19 @@ fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTree
                 skill_count += 1;
                 let relative = path.strip_prefix(base_dir).unwrap_or(&path);
                 let sync_target = target_dir.join(relative);
-                if vibe_fs::is_link(&sync_target) {
+                let synced = vibe_fs::is_link(&sync_target);
+                if synced {
                     synced_count += 1;
                 }
+                children.push(SkillsTreeNode {
+                    name: child_name,
+                    path: path.to_string_lossy().to_string(),
+                    is_dir: true,
+                    skill_count: 1,
+                    synced,
+                    synced_count: if synced { 1 } else { 0 },
+                    children: Vec::new(),
+                });
             } else {
                 // 这是一个分类目录
                 let child = build_tree_node(&path, base_dir, target_dir);
