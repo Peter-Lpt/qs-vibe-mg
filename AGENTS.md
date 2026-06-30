@@ -2,7 +2,7 @@
 
 ## What this is
 
-VAB Skills Manager — Tauri 2 desktop app (Rust + Vue 3 + TypeScript) for managing AI coding agent skills via a unified library at `~/.vab-skills/`. Skills are linked to agent directories through symlinks.
+VAB Skills Manager — Tauri 2 desktop app (Rust + Vue 3 + TypeScript) for managing AI coding agent skills via a unified library at `~/.vibe-skills/`. Skills are linked to agent directories through symlinks.
 
 ## Build & run
 
@@ -36,7 +36,7 @@ $env:CARGO_HOME = "D:\environment\rust\.cargo"
 | `models/` | Data types (skill, agent, history) |
 | `parsers/skill_md.rs` | SKILL.md YAML frontmatter parsing |
 | `errors.rs` | `VabError` enum — serialized as string for frontend |
-| `utils/path.rs` | `~/.vab-skills/` path resolution, tilde expansion |
+| `utils/path.rs` | `~/.vibe-skills/` path resolution, tilde expansion |
 | `utils/config.rs` | JSON config read/write |
 
 Register new commands in `lib.rs` `invoke_handler` macro.
@@ -53,9 +53,9 @@ Register new commands in `lib.rs` `invoke_handler` macro.
 ### Data flow
 
 - Frontend calls Rust via `invoke()` from `@tauri-apps/api/core`
-- Skill scanning: merges `~/.vab-skills/` with all agent directories, deduplicates by folder name
-- Symlink direction: `agent_dir/skills/{skill_name}` → symlink → `~/.vab-skills/{skill_name}`
-- No database — config stored in `~/.vab-skills/.vab-config.json`
+- Skill scanning: merges `~/.vibe-skills/` with all agent directories, deduplicates by folder name
+- Symlink direction: `agent_dir/skills/{skill_name}` → symlink → `~/.vibe-skills/{skill_name}`
+- No database — config stored in `~/.vibe-skills/.vibe-config.json`
 
 ## Key conventions
 

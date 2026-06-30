@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::VabError;
 use crate::models::agent::Agent;
-use crate::utils::path::{expand_tilde, vab_skills_dir};
+use crate::utils::path::{expand_tilde, vibe_skills_dir};
 
-const CONFIG_FILE: &str = ".vab-config.json";
+const CONFIG_FILE: &str = ".vibe-config.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -19,9 +19,9 @@ pub struct Config {
     pub ui: UiConfig,
     #[serde(default)]
     pub history: HistoryConfig,
-    /// 自定义 vab-skills 目录路径（None 表示使用默认 ~/.vab-skills/）
+    /// 自定义 vibe-skills 目录路径（None 表示使用默认 ~/.vibe-skills/）
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub vab_skills_path: Option<String>,
+    pub vibe_skills_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,7 +168,7 @@ fn hermes_skills_dir() -> String {
 
 /// 读取配置文件，不存在则返回默认配置
 pub fn load_config() -> Result<Config, VabError> {
-    let config_path = vab_skills_dir()?.join(CONFIG_FILE);
+    let config_path = vibe_skills_dir()?.join(CONFIG_FILE);
 
     if !config_path.exists() {
         let config = Config {
@@ -177,7 +177,7 @@ pub fn load_config() -> Result<Config, VabError> {
             agents: default_agents(),
             ui: UiConfig::default(),
             history: HistoryConfig::default(),
-            vab_skills_path: None,
+            vibe_skills_path: None,
         };
         save_config(&config)?;
         return Ok(config);
@@ -191,7 +191,7 @@ pub fn load_config() -> Result<Config, VabError> {
 
 /// 保存配置文件
 pub fn save_config(config: &Config) -> Result<(), VabError> {
-    let dir = vab_skills_dir()?;
+    let dir = vibe_skills_dir()?;
     if !dir.exists() {
         fs::create_dir_all(&dir)?;
     }
@@ -237,11 +237,11 @@ pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VabError>
 
 /// 扫描 agent skills 目录中的 symlink，返回关联的 skill id 列表
 fn scan_linked_skills(skills_dir: &std::path::Path) -> Vec<String> {
-    use crate::utils::fs as vab_fs;
-    use crate::utils::path::vab_skills_dir;
+    use crate::utils::fs as vibe_fs;
+    use crate::utils::path::vibe_skills_dir;
 
     let mut linked = Vec::new();
-    let vab_dir = match vab_skills_dir() {
+    let vibe_dir = match vibe_skills_dir() {
         Ok(d) => d,
         Err(_) => return linked,
     };
@@ -253,9 +253,9 @@ fn scan_linked_skills(skills_dir: &std::path::Path) -> Vec<String> {
     if let Ok(entries) = fs::read_dir(skills_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if vab_fs::is_link(&path) {
-                if let Ok(target) = vab_fs::read_link_target(&path) {
-                    if let Ok(stripped) = target.strip_prefix(&vab_dir) {
+            if vibe_fs::is_link(&path) {
+                if let Ok(target) = vibe_fs::read_link_target(&path) {
+                    if let Ok(stripped) = target.strip_prefix(&vibe_dir) {
                         if let Some(skill_id) = stripped.file_name() {
                             linked.push(skill_id.to_string_lossy().to_string());
                         }

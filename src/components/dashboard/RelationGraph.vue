@@ -51,7 +51,7 @@ interface GEdge {
 const nodes = ref<GNode[]>([]);
 const nodeMap = ref<Record<string, GNode>>({});
 
-const agentList = computed(() => props.agents.filter((a) => a.agent_id !== "vab-lib"));
+const agentList = computed(() => props.agents.filter((a) => a.agent_id !== "vibe-lib"));
 
 const allSkills = computed(() => {
   const map = new Map<string, { skill: DashboardSkill; agentIds: string[] }>();

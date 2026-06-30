@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-VAB Skills Manager — a cross-platform desktop app for managing AI coding agent skills (Claude Code, Hermes, Pi Agent, OpenCode, Codex CLI, MiMo Code, shared agents) via a unified library at `~/.vab-skills/`. Skills are linked to agent directories through symlinks. Follows the [Agent Skills open standard](https://agentskills.io).
+VAB Skills Manager — a cross-platform desktop app for managing AI coding agent skills (Claude Code, Hermes, Pi Agent, OpenCode, Codex CLI, MiMo Code, shared agents) via a unified library at `~/.vibe-skills/`. Skills are linked to agent directories through symlinks. Follows the [Agent Skills open standard](https://agentskills.io).
 
 ## Tech Stack
 
@@ -50,11 +50,11 @@ types/        index.ts
 
 ### Key Design Decisions
 
-- **Skill scanning**: Scans `~/.vab-skills/` AND all agent directories, merges and deduplicates by folder name
-- **SkillSource**: Each skill tracks which directories contain it (vab-lib or agent id)
-- **Symlink direction**: agent directory → symlink → `~/.vab-skills/{skill}` (source of truth in central library)
+- **Skill scanning**: Scans `~/.vibe-skills/` AND all agent directories, merges and deduplicates by folder name
+- **SkillSource**: Each skill tracks which directories contain it (vibe-lib or agent id)
+- **Symlink direction**: agent directory → symlink → `~/.vibe-skills/{skill}` (source of truth in central library)
 - **Agent detection**: Checks if agent skills directory exists on disk
-- **No database**: JSON config only (`~/.vab-skills/.vab-config.json`)
+- **No database**: JSON config only (`~/.vibe-skills/.vibe-config.json`)
 
 ## Version Roadmap
 

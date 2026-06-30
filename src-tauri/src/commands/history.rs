@@ -4,9 +4,9 @@ use std::path::Path;
 use crate::errors::VabError;
 use crate::models::history::{HistoryAction, HistoryEntry};
 use crate::utils::config::{build_agents_from_config, load_config};
-use crate::utils::fs as vab_fs;
+use crate::utils::fs as vibe_fs;
 use crate::utils::history::{last_undone_entry, last_undone_entry_for_redo, load_history, mark_undone};
-use crate::utils::path::vab_skills_dir;
+use crate::utils::path::vibe_skills_dir;
 
 /// 获取操作历史
 #[tauri::command]
@@ -29,28 +29,28 @@ pub fn undo() -> Result<HistoryEntry, VabError> {
                 let agents = build_agents_from_config(&config)?;
                 if let Some(agent) = agents.iter().find(|a| a.id == *agent_id) {
                     let link_path = Path::new(&agent.skills_dir).join(&entry.skill_id);
-                    let _ = vab_fs::remove_symlink(&link_path);
+                    let _ = vibe_fs::remove_symlink(&link_path);
                 }
             }
         }
         HistoryAction::Unlink => {
             // 逆操作：重新创建 symlink
             if let Some(ref agent_id) = entry.agent_id {
-                let vab_dir = vab_skills_dir()?;
-                let skill_path = vab_dir.join(&entry.skill_id);
+                let vibe_dir = vibe_skills_dir()?;
+                let skill_path = vibe_dir.join(&entry.skill_id);
                 let config = load_config()?;
                 let agents = build_agents_from_config(&config)?;
                 if let Some(agent) = agents.iter().find(|a| a.id == *agent_id) {
                     let link_path = Path::new(&agent.skills_dir).join(&entry.skill_id);
                     if skill_path.exists() {
-                        let _ = vab_fs::create_symlink(&skill_path, &link_path);
+                        let _ = vibe_fs::create_symlink(&skill_path, &link_path);
                     }
                 }
             }
         }
         HistoryAction::Install => {
             // 逆操作：删除 skill
-            let skill_path = vab_skills_dir()?.join(&entry.skill_id);
+            let skill_path = vibe_skills_dir()?.join(&entry.skill_id);
             if skill_path.exists() {
                 let _ = fs::remove_dir_all(&skill_path);
             }
@@ -71,7 +71,7 @@ pub fn undo() -> Result<HistoryEntry, VabError> {
                 if let Some(agent) = agents.iter().find(|a| a.id == *agent_id) {
                     for skill_id in skill_ids {
                         let link_path = Path::new(&agent.skills_dir).join(skill_id);
-                        let _ = vab_fs::remove_symlink(&link_path);
+                        let _ = vibe_fs::remove_symlink(&link_path);
                     }
                 }
             }
@@ -80,15 +80,15 @@ pub fn undo() -> Result<HistoryEntry, VabError> {
             // 逆操作：批量重新创建 symlink
             if let Some(ref agent_id) = entry.agent_id {
                 let skill_ids: Vec<&str> = entry.skill_id.split(',').collect();
-                let vab_dir = vab_skills_dir()?;
+                let vibe_dir = vibe_skills_dir()?;
                 let config = load_config()?;
                 let agents = build_agents_from_config(&config)?;
                 if let Some(agent) = agents.iter().find(|a| a.id == *agent_id) {
                     for skill_id in skill_ids {
-                        let skill_path = vab_dir.join(skill_id);
+                        let skill_path = vibe_dir.join(skill_id);
                         let link_path = Path::new(&agent.skills_dir).join(skill_id);
                         if skill_path.exists() {
-                            let _ = vab_fs::create_symlink(&skill_path, &link_path);
+                            let _ = vibe_fs::create_symlink(&skill_path, &link_path);
                         }
                     }
                 }
@@ -111,14 +111,14 @@ pub fn redo() -> Result<HistoryEntry, VabError> {
     match entry.action {
         HistoryAction::Link => {
             if let Some(ref agent_id) = entry.agent_id {
-                let vab_dir = vab_skills_dir()?;
-                let skill_path = vab_dir.join(&entry.skill_id);
+                let vibe_dir = vibe_skills_dir()?;
+                let skill_path = vibe_dir.join(&entry.skill_id);
                 let config = load_config()?;
                 let agents = build_agents_from_config(&config)?;
                 if let Some(agent) = agents.iter().find(|a| a.id == *agent_id) {
                     let link_path = Path::new(&agent.skills_dir).join(&entry.skill_id);
                     if skill_path.exists() {
-                        vab_fs::create_symlink(&skill_path, &link_path)?;
+                        vibe_fs::create_symlink(&skill_path, &link_path)?;
                     }
                 }
             }
@@ -129,7 +129,7 @@ pub fn redo() -> Result<HistoryEntry, VabError> {
                 let agents = build_agents_from_config(&config)?;
                 if let Some(agent) = agents.iter().find(|a| a.id == *agent_id) {
                     let link_path = Path::new(&agent.skills_dir).join(&entry.skill_id);
-                    let _ = vab_fs::remove_symlink(&link_path);
+                    let _ = vibe_fs::remove_symlink(&link_path);
                 }
             }
         }
@@ -140,7 +140,7 @@ pub fn redo() -> Result<HistoryEntry, VabError> {
             ));
         }
         HistoryAction::Delete => {
-            let skill_path = vab_skills_dir()?.join(&entry.skill_id);
+            let skill_path = vibe_skills_dir()?.join(&entry.skill_id);
             if skill_path.exists() {
                 let _ = fs::remove_dir_all(&skill_path);
             }
@@ -148,15 +148,15 @@ pub fn redo() -> Result<HistoryEntry, VabError> {
         HistoryAction::BatchLink => {
             if let Some(ref agent_id) = entry.agent_id {
                 let skill_ids: Vec<&str> = entry.skill_id.split(',').collect();
-                let vab_dir = vab_skills_dir()?;
+                let vibe_dir = vibe_skills_dir()?;
                 let config = load_config()?;
                 let agents = build_agents_from_config(&config)?;
                 if let Some(agent) = agents.iter().find(|a| a.id == *agent_id) {
                     for skill_id in skill_ids {
-                        let skill_path = vab_dir.join(skill_id);
+                        let skill_path = vibe_dir.join(skill_id);
                         let link_path = Path::new(&agent.skills_dir).join(skill_id);
                         if skill_path.exists() {
-                            let _ = vab_fs::create_symlink(&skill_path, &link_path);
+                            let _ = vibe_fs::create_symlink(&skill_path, &link_path);
                         }
                     }
                 }
@@ -170,7 +170,7 @@ pub fn redo() -> Result<HistoryEntry, VabError> {
                 if let Some(agent) = agents.iter().find(|a| a.id == *agent_id) {
                     for skill_id in skill_ids {
                         let link_path = Path::new(&agent.skills_dir).join(skill_id);
-                        let _ = vab_fs::remove_symlink(&link_path);
+                        let _ = vibe_fs::remove_symlink(&link_path);
                     }
                 }
             }

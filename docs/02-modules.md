@@ -3,7 +3,7 @@
 ## 已规划模块
 
 ### ✅ Skills 管理（v0.1.0 - 当前开发）
-- 统一库 ~/.vab-skills/ 管理所有 skill 实体文件
+- 统一库 ~/.vibe-skills/ 管理所有 skill 实体文件
 - Symlink/复制 同步到各 agent 的 skills 目录
 - Dashboard 展示、拖拽关联、操作撤销
 - 状态：开发中
@@ -73,15 +73,15 @@
 
 ### 目录结构扩展
 ```
-~/.vab-skills/                  # Skills 统一库（v0.1）
-  ├── .vab-config.json          # 全局配置
-  ├── .vab-history.json         # 操作历史
+~/.vibe-skills/                  # Skills 统一库（v0.1）
+  ├── .vibe-config.json          # 全局配置
+  ├── .vibe-history.json         # 操作历史
   ├── my-skill/                 # skill 实体文件
   └── ...
 
 # 后续扩展时，在同一目录下新增：
-# ~/.vab-skills/.vab-plugins/   # Plugin 统一库（v0.2 预留）
-# ~/.vab-skills/.vab-mcp/       # MCP 配置备份（v0.3 预留）
+# ~/.vibe-skills/.vibe-plugins/   # Plugin 统一库（v0.2 预留）
+# ~/.vibe-skills/.vibe-mcp/       # MCP 配置备份（v0.3 预留）
 ```
 
 ### 前端路由扩展

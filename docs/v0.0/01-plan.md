@@ -8,7 +8,7 @@
 ## 1. 目标
 
 **做什么：**
-- Skill 列表展示（从 ~/.vab-skills/ 扫描，解析 SKILL.md）
+- Skill 列表展示（从 ~/.vibe-skills/ 扫描，解析 SKILL.md）
 - Agent 列表展示（自动检测已安装的 agent）
 - 创建/删除 symlink（skill → agent 目录）
 - 关联状态展示（哪些 skill 关联了哪些 agent）
@@ -43,7 +43,7 @@
 ## 3. 项目结构（骨架）
 
 ```
-qs-vab-mg/
+qs-vibe-mg/
 ├── src-tauri/
 │   ├── src/
 │   │   ├── main.rs
@@ -64,7 +64,7 @@ qs-vab-mg/
 │   │   └── utils/
 │   │       ├── mod.rs
 │   │       ├── fs.rs             # symlink/junction 操作
-│   │       ├── config.rs         # .vab-config.json 读写
+│   │       ├── config.rs         # .vibe-config.json 读写
 │   │       └── path.rs           # ~ 展开
 │   ├── Cargo.toml
 │   └── tauri.conf.json
@@ -112,12 +112,12 @@ pub struct Skill {
     pub description: String,       // SKILL.md frontmatter description
     pub path: String,              // 绝对路径
     pub linked_agents: Vec<String>, // 已关联的 agent id 列表
-    pub sources: Vec<SkillSource>, // 来源列表（vab-lib + 各 agent 目录）
+    pub sources: Vec<SkillSource>, // 来源列表（vibe-lib + 各 agent 目录）
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillSource {
-    pub from: String,  // vab-lib 或 agent id
+    pub from: String,  // vibe-lib 或 agent id
     pub path: String,  // 该来源下的绝对路径
 }
 ```
@@ -141,11 +141,11 @@ pub struct Agent {
 ## 5. 功能清单
 
 ### F01 Skill 扫描与展示
-- [x] 扫描 ~/.vab-skills/ 下所有子文件夹
+- [x] 扫描 ~/.vibe-skills/ 下所有子文件夹
 - [x] 扫描所有已检测 agent 的 skills 目录
 - [x] 每个子文件夹读取 SKILL.md，解析 frontmatter（name、description）
 - [x] 解析失败时用文件夹名作为 name，description 为空
-- [x] 合并去重，每个 skill 标注来源（vab-lib / agent id）
+- [x] 合并去重，每个 skill 标注来源（vibe-lib / agent id）
 - [x] 返回 Skill 列表给前端
 
 ### F02 Agent 检测与展示
@@ -155,7 +155,7 @@ pub struct Agent {
 
 ### F03 Symlink 创建
 - [x] 前端选择 skill + agent → 调用后端创建 symlink
-- [x] 后端：~/.vab-skills/{skill} → {agent.skills_dir}/{skill}
+- [x] 后端：~/.vibe-skills/{skill} → {agent.skills_dir}/{skill}
 - [x] agent skills 目录不存在时自动创建
 - [x] 创建前检测是否已存在
 
@@ -165,7 +165,7 @@ pub struct Agent {
 
 ### F05 关联状态扫描
 - [x] 启动时扫描每个 agent 的 skills 目录
-- [x] 检测哪些是 symlink 且指向 ~/.vab-skills/
+- [x] 检测哪些是 symlink 且指向 ~/.vibe-skills/
 - [x] 更新 Skill.linked_agents 和 Agent 关联信息
 
 ### F06 Dashboard 界面
@@ -252,7 +252,7 @@ pub enum VabError {
 
 ## 8. 配置文件
 
-### ~/.vab-skills/.vab-config.json
+### ~/.vibe-skills/.vibe-config.json
 ```json
 {
   "version": 1,

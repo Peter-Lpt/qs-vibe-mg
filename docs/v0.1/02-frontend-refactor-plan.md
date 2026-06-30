@@ -95,7 +95,7 @@ struct AgentConfig {
 **目标**：展示所有 skill，支持按名称和内容搜索。
 
 **功能**：
-- 全量 skill 列表（合并 vab-skills + 所有 agent 目录）
+- 全量 skill 列表（合并 vibe-skills + 所有 agent 目录）
 - 搜索支持：name 匹配 + SKILL.md body 全文搜索
 - 每个 skill 卡片显示：名称、描述、tag（所属 CLI）、license、特性标记
 - 点击预览 SKILL.md 内容
@@ -196,7 +196,7 @@ pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
 
 ### 2.4 软连接配置
 
-**目标**：层级式管理 agent → vab-skills 的软连接，支持批量操作。
+**目标**：层级式管理 agent → vibe-skills 的软连接，支持批量操作。
 
 **交互方式**：
 - 不使用树形控件（树样式不好看）
@@ -205,21 +205,21 @@ pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
 - 右侧：选中 agent 的 skills 层级视图
 
 **核心操作**：
-1. **点击 agent 名称** → 将该 agent 所有 skills 软连接到 `~/.vab-skills/{agent_id}/`
-2. **点击 agent 下的分类文件夹** → 将该分类的 skills 软连接到 `~/.vab-skills/{agent_id}/{category}/`
+1. **点击 agent 名称** → 将该 agent 所有 skills 软连接到 `~/.vibe-skills/{agent_id}/`
+2. **点击 agent 下的分类文件夹** → 将该分类的 skills 软连接到 `~/.vibe-skills/{agent_id}/{category}/`
 3. **点击单个 skill** → 可单独操作
 
 **软连接方向**：
 ```
-agent/skills/{category?}/{skill} → symlink → ~/.vab-skills/{agent_id}/{category?}/{skill}
+agent/skills/{category?}/{skill} → symlink → ~/.vibe-skills/{agent_id}/{category?}/{skill}
 ```
 
-> 注意：与旧版方向相反。旧版是 agent/skills/skill → vab-skills/skill（单 skill 级别）
-> 新版是 vab-skills/agent/category/skill → agent/skills/category/skill（层级级别）
+> 注意：与旧版方向相反。旧版是 agent/skills/skill → vibe-skills/skill（单 skill 级别）
+> 新版是 vibe-skills/agent/category/skill → agent/skills/category/skill（层级级别）
 
 **目录结构不变原则**：
 - 源目录（agent/skills/）结构不动
-- 目标目录（~/.vab-skills/{agent}/）保持相同层级结构
+- 目标目录（~/.vibe-skills/{agent}/）保持相同层级结构
 - 操作只是创建/删除软连接，不移动文件
 
 **UI 设计**：
@@ -229,7 +229,7 @@ agent/skills/{category?}/{skill} → symlink → ~/.vab-skills/{agent_id}/{categ
 │                                                                   │
 │  ┌── Agent 列表 ─────────┐  ┌── 同步预览 ─────────────────────┐ │
 │  │                         │  │                                   │ │
-│  │  ● Claude Code  [同步]  │  │  目标: ~/.vab-skills/claude-code/│ │
+│  │  ● Claude Code  [同步]  │  │  目标: ~/.vibe-skills/claude-code/│ │
 │  │    ● skills/            │  │                                   │ │
 │  │      ● github/    [同步]│  │  源: ~/.claude/skills/            │ │
 │  │        ● code-review    │  │                                   │ │
@@ -259,7 +259,7 @@ struct SkillsTreeNode {
     path: String,
     is_dir: bool,
     skill_count: usize,      // 子树中 skill 的数量
-    synced: bool,             // 是否已同步到 vab-skills
+    synced: bool,             // 是否已同步到 vibe-skills
     synced_count: usize,      // 已同步的 skill 数
     children: Vec<SkillsTreeNode>,
 }
@@ -267,18 +267,18 @@ struct SkillsTreeNode {
 #[tauri::command]
 pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VabError> {
     // 扫描 agent 的 skills 目录，构建层级结构
-    // 检查每个节点是否已同步到 vab-skills
+    // 检查每个节点是否已同步到 vibe-skills
 }
 
 #[tauri::command]
-pub fn sync_agent_to_vab(agent_id: String) -> Result<SyncResult, VabError> {
-    // 将 agent 所有 skills 创建软连接到 ~/.vab-skills/{agent_id}/
+pub fn sync_agent_to_vibe(agent_id: String) -> Result<SyncResult, VabError> {
+    // 将 agent 所有 skills 创建软连接到 ~/.vibe-skills/{agent_id}/
     // 保持原始目录结构
 }
 
 #[tauri::command]
-pub fn sync_category_to_vab(agent_id: String, category_path: String) -> Result<SyncResult, VabError> {
-    // 将 agent 的特定分类 skills 创建软连接到 ~/.vab-skills/{agent_id}/{category}/
+pub fn sync_category_to_vibe(agent_id: String, category_path: String) -> Result<SyncResult, VabError> {
+    // 将 agent 的特定分类 skills 创建软连接到 ~/.vibe-skills/{agent_id}/{category}/
 }
 
 #[tauri::command]
@@ -313,8 +313,8 @@ tauri-plugin-dialog = "2"   # 原生文件夹选择器
 | `update_agent(agent_id, name?, skills_dir?)` | agents.rs | 更新 agent 配置 |
 | `get_skills_tree(agent_id)` | agents.rs | 获取层级结构 |
 | `get_dashboard_data()` | skills.rs | 获取看板数据 |
-| `sync_agent_to_vab(agent_id)` | sync.rs | 批量同步 |
-| `sync_category_to_vab(agent_id, category)` | sync.rs | 分类同步 |
+| `sync_agent_to_vibe(agent_id)` | sync.rs | 批量同步 |
+| `sync_category_to_vibe(agent_id, category)` | sync.rs | 分类同步 |
 | `remove_sync(agent_id, path?)` | sync.rs | 移除同步 |
 
 ### 3.3 新增模型
@@ -378,8 +378,8 @@ invoke_handler(tauri::generate_handler![
     commands::skills::get_dashboard_data,
     commands::agents::update_agent,
     commands::agents::get_skills_tree,
-    commands::sync::sync_agent_to_vab,
-    commands::sync::sync_category_to_vab,
+    commands::sync::sync_agent_to_vibe,
+    commands::sync::sync_category_to_vibe,
     commands::sync::remove_sync,
 ])
 ```
@@ -618,7 +618,7 @@ interface SyncResult {
 5. [ ] 实现 update_agent 命令
 6. [ ] 实现 get_skills_tree 命令
 7. [ ] 实现 get_dashboard_data 命令
-8. [ ] 实现 sync_agent_to_vab, sync_category_to_vab, remove_sync 命令
+8. [ ] 实现 sync_agent_to_vibe, sync_category_to_vibe, remove_sync 命令
 9. [ ] cargo check 验证
 
 ### Phase 2: TypeScript 类型 + Stores (T2)

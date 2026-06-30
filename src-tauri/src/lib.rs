@@ -21,8 +21,8 @@ pub fn run() {
             commands::sync::check_link_status,
             commands::sync::batch_link,
             commands::sync::batch_unlink,
-            commands::sync::sync_agent_to_vab,
-            commands::sync::sync_category_to_vab,
+            commands::sync::sync_agent_to_vibe,
+            commands::sync::sync_category_to_vibe,
             commands::sync::remove_sync,
             commands::agents::list_agents,
             commands::agents::add_custom_agent,
@@ -34,7 +34,7 @@ pub fn run() {
             commands::history::redo,
             commands::config::get_config,
             commands::config::update_config,
-            commands::config::set_vab_skills_path,
+            commands::config::set_vibe_skills_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

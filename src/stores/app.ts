@@ -7,15 +7,15 @@ export type Locale = "zh" | "en" | "zh-TW";
 
 export const useAppStore = defineStore("app", () => {
   const theme = ref<ThemeMode>(
-    (localStorage.getItem("vab-theme") as ThemeMode) || "system"
+    (localStorage.getItem("vibe-theme") as ThemeMode) || "system"
   );
   const locale = ref<Locale>(
-    (localStorage.getItem("vab-locale") as Locale) || "zh"
+    (localStorage.getItem("vibe-locale") as Locale) || "zh"
   );
   const showSettings = ref(false);
   const resolvedTheme = ref<"light" | "dark">("light");
   const activeTab = ref<TabId>(
-    (localStorage.getItem("vab-active-tab") as TabId) || "skills"
+    (localStorage.getItem("vibe-active-tab") as TabId) || "skills"
   );
 
   function applyTheme(mode: ThemeMode) {
@@ -37,18 +37,18 @@ export const useAppStore = defineStore("app", () => {
 
   function setTheme(mode: ThemeMode) {
     theme.value = mode;
-    localStorage.setItem("vab-theme", mode);
+    localStorage.setItem("vibe-theme", mode);
     applyTheme(mode);
   }
 
   function setLocale(loc: Locale) {
     locale.value = loc;
-    localStorage.setItem("vab-locale", loc);
+    localStorage.setItem("vibe-locale", loc);
   }
 
   function setActiveTab(tab: TabId) {
     activeTab.value = tab;
-    localStorage.setItem("vab-active-tab", tab);
+    localStorage.setItem("vibe-active-tab", tab);
   }
 
   function init() {

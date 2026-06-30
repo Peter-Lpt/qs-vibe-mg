@@ -38,7 +38,7 @@ async function pickVabPath() {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: t("settings.pick_vab_path"),
+      title: t("settings.pick_vibe_path"),
     });
     if (selected) {
       pendingPath.value = selected;
@@ -131,17 +131,17 @@ async function handleMigrate(migrate: boolean) {
 
         <div>
           <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">
-            {{ t('settings.vab_skills_path') }}
+            {{ t('settings.vibe_skills_path') }}
           </label>
           <p class="text-xs mb-2" style="color: var(--c-text-secondary);">
-            {{ t('settings.vab_skills_path_hint') }}
+            {{ t('settings.vibe_skills_path_hint') }}
           </p>
           <button
             class="w-full px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80 text-left"
             style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
             @click="pickVabPath"
           >
-            {{ t('settings.pick_vab_path') }}
+            {{ t('settings.pick_vibe_path') }}
           </button>
         </div>
       </div>

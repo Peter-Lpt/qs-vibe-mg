@@ -27,7 +27,7 @@ async function handleDelete() {
 
 const agentTags = () =>
   props.skill.sources
-    .filter((s) => s.from !== "vab-lib")
+    .filter((s) => s.from !== "vibe-lib")
     .map((s) => {
       const agent = props.agents.find((a) => a.id === s.from);
       return agent ? agent.name : s.from;

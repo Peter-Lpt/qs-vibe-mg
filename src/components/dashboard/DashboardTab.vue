@@ -66,7 +66,7 @@ const sortedAgents = computed(() => {
         <span style="color: var(--c-text-secondary);">|</span>
         <template v-for="(count, agentId) in skillsStore.dashboardData.stats.per_agent_count" :key="agentId">
           <span style="color: var(--c-text-secondary);">
-            {{ agentId }}: {{ count }}
+            {{ t('dashboard.per_agent', { agent: agentId, count }) }}
           </span>
         </template>
       </div>

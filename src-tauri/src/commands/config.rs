@@ -2,7 +2,7 @@ use std::fs;
 
 use crate::errors::VabError;
 use crate::utils::config::{load_config, save_config, Config};
-use crate::utils::path::{expand_tilde, vab_skills_dir};
+use crate::utils::path::{expand_tilde, vibe_skills_dir};
 
 /// 获取配置
 #[tauri::command]
@@ -37,11 +37,11 @@ pub fn update_config(
     Ok(config)
 }
 
-/// 设置 vab-skills 目录路径，可选迁移旧数据
+/// 设置 vibe-skills 目录路径，可选迁移旧数据
 #[tauri::command]
-pub fn set_vab_skills_path(new_path: String, migrate: bool) -> Result<Config, VabError> {
+pub fn set_vibe_skills_path(new_path: String, migrate: bool) -> Result<Config, VabError> {
     let expanded = expand_tilde(&new_path)?;
-    let old_dir = vab_skills_dir()?;
+    let old_dir = vibe_skills_dir()?;
 
     let mut config = load_config()?;
 
@@ -52,15 +52,15 @@ pub fn set_vab_skills_path(new_path: String, migrate: bool) -> Result<Config, Va
         }
 
         // 迁移配置文件
-        let old_config_path = old_dir.join(".vab-config.json");
-        let new_config_path = expanded.join(".vab-config.json");
+        let old_config_path = old_dir.join(".vibe-config.json");
+        let new_config_path = expanded.join(".vibe-config.json");
         if old_config_path.exists() && !new_config_path.exists() {
             fs::copy(&old_config_path, &new_config_path)?;
         }
 
         // 迁移历史文件
-        let old_history_path = old_dir.join(".vab-history.json");
-        let new_history_path = expanded.join(".vab-history.json");
+        let old_history_path = old_dir.join(".vibe-history.json");
+        let new_history_path = expanded.join(".vibe-history.json");
         if old_history_path.exists() && !new_history_path.exists() {
             fs::copy(&old_history_path, &new_history_path)?;
         }
@@ -91,7 +91,7 @@ pub fn set_vab_skills_path(new_path: String, migrate: bool) -> Result<Config, Va
     }
 
     // 更新配置
-    config.vab_skills_path = Some(new_path);
+    config.vibe_skills_path = Some(new_path);
     save_config(&config)?;
 
     Ok(config)

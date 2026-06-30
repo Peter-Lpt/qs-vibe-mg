@@ -3,7 +3,7 @@ import zh from "./locales/zh.json";
 import en from "./locales/en.json";
 import zhTW from "./locales/zh-TW.json";
 
-const savedLocale = localStorage.getItem("vab-locale") || "zh";
+const savedLocale = localStorage.getItem("vibe-locale") || "zh";
 
 const i18n = createI18n({
   legacy: false,

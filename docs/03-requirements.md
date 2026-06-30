@@ -8,10 +8,10 @@
 ## P0 - 核心功能（必须完成）
 
 ### R01 Skill 统一库管理
-- [x] ~/.vab-skills/ 目录作为 skill 实体文件存储位置
+- [x] ~/.vibe-skills/ 目录作为 skill 实体文件存储位置
 - [x] 每个 skill 一个子文件夹，包含 SKILL.md 及相关资源（scripts/、references/、assets/）
-- [x] .vab-config.json 存储 agent 配置和全局设置
-- [x] .vab-history.json 存储操作历史（最近 50 条）
+- [x] .vibe-config.json 存储 agent 配置和全局设置
+- [x] .vibe-history.json 存储操作历史（最近 50 条）
 
 ### R02 SKILL.md 解析
 - [x] 解析 SKILL.md 的 YAML frontmatter（name、description、license、compatibility、metadata、allowed-tools）
@@ -28,11 +28,11 @@
   - codex → ~/.codex/
   - mimocode → ~/.config/mimocode/
   - agents-shared → ~/.agents/
-- [ ] 检测结果更新到 .vab-config.json 的 detected 字段
+- [ ] 检测结果更新到 .vibe-config.json 的 detected 字段
 - [x] 未检测到的 agent 在 UI 中灰显
 
 ### R04 链接创建与管理（Symlink + Junction）
-- [x] 从 ~/.vab-skills/{skill} 创建链接到 agent 的 skills 目录
+- [x] 从 ~/.vibe-skills/{skill} 创建链接到 agent 的 skills 目录
 - [ ] 三种模式：Symlink（Unix/Win）、Junction（Win 免管理员）、Copy
 - [ ] 启动时自动检测系统支持的模式（Symlink → Junction → Copy 降级）
 - [x] agent 的 skills 目录不存在时自动创建
@@ -55,15 +55,15 @@
 ### R07 Skill 安装
 - [x] 点击 [+ 安装 Skill] 按钮
 - [x] 弹窗输入本地文件夹路径
-- [x] 将文件夹拷贝到 ~/.vab-skills/ 下
+- [x] 将文件夹拷贝到 ~/.vibe-skills/ 下
 - [x] 自动解析 SKILL.md frontmatter
 - [x] 安装记录写入操作历史
 
 ### R08 Skill 删除
-- [x] 删除 ~/.vab-skills/ 下的实体文件夹
+- [x] 删除 ~/.vibe-skills/ 下的实体文件夹
 - [x] 删除前自动清理所有已创建的链接/副本
 - [x] 确认弹窗防止误删
-- [ ] 删除前备份到 .vab-history/snapshots/{id}/（支持撤销恢复）
+- [ ] 删除前备份到 .vibe-history/snapshots/{id}/（支持撤销恢复）
 - [x] 删除记录写入操作历史
 
 ---
@@ -146,12 +146,12 @@
 
 ### R19 并发安全
 - [ ] 全局操作锁（Mutex），防止并发写入冲突
-- [ ] 多实例检测：.vab-lock 文件 + 进程检查
+- [ ] 多实例检测：.vibe-lock 文件 + 进程检查
 - [ ] 多实例时提示用户关闭其他实例
 
 ### R20 日志
 - [ ] Rust 后端使用 tracing 输出日志
-- [ ] 日志文件位置：Windows %LOCALAPPDATA%/qs-vab-mg/logs/，Mac ~/Library/Logs/qs-vab-mg/
+- [ ] 日志文件位置：Windows %LOCALAPPDATA%/qs-vibe-mg/logs/，Mac ~/Library/Logs/qs-vibe-mg/
 - [x] 开发模式：Vite devtools + Vue DevTools
 - [x] 生产模式：Tauri 调试窗口（Ctrl+Shift+I）
 

@@ -72,7 +72,7 @@ export const useAgentsStore = defineStore("agents", () => {
     syncing.value = true;
     syncResult.value = null;
     try {
-      syncResult.value = await invoke<SyncResult>("sync_agent_to_vab", { agentId });
+      syncResult.value = await invoke<SyncResult>("sync_agent_to_vibe", { agentId });
       await fetchAgents();
     } catch (e: unknown) {
       throw new Error(String(e));
@@ -85,7 +85,7 @@ export const useAgentsStore = defineStore("agents", () => {
     syncing.value = true;
     syncResult.value = null;
     try {
-      syncResult.value = await invoke<SyncResult>("sync_category_to_vab", {
+      syncResult.value = await invoke<SyncResult>("sync_category_to_vibe", {
         agentId,
         categoryPath,
       });
@@ -109,7 +109,7 @@ export const useAgentsStore = defineStore("agents", () => {
 
   async function setVabSkillsPath(newPath: string, migrate: boolean) {
     try {
-      await invoke("set_vab_skills_path", { newPath, migrate });
+      await invoke("set_vibe_skills_path", { newPath, migrate });
       await fetchAgents();
     } catch (e: unknown) {
       throw new Error(String(e));

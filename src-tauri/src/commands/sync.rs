@@ -5,14 +5,14 @@ use crate::errors::VabError;
 use crate::models::history::HistoryAction;
 use crate::models::sync::SyncResult;
 use crate::utils::config::{build_agents_from_config, load_config};
-use crate::utils::fs as vab_fs;
+use crate::utils::fs as vibe_fs;
 use crate::utils::history::record_action;
-use crate::utils::path::vab_skills_dir;
+use crate::utils::path::vibe_skills_dir;
 
 #[tauri::command]
 pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VabError> {
-    let vab_dir = vab_skills_dir()?;
-    let skill_path = vab_dir.join(&skill_id);
+    let vibe_dir = vibe_skills_dir()?;
+    let skill_path = vibe_dir.join(&skill_id);
 
     if !skill_path.exists() {
         return Err(VabError::SkillNotFound { skill_id });
@@ -31,7 +31,7 @@ pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VabError> {
     let agent_skills_dir = Path::new(&agent.skills_dir);
     let link_path = agent_skills_dir.join(&skill_id);
 
-    vab_fs::create_symlink(&skill_path, &link_path)?;
+    vibe_fs::create_symlink(&skill_path, &link_path)?;
 
     let _ = record_action(
         HistoryAction::Link,
@@ -58,14 +58,14 @@ pub fn remove_link(skill_id: String, agent_id: String) -> Result<(), VabError> {
     let agent_skills_dir = Path::new(&agent.skills_dir);
     let link_path = agent_skills_dir.join(&skill_id);
 
-    if !vab_fs::is_link(&link_path) {
+    if !vibe_fs::is_link(&link_path) {
         return Err(VabError::LinkNotFound {
             skill_id,
             agent_id,
         });
     }
 
-    vab_fs::remove_symlink(&link_path)?;
+    vibe_fs::remove_symlink(&link_path)?;
 
     let _ = record_action(
         HistoryAction::Unlink,
@@ -91,14 +91,14 @@ pub fn check_link_status(skill_id: String, agent_id: String) -> Result<String, V
 
     let link_path = Path::new(&agent.skills_dir).join(&skill_id);
 
-    if !link_path.exists() && !vab_fs::is_link(&link_path) {
+    if !link_path.exists() && !vibe_fs::is_link(&link_path) {
         return Ok("none".to_string());
     }
 
-    if vab_fs::is_link(&link_path) {
-        if let Ok(target) = vab_fs::read_link_target(&link_path) {
-            let vab_dir = vab_skills_dir()?;
-            let expected = vab_dir.join(&skill_id);
+    if vibe_fs::is_link(&link_path) {
+        if let Ok(target) = vibe_fs::read_link_target(&link_path) {
+            let vibe_dir = vibe_skills_dir()?;
+            let expected = vibe_dir.join(&skill_id);
             if target == expected {
                 return Ok("valid".to_string());
             }
@@ -149,9 +149,9 @@ pub fn batch_unlink(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<Stri
     Ok(errors)
 }
 
-/// 将 agent 的所有 skills 层级同步到 ~/.vab-skills/{agent_id}/
+/// 将 agent 的所有 skills 层级同步到 ~/.vibe-skills/{agent_id}/
 #[tauri::command]
-pub fn sync_agent_to_vab(agent_id: String) -> Result<SyncResult, VabError> {
+pub fn sync_agent_to_vibe(agent_id: String) -> Result<SyncResult, VabError> {
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
     let agent = agents
@@ -169,8 +169,8 @@ pub fn sync_agent_to_vab(agent_id: String) -> Result<SyncResult, VabError> {
         )));
     }
 
-    let vab_dir = vab_skills_dir()?;
-    let target_dir = vab_dir.join(&agent_id);
+    let vibe_dir = vibe_skills_dir()?;
+    let target_dir = vibe_dir.join(&agent_id);
 
     let mut result = SyncResult {
         synced_count: 0,
@@ -189,9 +189,9 @@ pub fn sync_agent_to_vab(agent_id: String) -> Result<SyncResult, VabError> {
     Ok(result)
 }
 
-/// 将 agent 的特定分类同步到 ~/.vab-skills/{agent_id}/{category}/
+/// 将 agent 的特定分类同步到 ~/.vibe-skills/{agent_id}/{category}/
 #[tauri::command]
-pub fn sync_category_to_vab(
+pub fn sync_category_to_vibe(
     agent_id: String,
     category_path: String,
 ) -> Result<SyncResult, VabError> {
@@ -214,8 +214,8 @@ pub fn sync_category_to_vab(
         )));
     }
 
-    let vab_dir = vab_skills_dir()?;
-    let target_dir = vab_dir.join(&agent_id).join(&category_path);
+    let vibe_dir = vibe_skills_dir()?;
+    let target_dir = vibe_dir.join(&agent_id).join(&category_path);
 
     let mut result = SyncResult {
         synced_count: 0,
@@ -237,8 +237,8 @@ pub fn sync_category_to_vab(
 /// 移除软连接
 #[tauri::command]
 pub fn remove_sync(agent_id: String, path: Option<String>) -> Result<(), VabError> {
-    let vab_dir = vab_skills_dir()?;
-    let target_base = vab_dir.join(&agent_id);
+    let vibe_dir = vibe_skills_dir()?;
+    let target_base = vibe_dir.join(&agent_id);
 
     if !target_base.exists() {
         return Ok(());
@@ -302,7 +302,7 @@ fn sync_directory_recursive(
         let link_target = target_dir.join(&name);
 
         if has_skill_md {
-            if vab_fs::is_link(&link_target) {
+            if vibe_fs::is_link(&link_target) {
                 result.synced_count += 1;
                 continue;
             }
@@ -311,7 +311,7 @@ fn sync_directory_recursive(
                 continue;
             }
 
-            match vab_fs::create_symlink(&path, &link_target) {
+            match vibe_fs::create_symlink(&path, &link_target) {
                 Ok(()) => result.synced_count += 1,
                 Err(e) => result.errors.push(format!("{}: {}", name, e)),
             }
@@ -335,8 +335,8 @@ fn remove_symlinks_recursive(dir: &Path) -> Result<usize, VabError> {
         let entry = entry?;
         let path = entry.path();
 
-        if vab_fs::is_link(&path) {
-            vab_fs::remove_symlink(&path)?;
+        if vibe_fs::is_link(&path) {
+            vibe_fs::remove_symlink(&path)?;
             count += 1;
         } else if path.is_dir() {
             count += remove_symlinks_recursive(&path)?;

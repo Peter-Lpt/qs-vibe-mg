@@ -2,8 +2,8 @@ use crate::errors::VabError;
 use crate::models::agent::Agent;
 use crate::models::sync::SkillsTreeNode;
 use crate::utils::config::{build_agents_from_config, load_config, save_config, AgentConfig};
-use crate::utils::fs as vab_fs;
-use crate::utils::path::vab_skills_dir;
+use crate::utils::fs as vibe_fs;
+use crate::utils::path::vibe_skills_dir;
 use std::fs;
 use std::path::Path;
 
@@ -134,8 +134,8 @@ pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VabError> {
         });
     }
 
-    let vab_dir = vab_skills_dir()?;
-    let target_dir = vab_dir.join(&agent_id);
+    let vibe_dir = vibe_skills_dir()?;
+    let target_dir = vibe_dir.join(&agent_id);
 
     let root = build_tree_node(skills_dir, skills_dir, &target_dir);
     Ok(root)
@@ -172,7 +172,7 @@ fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTree
                 skill_count += 1;
                 let relative = path.strip_prefix(base_dir).unwrap_or(&path);
                 let sync_target = target_dir.join(relative);
-                if vab_fs::is_link(&sync_target) {
+                if vibe_fs::is_link(&sync_target) {
                     synced_count += 1;
                 }
             } else {
@@ -187,7 +187,7 @@ fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTree
 
     let relative = dir.strip_prefix(base_dir).unwrap_or(dir);
     let sync_target = target_dir.join(relative);
-    let synced = vab_fs::is_link(&sync_target) || (sync_target.exists() && synced_count > 0);
+    let synced = vibe_fs::is_link(&sync_target) || (sync_target.exists() && synced_count > 0);
 
     SkillsTreeNode {
         name,

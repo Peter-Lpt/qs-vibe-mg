@@ -19,7 +19,7 @@ const agentOptions = computed(() => {
   const tags = new Set<string>();
   for (const skill of skillsStore.skills) {
     for (const src of skill.sources) {
-      if (src.from !== "vab-lib") {
+      if (src.from !== "vibe-lib") {
         const agent = agentsStore.agents.find(a => a.id === src.from);
         tags.add(agent ? agent.name : src.from);
       }
@@ -33,7 +33,7 @@ const displaySkills = computed(() => {
   if (filterAgent.value) {
     list = list.filter(s =>
       s.sources.some(src => {
-        if (src.from === "vab-lib") return false;
+        if (src.from === "vibe-lib") return false;
         const agent = agentsStore.agents.find(a => a.id === src.from);
         return agent ? agent.name === filterAgent.value : src.from === filterAgent.value;
       })

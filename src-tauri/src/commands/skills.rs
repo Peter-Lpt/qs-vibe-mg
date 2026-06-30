@@ -9,17 +9,17 @@ use crate::models::dashboard::{
 use crate::models::skill::{Skill, SkillSource};
 use crate::parsers::skill_md::parse_skill_md_full;
 use crate::utils::config::{build_agents_from_config, load_config};
-use crate::utils::fs as vab_fs;
+use crate::utils::fs as vibe_fs;
 use crate::utils::history::record_action;
-use crate::utils::path::vab_skills_dir;
+use crate::utils::path::vibe_skills_dir;
 use crate::models::history::HistoryAction;
 
 #[tauri::command]
 pub fn list_skills() -> Result<Vec<Skill>, VabError> {
     let mut map: HashMap<String, SkillEntry> = HashMap::new();
 
-    let vab_dir = vab_skills_dir()?;
-    scan_directory(&vab_dir, "vab-lib", &mut map)?;
+    let vibe_dir = vibe_skills_dir()?;
+    scan_directory(&vibe_dir, "vibe-lib", &mut map)?;
 
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
@@ -78,7 +78,7 @@ pub fn search_skills(query: String) -> Result<Vec<Skill>, VabError> {
 pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
-    let vab_dir = vab_skills_dir()?;
+    let vibe_dir = vibe_skills_dir()?;
 
     let mut agent_skills: HashMap<String, Vec<(String, String)>> = HashMap::new();
     let mut all_skill_agents: HashMap<String, Vec<String>> = HashMap::new();
@@ -159,20 +159,20 @@ pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
         })
         .collect();
 
-    let mut vab_skills = Vec::new();
-    if vab_dir.exists() {
-        collect_vab_skills(&vab_dir, &mut vab_skills, &all_skill_agents, &mut total_skills);
+    let mut vibe_skills = Vec::new();
+    if vibe_dir.exists() {
+        collect_vibe_skills(&vibe_dir, &mut vibe_skills, &all_skill_agents, &mut total_skills);
     }
 
     let mut all_agents = dashboard_agents;
-    if !vab_skills.is_empty() {
+    if !vibe_skills.is_empty() {
         all_agents.insert(
             0,
             DashboardAgent {
-                agent_id: "vab-lib".to_string(),
+                agent_id: "vibe-lib".to_string(),
                 agent_name: "VAB Library".to_string(),
-                skill_count: vab_skills.len(),
-                skills: vab_skills,
+                skill_count: vibe_skills.len(),
+                skills: vibe_skills,
             },
         );
     }
@@ -230,9 +230,9 @@ fn collect_skills_recursive(
     }
 }
 
-fn collect_vab_skills(
+fn collect_vibe_skills(
     dir: &Path,
-    vab_skills: &mut Vec<DashboardSkill>,
+    vibe_skills: &mut Vec<DashboardSkill>,
     all_skill_agents: &HashMap<String, Vec<String>>,
     total_skills: &mut std::collections::HashSet<String>,
 ) {
@@ -246,7 +246,7 @@ fn collect_vab_skills(
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
-            if id.starts_with('.') || id == ".vab-config.json" || id == ".vab-history.json" {
+            if id.starts_with('.') || id == ".vibe-config.json" || id == ".vibe-history.json" {
                 continue;
             }
 
@@ -263,13 +263,13 @@ fn collect_vab_skills(
                     .map(|ids| ids.clone())
                     .unwrap_or_default();
 
-                vab_skills.push(DashboardSkill {
+                vibe_skills.push(DashboardSkill {
                     skill_id: id,
                     skill_name: name,
                     shared_with,
                 });
             } else {
-                collect_vab_skills(&path, vab_skills, all_skill_agents, total_skills);
+                collect_vibe_skills(&path, vibe_skills, all_skill_agents, total_skills);
             }
         }
     }
@@ -277,11 +277,11 @@ fn collect_vab_skills(
 
 #[tauri::command]
 pub fn preview_skill(skill_id: String) -> Result<String, VabError> {
-    // 搜索所有可能的位置：vab-skills + 各 agent 目录
-    let vab_dir = vab_skills_dir()?;
-    let vab_path = vab_dir.join(&skill_id).join("SKILL.md");
-    if vab_path.exists() {
-        return fs::read_to_string(&vab_path).map_err(VabError::Io);
+    // 搜索所有可能的位置：vibe-skills + 各 agent 目录
+    let vibe_dir = vibe_skills_dir()?;
+    let vibe_path = vibe_dir.join(&skill_id).join("SKILL.md");
+    if vibe_path.exists() {
+        return fs::read_to_string(&vibe_path).map_err(VabError::Io);
     }
 
     let config = load_config()?;
@@ -351,8 +351,8 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
     let (name, description, license, compatibility, metadata, _body) =
         parse_skill_md_full(&skill_md)?;
 
-    let vab_dir = vab_skills_dir()?;
-    let dest = vab_dir.join(&name);
+    let vibe_dir = vibe_skills_dir()?;
+    let dest = vibe_dir.join(&name);
 
     if dest.exists() {
         return Err(VabError::SkillAlreadyExists { skill_id: name });
@@ -370,7 +370,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
         path: dest.to_string_lossy().to_string(),
         linked_agents: Vec::new(),
         sources: vec![SkillSource {
-            from: "vab-lib".to_string(),
+            from: "vibe-lib".to_string(),
             path: dest.to_string_lossy().to_string(),
         }],
         license,
@@ -385,7 +385,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
 
 #[tauri::command]
 pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
-    let skill_path = vab_skills_dir()?.join(&skill_id);
+    let skill_path = vibe_skills_dir()?.join(&skill_id);
 
     if !skill_path.exists() {
         return Err(VabError::SkillNotFound { skill_id });
@@ -395,8 +395,8 @@ pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
     let agents = build_agents_from_config(&config)?;
     for agent in &agents {
         let link_path = Path::new(&agent.skills_dir).join(&skill_id);
-        if vab_fs::is_link(&link_path) {
-            let _ = vab_fs::remove_symlink(&link_path);
+        if vibe_fs::is_link(&link_path) {
+            let _ = vibe_fs::remove_symlink(&link_path);
         }
     }
 
@@ -496,10 +496,10 @@ fn find_linked_agents(skill_id: &str, agents: &[crate::models::agent::Agent]) ->
             continue;
         }
         let link_path = Path::new(&agent.skills_dir).join(skill_id);
-        if vab_fs::is_link(&link_path) {
-            if let Ok(target) = vab_fs::read_link_target(&link_path) {
-                if let Ok(vab_dir) = vab_skills_dir() {
-                    let expected = vab_dir.join(skill_id);
+        if vibe_fs::is_link(&link_path) {
+            if let Ok(target) = vibe_fs::read_link_target(&link_path) {
+                if let Ok(vibe_dir) = vibe_skills_dir() {
+                    let expected = vibe_dir.join(skill_id);
                     if target == expected {
                         linked.push(agent.id.clone());
                     }

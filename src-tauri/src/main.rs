@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    vab_skills_manager_lib::run()
+    vibe_skills_manager_lib::run()
 }

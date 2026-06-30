@@ -65,7 +65,7 @@ Windows 创建软连接需要开发者模式或以管理员身份运行。
 ## 项目结构
 
 ```
-qs-vab-mg/
+qs-vibe-mg/
 ├── src-tauri/                        # Rust 后端
 │   ├── src/
 │   │   ├── commands/
@@ -139,9 +139,9 @@ qs-vab-mg/
 ## 数据流
 
 ```
-~/.vab-skills/                      # 统一库
-├── .vab-config.json                # 全局配置
-├── .vab-history.json               # 操作历史
+~/.vibe-skills/                      # 统一库
+├── .vibe-config.json                # 全局配置
+├── .vibe-history.json               # 操作历史
 ├── my-skill/                       # skill 实体
 │   ├── SKILL.md
 │   ├── scripts/

@@ -1,12 +1,12 @@
 [package]
-name = "vab-skills-manager"
+name = "vibe-skills-manager"
 version = "0.1.0"
 description = "Cross-platform AI agent skills manager"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "vab_skills_manager_lib"
+name = "vibe_skills_manager_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

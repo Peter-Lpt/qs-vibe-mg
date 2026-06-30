@@ -5,12 +5,12 @@ use uuid::Uuid;
 use crate::errors::VabError;
 use crate::models::history::{HistoryAction, HistoryEntry, HistoryStore};
 use crate::utils::config::load_config;
-use crate::utils::path::vab_skills_dir;
+use crate::utils::path::vibe_skills_dir;
 
-const HISTORY_FILE: &str = ".vab-history.json";
+const HISTORY_FILE: &str = ".vibe-history.json";
 
 fn history_path() -> Result<std::path::PathBuf, VabError> {
-    Ok(vab_skills_dir()?.join(HISTORY_FILE))
+    Ok(vibe_skills_dir()?.join(HISTORY_FILE))
 }
 
 /// 加载历史记录
@@ -29,7 +29,7 @@ pub fn load_history() -> Result<HistoryStore, VabError> {
 /// 保存历史记录
 pub fn save_history(store: &HistoryStore) -> Result<(), VabError> {
     let path = history_path()?;
-    let dir = vab_skills_dir()?;
+    let dir = vibe_skills_dir()?;
     if !dir.exists() {
         fs::create_dir_all(&dir)?;
     }

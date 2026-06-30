@@ -8,11 +8,11 @@ pub struct Skill {
     pub name: String,
     /// SKILL.md frontmatter 中的 description
     pub description: String,
-    /// ~/.vab-skills/{id} 绝对路径
+    /// ~/.vibe-skills/{id} 绝对路径
     pub path: String,
     /// 已关联的 agent id 列表
     pub linked_agents: Vec<String>,
-    /// skill 来源：vab-lib（中心库）或各 agent id
+    /// skill 来源：vibe-lib（中心库）或各 agent id
     pub sources: Vec<SkillSource>,
     /// license
     pub license: Option<String>,
@@ -32,7 +32,7 @@ pub struct Skill {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillSource {
-    /// 来源标识：vab-lib 或 agent id（如 claude-code）
+    /// 来源标识：vibe-lib 或 agent id（如 claude-code）
     pub from: String,
     /// 该来源下的绝对路径
     pub path: String,

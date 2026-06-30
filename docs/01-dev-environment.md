@@ -88,8 +88,8 @@ cargo --version
 
 ### 1. 创建项目
 ```bash
-cd F:\workspace\demo\qs-vab-mg   # Windows
-# cd ~/workspace/demo/qs-vab-mg  # Mac
+cd F:\workspace\demo\qs-vibe-mg   # Windows
+# cd ~/workspace/demo/qs-vibe-mg  # Mac
 
 # 创建 Tauri 2 + Vue + TS 项目（在当前目录下）
 pnpm create tauri-app . --template vue-ts
@@ -99,7 +99,7 @@ pnpm create tauri-app . --template vue-ts
 > ```bash
 > npm create tauri-app@latest
 > # 选择：Vue + TypeScript
-> # 项目名：vab-skills-manager
+> # 项目名：vibe-skills-manager
 > # 然后把生成的文件移到当前目录
 > ```
 
@@ -139,7 +139,7 @@ pnpm tauri dev
 ## 项目目录结构（初始化后）
 
 ```
-qs-vab-mg/
+qs-vibe-mg/
 ├── src-tauri/           # Rust 后端
 │   ├── src/
 │   │   └── main.rs      # Rust 入口
