@@ -26,7 +26,7 @@ function selectTab(tab: TabId) {
 
 <template>
   <div
-    class="flex items-center gap-0.5 px-4 py-1.5 border-b shrink-0"
+    class="flex items-center gap-0.5 px-4 py-1.5 border-b shrink-0 mb-5"
     style="border-color: var(--c-border); background: var(--c-surface);"
   >
     <button
