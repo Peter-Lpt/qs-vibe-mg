@@ -24,6 +24,7 @@ pub fn run() {
             commands::sync::sync_agent_to_vibe,
             commands::sync::sync_category_to_vibe,
             commands::sync::remove_sync,
+            commands::sync::remove_sync_skills,
             commands::agents::list_agents,
             commands::agents::add_custom_agent,
             commands::agents::update_agent,

@@ -97,7 +97,13 @@
     "select_all": "Select all",
     "deselect_all": "Deselect all",
     "selected_count": "{count} selected",
-    "sync_selected": "Sync ({count})"
+    "sync_selected": "Sync ({count})",
+    "delete_selected": "Delete ({count})",
+    "delete_confirm": "Delete {count} synced items?",
+    "linked_elsewhere": "Linked elsewhere",
+    "move_link": "Move here",
+    "status_synced": "Synced",
+    "status_linked": "Linked"
   },
   "agents": {
     "panel": "Agent Panel",

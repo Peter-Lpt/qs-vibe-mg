@@ -81,7 +81,13 @@
     "select_all": "全选",
     "deselect_all": "取消全选",
     "selected_count": "已选 {count} 项",
-    "sync_selected": "同步 ({count})"
+    "sync_selected": "同步 ({count})",
+    "delete_selected": "删除 ({count})",
+    "delete_confirm": "确定删除选中的 {count} 个已同步项？",
+    "linked_elsewhere": "已链接到其他位置",
+    "move_link": "挪动到此处",
+    "status_synced": "已同步",
+    "status_linked": "已链接"
   },
   "agents": {
     "panel": "Agent 关联面板",

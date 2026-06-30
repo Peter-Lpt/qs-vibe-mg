@@ -131,6 +131,8 @@ pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VabError> {
             synced: false,
             synced_count: 0,
             children: Vec::new(),
+            link_target: None,
+            is_source_link: false,
         });
     }
 
@@ -168,7 +170,6 @@ fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTree
             let has_skill_md = path.join("SKILL.md").exists();
 
             if has_skill_md {
-                // 这是一个 skill
                 skill_count += 1;
                 let relative = path.strip_prefix(base_dir).unwrap_or(&path);
                 let sync_target = target_dir.join(relative);
@@ -176,6 +177,17 @@ fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTree
                 if synced {
                     synced_count += 1;
                 }
+
+                // 检测源目录本身是否是 symlink
+                let is_source_link = vibe_fs::is_link(&path);
+                let link_target = if is_source_link {
+                    vibe_fs::read_link_target(&path)
+                        .ok()
+                        .map(|p| p.to_string_lossy().to_string())
+                } else {
+                    None
+                };
+
                 children.push(SkillsTreeNode {
                     name: child_name,
                     path: path.to_string_lossy().to_string(),
@@ -184,9 +196,10 @@ fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTree
                     synced,
                     synced_count: if synced { 1 } else { 0 },
                     children: Vec::new(),
+                    link_target,
+                    is_source_link,
                 });
             } else {
-                // 这是一个分类目录
                 let child = build_tree_node(&path, base_dir, target_dir);
                 skill_count += child.skill_count;
                 synced_count += child.synced_count;
@@ -199,6 +212,15 @@ fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTree
     let sync_target = target_dir.join(relative);
     let synced = vibe_fs::is_link(&sync_target) || (sync_target.exists() && synced_count > 0);
 
+    let is_source_link = vibe_fs::is_link(dir) && dir != base_dir;
+    let link_target = if is_source_link {
+        vibe_fs::read_link_target(dir)
+            .ok()
+            .map(|p| p.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
     SkillsTreeNode {
         name,
         path: dir.to_string_lossy().to_string(),
@@ -207,5 +229,7 @@ fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTree
         synced,
         synced_count,
         children,
+        link_target,
+        is_source_link,
     }
 }

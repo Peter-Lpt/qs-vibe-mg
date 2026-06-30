@@ -102,6 +102,8 @@ export interface SkillsTreeNode {
   synced: boolean;
   synced_count: number;
   children: SkillsTreeNode[];
+  link_target?: string;
+  is_source_link: boolean;
 }
 
 export interface SyncResult {

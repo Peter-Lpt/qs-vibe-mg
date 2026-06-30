@@ -107,6 +107,17 @@ export const useAgentsStore = defineStore("agents", () => {
     }
   }
 
+  async function removeSyncSkills(agentId: string, skillNames: string[]): Promise<SyncResult> {
+    try {
+      const result = await invoke<SyncResult>("remove_sync_skills", { agentId, skillNames });
+      syncResult.value = result;
+      await fetchAgents();
+      return result;
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
   async function setVabSkillsPath(newPath: string, migrate: boolean) {
     try {
       await invoke("set_vibe_skills_path", { newPath, migrate });
@@ -132,6 +143,7 @@ export const useAgentsStore = defineStore("agents", () => {
     syncAgentToVab,
     syncCategoryToVab,
     removeSync,
+    removeSyncSkills,
     setVabSkillsPath,
   };
 });

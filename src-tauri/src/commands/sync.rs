@@ -323,6 +323,45 @@ fn sync_directory_recursive(
     Ok(())
 }
 
+/// 按 skill 名称列表删除目标端 symlink
+#[tauri::command]
+pub fn remove_sync_skills(agent_id: String, skill_names: Vec<String>) -> Result<SyncResult, VabError> {
+    let vibe_dir = vibe_skills_dir()?;
+    let target_base = vibe_dir.join(&agent_id);
+
+    let mut result = SyncResult {
+        synced_count: 0,
+        errors: Vec::new(),
+    };
+
+    for name in &skill_names {
+        let target = target_base.join(name);
+        if !target.exists() {
+            continue;
+        }
+        if vibe_fs::is_link(&target) {
+            match vibe_fs::remove_symlink(&target) {
+                Ok(()) => result.synced_count += 1,
+                Err(e) => result.errors.push(format!("{}: {}", name, e)),
+            }
+        } else if target.is_dir() {
+            match fs::remove_dir_all(&target) {
+                Ok(()) => result.synced_count += 1,
+                Err(e) => result.errors.push(format!("{}: {}", name, e)),
+            }
+        }
+    }
+
+    let _ = record_action(
+        HistoryAction::BatchUnlink,
+        &format!("remove-sync-skills:{}:{}", agent_id, skill_names.len()),
+        Some(&agent_id),
+        Some("symlink"),
+    );
+
+    Ok(result)
+}
+
 /// 递归移除软连接，返回移除数量
 fn remove_symlinks_recursive(dir: &Path) -> Result<usize, VabError> {
     if !dir.exists() {

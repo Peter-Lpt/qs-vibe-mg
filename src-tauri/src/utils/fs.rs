@@ -117,9 +117,23 @@ pub fn is_link(path: &Path) -> bool {
     is_symlink(path) || is_junction(path)
 }
 
-/// 获取 symlink 的目标路径
+/// 获取 symlink 或 junction 的目标路径
 pub fn read_link_target(link: &Path) -> Result<std::path::PathBuf, VabError> {
-    fs::read_link(link).map_err(VabError::Io)
+    // 先尝试普通 symlink
+    if let Ok(target) = fs::read_link(link) {
+        return Ok(target);
+    }
+    // Windows junction: fs::read_link 失败，用 canonicalize 解析实际路径
+    #[cfg(windows)]
+    {
+        if is_junction(link) {
+            return fs::canonicalize(link).map_err(VabError::Io);
+        }
+    }
+    Err(VabError::Io(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        format!("Cannot read link target: {}", link.display()),
+    )))
 }
 
 #[cfg(test)]
