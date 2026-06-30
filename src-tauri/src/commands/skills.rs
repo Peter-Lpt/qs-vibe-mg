@@ -128,7 +128,7 @@ pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
             let skill_count = skills.len();
             per_agent_count.insert(agent.id.clone(), skill_count);
 
-            let dashboard_skills: Vec<DashboardSkill> = skills
+            let mut dashboard_skills: Vec<DashboardSkill> = skills
                 .iter()
                 .map(|(skill_id, skill_name)| {
                     total_skills.insert(skill_id.clone());
@@ -149,6 +149,11 @@ pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
                     }
                 })
                 .collect();
+
+            dashboard_skills.sort_by(|a, b| {
+                b.shared_with.len().cmp(&a.shared_with.len())
+                    .then(a.skill_name.to_lowercase().cmp(&b.skill_name.to_lowercase()))
+            });
 
             DashboardAgent {
                 agent_id: agent.id.clone(),

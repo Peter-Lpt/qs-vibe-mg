@@ -159,6 +159,7 @@
     "drag_hint": "拖拽节点可移动，滚轮缩放",
     "skills": "skills",
     "unique": "独立",
-    "shared": "共享"
+    "shared": "共享",
+    "no_shared_skills": "暂无共享 skill"
   }
 }

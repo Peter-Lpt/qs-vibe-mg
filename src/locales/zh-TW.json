@@ -74,7 +74,8 @@
     "drag_hint": "拖曳節點可移動，滾輪縮放",
     "skills": "skills",
     "unique": "獨立",
-    "shared": "共享"
+    "shared": "共享",
+    "no_shared_skills": "暫無共享 skill"
   },
   "symlink": {
     "title": "軟連結配置",

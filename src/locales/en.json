@@ -74,7 +74,8 @@
     "drag_hint": "Drag nodes, scroll to zoom",
     "skills": "skills",
     "unique": "unique",
-    "shared": "shared"
+    "shared": "shared",
+    "no_shared_skills": "No shared skills"
   },
   "symlink": {
     "title": "Symlink Configuration",
