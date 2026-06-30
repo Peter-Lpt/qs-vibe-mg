@@ -22,15 +22,15 @@ function selectAgent(agentId: string) {
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-5">
       <h2 class="text-base font-semibold" style="color: var(--c-text);">
         {{ t('symlink.title') }}
       </h2>
     </div>
 
-    <div class="flex gap-4" style="min-height: 400px;">
+    <div class="flex gap-5" style="min-height: 400px;">
       <div class="w-1/3">
-        <div class="space-y-2">
+        <div class="space-y-3">
           <AgentExpandable
             v-for="agent in agentsStore.agents.filter(a => a.detected)"
             :key="agent.id"

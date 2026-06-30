@@ -56,7 +56,7 @@ const appStore = useAppStore();
       </div>
     </header>
 
-    <div class="flex-1 overflow-y-auto" style="background: var(--c-bg);">
+    <div class="flex-1 overflow-y-auto p-6" style="background: var(--c-bg);">
       <slot />
     </div>
 

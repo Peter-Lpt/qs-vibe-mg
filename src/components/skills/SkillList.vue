@@ -52,33 +52,35 @@ watch(searchQuery, (val) => {
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-3">
+    <div class="flex items-center justify-between mb-5">
       <h2 class="text-base font-semibold" style="color: var(--c-text);">
         {{ t('skills.library') }}
-        <span class="text-sm font-normal ml-1" style="color: var(--c-text-secondary);">
+        <span class="text-sm font-normal ml-1.5" style="color: var(--c-text-secondary);">
           ({{ displaySkills.length }}/{{ skillsStore.skills.length }})
         </span>
       </h2>
       <button
-        class="text-xs px-3 py-1.5 rounded cursor-pointer hover:opacity-80"
+        class="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-colors"
         style="background: var(--c-primary); color: white;"
         @click="showInstall = true"
+        @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary-hover)'"
+        @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary)'"
       >
         + {{ t('skills.install') }}
       </button>
     </div>
 
-    <div class="flex gap-2 mb-3">
+    <div class="flex gap-3 mb-5">
       <input
         v-model="searchQuery"
         :placeholder="t('skills.search')"
-        class="flex-1 px-3 py-2 text-xs rounded-md border outline-none"
-        style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+        class="flex-1 px-3 py-2 text-xs rounded-md border outline-none transition-colors"
+        style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text);"
       />
       <select
         v-model="filterAgent"
-        class="px-2 py-2 text-xs rounded-md border cursor-pointer outline-none shrink-0"
-        style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text); min-width: 100px;"
+        class="px-3 py-2 text-xs rounded-md border cursor-pointer outline-none shrink-0 transition-colors"
+        style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text); min-width: 120px;"
       >
         <option value="">{{ t('skills.all_cli') }}</option>
         <option v-for="name in agentOptions" :key="name" :value="name">{{ name }}</option>
@@ -102,7 +104,7 @@ watch(searchQuery, (val) => {
       <p class="text-xs mt-1">{{ t('skills.no_skills_hint') }}</p>
     </div>
 
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <SkillCard
         v-for="skill in displaySkills"
         :key="skill.id"

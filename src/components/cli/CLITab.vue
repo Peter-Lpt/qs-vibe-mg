@@ -26,17 +26,19 @@ function handleAdded() {
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-5">
       <h2 class="text-base font-semibold" style="color: var(--c-text);">
         {{ t('cli.title') }}
-        <span class="text-sm font-normal ml-1" style="color: var(--c-text-secondary);">
+        <span class="text-sm font-normal ml-1.5" style="color: var(--c-text-secondary);">
           ({{ agentsStore.agents.length }})
         </span>
       </h2>
       <button
-        class="text-xs px-3 py-1.5 rounded-md cursor-pointer hover:opacity-80"
+        class="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-colors"
         style="background: var(--c-primary); color: white;"
         @click="showAddDialog = true"
+        @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary-hover)'"
+        @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary)'"
       >
         + {{ t('cli.add') }}
       </button>
@@ -50,7 +52,7 @@ function handleAdded() {
       {{ agentsStore.error }}
     </div>
 
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <CLICard
         v-for="agent in agentsStore.agents"
         :key="agent.id"

@@ -26,14 +26,16 @@ const sortedAgents = computed(() => {
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-5">
       <h2 class="text-base font-semibold" style="color: var(--c-text);">
         {{ t('dashboard.title') }}
       </h2>
       <button
-        class="text-xs px-3 py-1.5 rounded border cursor-pointer hover:opacity-80"
+        class="text-xs px-3 py-1.5 rounded-md border cursor-pointer transition-colors"
         style="border-color: var(--c-border); color: var(--c-text-secondary);"
         @click="refresh"
+        @mouseenter="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'var(--c-surface-hover)'; }"
+        @mouseleave="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'transparent'; }"
       >
         {{ t('dashboard.refresh') }}
       </button>
@@ -53,7 +55,7 @@ const sortedAgents = computed(() => {
 
     <template v-else>
       <div
-        class="flex items-center gap-4 mb-4 px-3 py-2 rounded-md text-xs"
+        class="flex items-center gap-4 mb-5 px-4 py-2.5 rounded-lg text-xs"
         style="background: var(--c-surface); border: 1px solid var(--c-border);"
       >
         <span style="color: var(--c-text);">
@@ -71,7 +73,7 @@ const sortedAgents = computed(() => {
         </template>
       </div>
 
-      <div class="flex gap-3 overflow-x-auto pb-2 mb-4" style="max-height: 360px;">
+      <div class="flex gap-4 overflow-x-auto pb-3 mb-5" style="max-height: 360px;">
         <AgentColumn
           v-for="agent in sortedAgents"
           :key="agent.agent_id"
