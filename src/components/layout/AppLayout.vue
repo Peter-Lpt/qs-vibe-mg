@@ -7,34 +7,46 @@ const appStore = useAppStore();
 </script>
 
 <template>
-  <div class="flex flex-col h-screen overflow-hidden">
+  <div class="flex flex-col h-screen overflow-hidden" style="background: var(--c-bg);">
     <header
-      class="flex items-center px-6 py-3 border-b shrink-0"
+      class="flex items-center px-5 py-3 border-b shrink-0"
       style="border-color: var(--c-border); background: var(--c-surface);"
     >
-      <h1 class="text-lg font-semibold" style="color: var(--c-text);">
-        {{ t('app.title') }}
-      </h1>
-      <span
-        class="ml-2 text-xs px-2 py-0.5 rounded-full"
-        style="background: var(--c-primary); color: white;"
-      >
-        {{ t('app.version') }}
-      </span>
+      <div class="flex items-center gap-2.5">
+        <div
+          class="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold"
+          style="background: var(--c-primary); color: white;"
+        >
+          V
+        </div>
+        <h1 class="text-sm font-semibold" style="color: var(--c-text);">
+          {{ t('app.title') }}
+        </h1>
+        <span
+          class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+          style="background: var(--c-primary-light); color: var(--c-primary);"
+        >
+          {{ t('app.version') }}
+        </span>
+      </div>
 
-      <div class="ml-auto flex items-center gap-2">
+      <div class="ml-auto flex items-center gap-1">
         <button
-          class="text-sm px-2 py-1 rounded cursor-pointer hover:opacity-80"
+          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer transition-colors"
           style="color: var(--c-text-secondary);"
           @click="appStore.setTheme(appStore.resolvedTheme === 'dark' ? 'light' : 'dark')"
+          @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-surface-hover)'"
+          @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'transparent'"
         >
           {{ appStore.resolvedTheme === 'dark' ? '☀️' : '🌙' }}
         </button>
         <button
-          class="text-sm px-2 py-1 rounded cursor-pointer hover:opacity-80"
+          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer transition-colors"
           style="color: var(--c-text-secondary);"
           @click="appStore.showSettings = true"
           :title="t('app.settings')"
+          @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-surface-hover)'"
+          @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'transparent'"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
@@ -44,7 +56,7 @@ const appStore = useAppStore();
       </div>
     </header>
 
-    <div class="flex-1 overflow-y-auto p-5" style="background: var(--c-bg);">
+    <div class="flex-1 overflow-y-auto" style="background: var(--c-bg);">
       <slot />
     </div>
 

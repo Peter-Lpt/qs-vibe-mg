@@ -34,13 +34,12 @@ const agentTags = () =>
     });
 
 const tagColors = [
-  { bg: "#dbeafe", text: "#1e40af" },
-  { bg: "#f3e8ff", text: "#7c3aed" },
-  { bg: "#dcfce7", text: "#166534" },
-  { bg: "#fef3c7", text: "#92400e" },
-  { bg: "#ffe4e6", text: "#9f1239" },
-  { bg: "#e0f2fe", text: "#075985" },
-  { bg: "#f0fdf4", text: "#166534" },
+  { bg: "rgba(37, 99, 235, 0.1)", text: "#2563eb" },
+  { bg: "rgba(124, 58, 237, 0.1)", text: "#7c3aed" },
+  { bg: "rgba(22, 163, 74, 0.1)", text: "#16a34a" },
+  { bg: "rgba(217, 119, 6, 0.1)", text: "#d97706" },
+  { bg: "rgba(220, 38, 38, 0.1)", text: "#dc2626" },
+  { bg: "rgba(8, 145, 178, 0.1)", text: "#0891b2" },
 ];
 
 function getTagColor(index: number) {
@@ -50,47 +49,54 @@ function getTagColor(index: number) {
 
 <template>
   <div
-    class="rounded-lg p-4 border transition-all cursor-pointer hover:shadow-sm"
+    class="group rounded-lg p-3.5 border transition-all cursor-pointer"
     style="background: var(--c-surface); border-color: var(--c-border);"
     @click="showPreview = true"
+    @mouseenter="(e: MouseEvent) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--c-primary)'; (e.currentTarget as HTMLElement).style.boxShadow = 'var(--shadow-sm)'; }"
+    @mouseleave="(e: MouseEvent) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--c-border)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }"
   >
     <div class="flex items-start gap-2">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
           <h3
-            class="text-sm font-semibold truncate"
+            class="text-sm font-medium truncate"
             style="color: var(--c-text);"
           >
             {{ skill.name }}
           </h3>
           <span
             v-if="skill.license"
-            class="text-xs px-1.5 py-0.5 rounded shrink-0"
+            class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
             style="background: var(--c-surface-hover); color: var(--c-text-secondary);"
           >
             {{ skill.license }}
           </span>
         </div>
-        <p class="text-xs mt-1 line-clamp-2" style="color: var(--c-text-secondary);">
+        <p class="text-xs mt-1 line-clamp-2 leading-relaxed" style="color: var(--c-text-secondary);">
           {{ skill.description || t('skills.none') }}
         </p>
       </div>
 
       <button
-        class="text-xs px-1.5 py-0.5 rounded hover:opacity-80 cursor-pointer shrink-0"
-        style="color: var(--c-danger);"
+        class="w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shrink-0"
+        style="color: var(--c-text-tertiary);"
         @click.stop="showDeleteConfirm = true"
+        @mouseenter="(e: MouseEvent) => { (e.target as HTMLElement).style.color = 'var(--c-danger)'; (e.target as HTMLElement).style.background = 'var(--c-danger-light)'; }"
+        @mouseleave="(e: MouseEvent) => { (e.target as HTMLElement).style.color = 'var(--c-text-tertiary)'; (e.target as HTMLElement).style.background = 'transparent'; }"
         :title="t('skills.delete')"
       >
-        &#128465;
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
       </button>
     </div>
 
-    <div class="flex flex-wrap gap-1 mt-2">
+    <div class="flex flex-wrap gap-1 mt-2.5">
       <span
         v-for="(tag, idx) in agentTags()"
         :key="tag"
-        class="text-xs px-1.5 py-0.5 rounded"
+        class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
         :style="{
           background: getTagColor(idx).bg,
           color: getTagColor(idx).text,
