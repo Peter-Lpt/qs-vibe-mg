@@ -11,7 +11,7 @@ import CLITab from "./components/cli/CLITab.vue";
 import SkillList from "./components/skills/SkillList.vue";
 import DashboardTab from "./components/dashboard/DashboardTab.vue";
 import SymlinkTab from "./components/symlink/SymlinkTab.vue";
-import HistoryBar from "./components/history/HistoryBar.vue";
+import HistoryTab from "./components/history/HistoryTab.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
 
 const { locale } = useI18n();
@@ -25,6 +25,15 @@ watch(
   (newLocale) => {
     locale.value = newLocale;
   }
+);
+
+// 当技能列表发生变化时，同步刷新历史记录
+watch(
+  () => skillsStore.skills,
+  () => {
+    historyStore.fetchHistory();
+  },
+  { deep: true }
 );
 
 onMounted(async () => {
@@ -45,10 +54,7 @@ onMounted(async () => {
     <SkillList v-else-if="appStore.activeTab === 'skills'" />
     <DashboardTab v-else-if="appStore.activeTab === 'dashboard'" />
     <SymlinkTab v-else-if="appStore.activeTab === 'symlink'" />
-
-    <template #bottom>
-      <HistoryBar />
-    </template>
+    <HistoryTab v-else-if="appStore.activeTab === 'history'" />
   </AppLayout>
 
   <SettingsPage v-if="appStore.showSettings" />

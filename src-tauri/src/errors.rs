@@ -43,6 +43,21 @@ pub enum VabError {
     #[error("No operation to redo")]
     NothingToRedo,
 
+    #[error("Can only undo the most recent undoable entry")]
+    UndoNotLatest,
+
+    #[error("Can only redo the most recent redoable entry")]
+    RedoNotLatest,
+
+    #[error("History entry not found: {id}")]
+    HistoryEntryNotFound { id: String },
+
+    #[error("History entry is already undone: {id}")]
+    AlreadyUndone { id: String },
+
+    #[error("History entry is not undone: {id}")]
+    NotUndone { id: String },
+
     #[error("Skill already exists: {skill_id}")]
     SkillAlreadyExists { skill_id: String },
 }

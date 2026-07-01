@@ -1,10 +1,13 @@
 use std::fs;
+use std::path::Path;
 
 use uuid::Uuid;
 
 use crate::errors::VabError;
+use crate::models::agent::Agent;
 use crate::models::history::{HistoryAction, HistoryEntry, HistoryStore};
-use crate::utils::config::load_config;
+use crate::utils::config::{build_agents_from_config, load_config};
+use crate::utils::fs as vibe_fs;
 use crate::utils::path::vibe_skills_dir;
 
 const HISTORY_FILE: &str = ".vibe-history.json";
@@ -90,6 +93,162 @@ pub fn mark_undone(id: &str, undone: bool) -> Result<(), VabError> {
         entry.undone = undone;
     }
     save_history(&store)
+}
+
+/// 清空所有历史记录
+pub fn clear_history() -> Result<(), VabError> {
+    // 先写入空 store，写入成功再清空内存（防止IO失败导致状态不一致）
+    let empty_store = HistoryStore::default();
+    save_history(&empty_store)?;
+    Ok(())
+}
+
+/// 根据 agent_id 解析 Agent 对象
+pub fn resolve_agent(agent_id: &str) -> Result<Agent, VabError> {
+    let config = load_config()?;
+    let agents = build_agents_from_config(&config)?;
+    agents
+        .into_iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| VabError::AgentNotFound {
+            agent_id: agent_id.to_string(),
+        })
+}
+
+// ===== 原子文件操作 =====
+
+fn do_link(skill_id: &str, agent: &Agent) -> Result<(), VabError> {
+    let vibe_dir = vibe_skills_dir()?;
+    let skill_path = vibe_dir.join(skill_id);
+    let link_path = Path::new(&agent.skills_dir).join(skill_id);
+    if skill_path.exists() {
+        vibe_fs::create_symlink(&skill_path, &link_path)?;
+    }
+    Ok(())
+}
+
+fn do_unlink(skill_id: &str, agent: &Agent) -> Result<(), VabError> {
+    let link_path = Path::new(&agent.skills_dir).join(skill_id);
+    let _ = vibe_fs::remove_symlink(&link_path);
+    Ok(())
+}
+
+fn do_delete_skill(skill_id: &str) -> Result<(), VabError> {
+    let skill_path = vibe_skills_dir()?.join(skill_id);
+    if skill_path.exists() {
+        fs::remove_dir_all(&skill_path)?;
+    }
+    Ok(())
+}
+
+// ===== 顶层分发函数 =====
+
+/// 执行撤销操作（内部使用，被 undo() 和 undo_by_id() 共用）
+pub fn perform_undo(entry: &HistoryEntry) -> Result<(), VabError> {
+    match entry.action {
+        HistoryAction::Link => {
+            let agent = entry.agent_id.as_ref().ok_or_else(|| {
+                VabError::History("Link entry missing agent_id".to_string())
+            })?;
+            let agent = resolve_agent(agent)?;
+            do_unlink(&entry.skill_id, &agent)
+        }
+        HistoryAction::Unlink => {
+            let agent = entry.agent_id.as_ref().ok_or_else(|| {
+                VabError::History("Unlink entry missing agent_id".to_string())
+            })?;
+            let agent = resolve_agent(agent)?;
+            let vibe_dir = vibe_skills_dir()?;
+            let skill_path = vibe_dir.join(&entry.skill_id);
+            if skill_path.exists() {
+                do_link(&entry.skill_id, &agent)
+            } else {
+                Ok(())
+            }
+        }
+        HistoryAction::Install => do_delete_skill(&entry.skill_id),
+        HistoryAction::Delete => Err(VabError::History(
+            "Cannot undo delete without snapshot".to_string(),
+        )),
+        HistoryAction::BatchLink => {
+            let agent = entry.agent_id.as_ref().ok_or_else(|| {
+                VabError::History("BatchLink entry missing agent_id".to_string())
+            })?;
+            let agent = resolve_agent(agent)?;
+            for skill_id in entry.skill_id.split(',') {
+                do_unlink(skill_id, &agent)?;
+            }
+            Ok(())
+        }
+        HistoryAction::BatchUnlink => {
+            let agent = entry.agent_id.as_ref().ok_or_else(|| {
+                VabError::History("BatchUnlink entry missing agent_id".to_string())
+            })?;
+            let agent = resolve_agent(agent)?;
+            let vibe_dir = vibe_skills_dir()?;
+            for skill_id in entry.skill_id.split(',') {
+                let skill_path = vibe_dir.join(skill_id);
+                if skill_path.exists() {
+                    do_link(skill_id, &agent)?;
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
+/// 执行重做操作（内部使用，被 redo() 和 redo_by_id() 共用）
+pub fn perform_redo(entry: &HistoryEntry) -> Result<(), VabError> {
+    match entry.action {
+        HistoryAction::Link => {
+            let agent = entry.agent_id.as_ref().ok_or_else(|| {
+                VabError::History("Link entry missing agent_id".to_string())
+            })?;
+            let agent = resolve_agent(agent)?;
+            let vibe_dir = vibe_skills_dir()?;
+            let skill_path = vibe_dir.join(&entry.skill_id);
+            if skill_path.exists() {
+                do_link(&entry.skill_id, &agent)
+            } else {
+                Ok(())
+            }
+        }
+        HistoryAction::Unlink => {
+            let agent = entry.agent_id.as_ref().ok_or_else(|| {
+                VabError::History("Unlink entry missing agent_id".to_string())
+            })?;
+            let agent = resolve_agent(agent)?;
+            do_unlink(&entry.skill_id, &agent)
+        }
+        HistoryAction::Install => Err(VabError::History(
+            "Cannot redo install operation".to_string(),
+        )),
+        HistoryAction::Delete => do_delete_skill(&entry.skill_id),
+        HistoryAction::BatchLink => {
+            let agent = entry.agent_id.as_ref().ok_or_else(|| {
+                VabError::History("BatchLink entry missing agent_id".to_string())
+            })?;
+            let agent = resolve_agent(agent)?;
+            let vibe_dir = vibe_skills_dir()?;
+            for skill_id in entry.skill_id.split(',') {
+                let skill_path = vibe_dir.join(skill_id);
+                if skill_path.exists() {
+                    do_link(skill_id, &agent)?;
+                }
+            }
+            Ok(())
+        }
+        HistoryAction::BatchUnlink => {
+            let agent = entry.agent_id.as_ref().ok_or_else(|| {
+                VabError::History("BatchUnlink entry missing agent_id".to_string())
+            })?;
+            let agent = resolve_agent(agent)?;
+            for skill_id in entry.skill_id.split(',') {
+                do_unlink(skill_id, &agent)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 /// 获取当前时间的 ISO 8601 格式字符串

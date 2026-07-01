@@ -59,9 +59,5 @@ const appStore = useAppStore();
     <div class="flex-1 overflow-y-auto p-6" style="background: var(--c-bg);">
       <slot />
     </div>
-
-    <div class="shrink-0">
-      <slot name="bottom" />
-    </div>
   </div>
 </template>

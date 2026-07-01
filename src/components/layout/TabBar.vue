@@ -17,6 +17,7 @@ const tabs: { id: TabId; icon: string; labelKey: string }[] = [
   { id: "skills", icon: "📁", labelKey: "tabs.skills" },
   { id: "dashboard", icon: "📊", labelKey: "tabs.dashboard" },
   { id: "symlink", icon: "🔗", labelKey: "tabs.symlink" },
+  { id: "history", icon: "🕐", labelKey: "tabs.history" },
 ];
 
 function selectTab(tab: TabId) {

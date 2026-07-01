@@ -77,14 +77,32 @@ watch(searchQuery, (val) => {
         class="flex-1 px-3 py-2 text-xs rounded-md border outline-none transition-colors"
         style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text);"
       />
-      <select
-        v-model="filterAgent"
-        class="px-3 py-2 text-xs rounded-md border cursor-pointer outline-none shrink-0 transition-colors"
-        style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text); min-width: 120px;"
-      >
-        <option value="">{{ t('skills.all_cli') }}</option>
-        <option v-for="name in agentOptions" :key="name" :value="name">{{ name }}</option>
-      </select>
+      <div class="relative shrink-0">
+        <select
+          v-model="filterAgent"
+          class="appearance-none px-3 py-2 pr-8 text-xs rounded-md border outline-none cursor-pointer transition-colors"
+          style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text); min-width: 120px;"
+          @focus="($event.target as HTMLElement).style.borderColor = 'var(--c-primary)'"
+          @blur="($event.target as HTMLElement).style.borderColor = 'var(--c-border)'"
+        >
+          <option value="">{{ t('skills.all_cli') }}</option>
+          <option v-for="name in agentOptions" :key="name" :value="name">{{ name }}</option>
+        </select>
+        <svg
+          class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          style="color: var(--c-text-secondary);"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </div>
     </div>
 
     <div v-if="skillsStore.loading || skillsStore.searching" class="text-sm" style="color: var(--c-text-secondary);">
