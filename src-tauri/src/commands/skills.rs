@@ -68,7 +68,10 @@ pub fn search_skills(query: String) -> Result<Vec<Skill>, VabError> {
     let q = query.to_lowercase();
     let results: Vec<Skill> = all_skills
         .into_iter()
-        .filter(|s| s.name.to_lowercase().contains(&q))
+        .filter(|s| {
+            s.name.to_lowercase().contains(&q)
+                || s.description.to_lowercase().contains(&q)
+        })
         .collect();
 
     Ok(results)

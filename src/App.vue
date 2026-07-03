@@ -7,7 +7,7 @@ import { useHistoryStore } from "./stores/history";
 import { useAppStore } from "./stores/app";
 import AppLayout from "./components/layout/AppLayout.vue";
 import TabBar from "./components/layout/TabBar.vue";
-import CLITab from "./components/cli/CLITab.vue";
+import AgentsTab from "./components/agents/AgentsTab.vue";
 import SkillList from "./components/skills/SkillList.vue";
 import DashboardTab from "./components/dashboard/DashboardTab.vue";
 import SymlinkTab from "./components/symlink/SymlinkTab.vue";
@@ -50,7 +50,7 @@ onMounted(async () => {
   <AppLayout>
     <TabBar v-model="appStore.activeTab" />
 
-    <CLITab v-if="appStore.activeTab === 'cli'" />
+    <AgentsTab v-if="appStore.activeTab === 'agents'" />
     <SkillList v-else-if="appStore.activeTab === 'skills'" />
     <DashboardTab v-else-if="appStore.activeTab === 'dashboard'" />
     <SymlinkTab v-else-if="appStore.activeTab === 'symlink'" />

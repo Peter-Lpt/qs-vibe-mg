@@ -17,13 +17,15 @@ const showRemoveConfirm = ref(false);
 const editing = ref(false);
 const editName = ref(props.agent.name);
 const editDir = ref(props.agent.skills_dir);
+const error = ref<string | null>(null);
 
 async function handleRemove() {
   try {
     await agentsStore.removeCustomAgent(props.agent.id);
     showRemoveConfirm.value = false;
   } catch (e: unknown) {
-    alert(String(e));
+    error.value = String(e);
+    setTimeout(() => (error.value = null), 3000);
   }
 }
 
@@ -36,7 +38,8 @@ async function handleSaveEdit() {
     });
     editing.value = false;
   } catch (e: unknown) {
-    alert(String(e));
+    error.value = String(e);
+    setTimeout(() => (error.value = null), 3000);
   }
 }
 
@@ -51,7 +54,7 @@ async function pickDirectory() {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: t("cli.pick_folder"),
+      title: t("agents.pick_folder"),
     });
     if (selected) {
       editDir.value = selected;
@@ -91,7 +94,7 @@ async function pickDirectory() {
             class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
             style="background: var(--c-warning-light); color: var(--c-warning);"
           >
-            {{ t('cli.custom') }}
+            {{ t('agents.custom') }}
           </span>
         </div>
         <p class="text-[11px] truncate mt-0.5" style="color: var(--c-text-tertiary);">
@@ -103,7 +106,7 @@ async function pickDirectory() {
     <div v-if="!editing">
       <div class="flex items-center justify-between">
         <span class="text-xs font-medium" style="color: var(--c-text-secondary);">
-          {{ t('cli.skill_count', { count: skillCount }) }}
+          {{ t('agents.skill_count', { count: skillCount }) }}
         </span>
         <div class="flex gap-1">
           <button
@@ -113,7 +116,7 @@ async function pickDirectory() {
             @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary-light)'"
             @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'transparent'"
           >
-            {{ t('cli.edit') }}
+            {{ t('agents.edit') }}
           </button>
           <button
             v-if="!agent.auto_detected"
@@ -123,7 +126,7 @@ async function pickDirectory() {
             @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-danger-light)'"
             @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'transparent'"
           >
-            {{ t('cli.remove') }}
+            {{ t('agents.remove') }}
           </button>
         </div>
       </div>
@@ -134,14 +137,14 @@ async function pickDirectory() {
         v-model="editName"
         class="w-full px-2.5 py-1.5 text-xs rounded-md border outline-none transition-colors"
         style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
-        :placeholder="t('cli.name')"
+        :placeholder="t('agents.name')"
       />
       <div class="flex gap-1.5">
         <input
           v-model="editDir"
           class="flex-1 px-2.5 py-1.5 text-xs rounded-md border outline-none transition-colors"
           style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
-          :placeholder="t('cli.skills_dir')"
+          :placeholder="t('agents.skills_dir')"
         />
         <button
           class="px-2.5 py-1.5 text-xs rounded-md border cursor-pointer transition-colors shrink-0"
@@ -150,7 +153,7 @@ async function pickDirectory() {
           @mouseenter="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'var(--c-surface-hover)'; }"
           @mouseleave="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'transparent'; }"
         >
-          {{ t('cli.pick_folder') }}
+          {{ t('agents.pick_folder') }}
         </button>
       </div>
       <div class="flex gap-1.5">
@@ -175,11 +178,15 @@ async function pickDirectory() {
       </div>
     </div>
 
+    <div v-if="error" class="mt-2 text-[10px] px-2 py-1 rounded-md" style="background: var(--c-danger-light); color: var(--c-danger);">
+      {{ error }}
+    </div>
+
     <ConfirmDialog
       v-if="showRemoveConfirm"
-      :title="t('cli.remove')"
-      :message="t('cli.remove_confirm', { name: agent.name })"
-      :confirm-text="t('cli.remove')"
+      :title="t('agents.remove')"
+      :message="t('agents.remove_confirm', { name: agent.name })"
+      :confirm-text="t('agents.remove')"
       :danger="true"
       @confirm="handleRemove"
       @cancel="showRemoveConfirm = false"

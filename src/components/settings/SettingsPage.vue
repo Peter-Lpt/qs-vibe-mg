@@ -24,6 +24,7 @@ const locales: { value: Locale; label: string }[] = [
 const showMigrateConfirm = ref(false);
 const pendingPath = ref("");
 const savingPath = ref(false);
+const pathError = ref<string | null>(null);
 
 function handleThemeChange(mode: ThemeMode) {
   appStore.setTheme(mode);
@@ -51,12 +52,13 @@ async function pickVabPath() {
 
 async function handleMigrate(migrate: boolean) {
   savingPath.value = true;
+  pathError.value = null;
   try {
     await agentsStore.setVabSkillsPath(pendingPath.value, migrate);
     showMigrateConfirm.value = false;
     pendingPath.value = "";
   } catch (e: unknown) {
-    alert(String(e));
+    pathError.value = String(e);
   } finally {
     savingPath.value = false;
   }
@@ -162,6 +164,9 @@ async function handleMigrate(migrate: boolean) {
         <p class="text-xs mb-4" style="color: var(--c-text-secondary);">
           {{ t('settings.migrate_confirm') }}
         </p>
+        <div v-if="pathError" class="text-xs mb-3 px-2 py-1 rounded-md" style="background: var(--c-danger-light); color: var(--c-danger);">
+          {{ pathError }}
+        </div>
         <div class="flex justify-end gap-2">
           <button
             class="px-3 py-1.5 text-xs rounded-md border cursor-pointer hover:opacity-80"

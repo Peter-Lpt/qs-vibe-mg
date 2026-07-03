@@ -13,15 +13,15 @@ const emit = defineEmits<{
 }>();
 
 const name = ref("");
-const cliPath = ref("");
+const agentPath = ref("");
 const skillsDir = ref("");
 const adding = ref(false);
 const addError = ref<string | null>(null);
 
 function updateSkillsDir() {
-  if (cliPath.value && !skillsDir.value) {
-    const sep = cliPath.value.includes("\\") ? "\\" : "/";
-    skillsDir.value = `${cliPath.value}${sep}skills`;
+  if (agentPath.value && !skillsDir.value) {
+    const sep = agentPath.value.includes("\\") ? "\\" : "/";
+    skillsDir.value = `${agentPath.value}${sep}skills`;
   }
 }
 
@@ -30,10 +30,10 @@ async function pickDirectory() {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: t("cli.pick_folder"),
+      title: t("agents.pick_folder"),
     });
     if (selected) {
-      cliPath.value = selected;
+      agentPath.value = selected;
       updateSkillsDir();
     }
   } catch (e: unknown) {
@@ -44,11 +44,11 @@ async function pickDirectory() {
 async function handleAdd() {
   addError.value = null;
   if (!name.value.trim()) {
-    addError.value = t("cli.name_required");
+    addError.value = t("agents.name_required");
     return;
   }
   if (!skillsDir.value.trim()) {
-    addError.value = t("cli.skills_dir_required");
+    addError.value = t("agents.skills_dir_required");
     return;
   }
 
@@ -77,33 +77,33 @@ async function handleAdd() {
         style="background: var(--c-surface); border: 1px solid var(--c-border);"
       >
         <h3 class="text-sm font-semibold mb-4" style="color: var(--c-text);">
-          {{ t('cli.add') }}
+          {{ t('agents.add') }}
         </h3>
 
         <div class="space-y-3">
           <div>
             <label class="text-xs block mb-1" style="color: var(--c-text-secondary);">
-              {{ t('cli.name') }} *
+              {{ t('agents.name') }} *
             </label>
             <input
               v-model="name"
-              :placeholder="t('cli.name_placeholder')"
+              :placeholder="t('agents.name_placeholder')"
               class="w-full px-3 py-2 text-xs rounded-md border outline-none"
               style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
             />
             <p class="text-xs mt-0.5" style="color: var(--c-text-secondary);">
-              {{ t('cli.name_hint') }}
+              {{ t('agents.name_hint') }}
             </p>
           </div>
 
           <div>
             <label class="text-xs block mb-1" style="color: var(--c-text-secondary);">
-              {{ t('cli.path') }}
+              {{ t('agents.path') }}
             </label>
             <div class="flex gap-2">
               <input
-                v-model="cliPath"
-                :placeholder="t('cli.path_placeholder')"
+                v-model="agentPath"
+                :placeholder="t('agents.path_placeholder')"
                 class="flex-1 px-3 py-2 text-xs rounded-md border outline-none"
                 style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
               />
@@ -112,23 +112,23 @@ async function handleAdd() {
                 style="border-color: var(--c-border); color: var(--c-text);"
                 @click="pickDirectory"
               >
-                {{ t('cli.pick_folder') }}
+                {{ t('agents.pick_folder') }}
               </button>
             </div>
           </div>
 
           <div>
             <label class="text-xs block mb-1" style="color: var(--c-text-secondary);">
-              {{ t('cli.skills_dir') }} *
+              {{ t('agents.skills_dir') }} *
             </label>
             <input
               v-model="skillsDir"
-              :placeholder="t('cli.skills_dir_placeholder')"
+              :placeholder="t('agents.skills_dir_placeholder')"
               class="w-full px-3 py-2 text-xs rounded-md border outline-none"
               style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
             />
             <p class="text-xs mt-0.5" style="color: var(--c-text-secondary);">
-              {{ t('cli.skills_dir_hint') }}
+              {{ t('agents.skills_dir_hint') }}
             </p>
           </div>
         </div>

@@ -61,7 +61,7 @@ export interface AgentConfig {
   auto_detected: boolean;
 }
 
-export type TabId = 'cli' | 'skills' | 'dashboard' | 'symlink' | 'history';
+export type TabId = 'agents' | 'skills' | 'dashboard' | 'symlink' | 'history';
 
 export interface DashboardData {
   agents: DashboardAgent[];

@@ -3,8 +3,8 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAgentsStore } from "../../stores/agents";
 import { useSkillsStore } from "../../stores/skills";
-import CLICard from "./CLICard.vue";
-import AddCLIDialog from "./AddCLIDialog.vue";
+import AgentCard from "./AgentCard.vue";
+import AddAgentDialog from "./AddAgentDialog.vue";
 
 const { t } = useI18n();
 const agentsStore = useAgentsStore();
@@ -27,7 +27,7 @@ function handleAdded() {
   <div>
     <div class="flex items-center justify-between mb-5">
       <h2 class="text-base font-semibold" style="color: var(--c-text);">
-        {{ t('cli.title') }}
+        {{ t('agents.title') }}
         <span class="text-sm font-normal ml-1.5" style="color: var(--c-text-secondary);">
           ({{ agentsStore.agents.length }})
         </span>
@@ -39,7 +39,7 @@ function handleAdded() {
         @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary-hover)'"
         @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary)'"
       >
-        + {{ t('cli.add') }}
+        + {{ t('agents.add') }}
       </button>
     </div>
 
@@ -51,8 +51,27 @@ function handleAdded() {
       {{ agentsStore.error }}
     </div>
 
+    <div v-else-if="agentsStore.agents.length === 0" class="flex flex-col items-center py-16">
+      <div class="text-4xl mb-4">🤖</div>
+      <p class="text-sm font-medium mb-1" style="color: var(--c-text);">
+        {{ t('agents.empty_title') }}
+      </p>
+      <p class="text-xs mb-5" style="color: var(--c-text-secondary);">
+        {{ t('agents.empty_hint') }}
+      </p>
+      <button
+        class="text-xs px-4 py-2 rounded-md cursor-pointer transition-colors font-medium"
+        style="background: var(--c-primary); color: white;"
+        @click="showAddDialog = true"
+        @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary-hover)'"
+        @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary)'"
+      >
+        + {{ t('agents.add') }}
+      </button>
+    </div>
+
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <CLICard
+      <AgentCard
         v-for="agent in agentsStore.agents"
         :key="agent.id"
         :agent="agent"
@@ -60,7 +79,7 @@ function handleAdded() {
       />
     </div>
 
-    <AddCLIDialog
+    <AddAgentDialog
       v-if="showAddDialog"
       @close="showAddDialog = false"
       @added="handleAdded"

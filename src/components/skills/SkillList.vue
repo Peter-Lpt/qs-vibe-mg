@@ -85,7 +85,7 @@ watch(searchQuery, (val) => {
           @focus="($event.target as HTMLElement).style.borderColor = 'var(--c-primary)'"
           @blur="($event.target as HTMLElement).style.borderColor = 'var(--c-border)'"
         >
-          <option value="">{{ t('skills.all_cli') }}</option>
+          <option value="">{{ t('skills.all_agents') }}</option>
           <option v-for="name in agentOptions" :key="name" :value="name">{{ name }}</option>
         </select>
         <svg
