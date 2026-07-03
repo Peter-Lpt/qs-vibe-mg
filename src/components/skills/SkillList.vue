@@ -134,7 +134,6 @@ watch(searchQuery, (val) => {
     <InstallDialog
       v-if="showInstall"
       @close="showInstall = false"
-      @installed="skillsStore.fetchSkills()"
     />
   </div>
 </template>

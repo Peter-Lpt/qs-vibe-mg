@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { Skill, DashboardData } from "../types";
+import { useAgentsStore } from "./agents";
 
 export const useSkillsStore = defineStore("skills", () => {
   const skills = ref<Skill[]>([]);
@@ -57,6 +58,7 @@ export const useSkillsStore = defineStore("skills", () => {
     try {
       await invoke("create_link", { skillId, agentId });
       await fetchSkills();
+      await useAgentsStore().fetchAgents();
     } catch (e: unknown) {
       throw new Error(String(e));
     }
@@ -66,6 +68,7 @@ export const useSkillsStore = defineStore("skills", () => {
     try {
       await invoke("remove_link", { skillId, agentId });
       await fetchSkills();
+      await useAgentsStore().fetchAgents();
     } catch (e: unknown) {
       throw new Error(String(e));
     }
@@ -86,6 +89,7 @@ export const useSkillsStore = defineStore("skills", () => {
       await invoke("delete_skill", { skillId });
       selectedIds.value.delete(skillId);
       await fetchSkills();
+      await useAgentsStore().fetchAgents();
     } catch (e: unknown) {
       throw new Error(String(e));
     }
@@ -103,6 +107,7 @@ export const useSkillsStore = defineStore("skills", () => {
     try {
       const errors = await invoke<string[]>("batch_link", { skillIds, agentId });
       await fetchSkills();
+      await useAgentsStore().fetchAgents();
       return errors;
     } catch (e: unknown) {
       throw new Error(String(e));
@@ -113,6 +118,7 @@ export const useSkillsStore = defineStore("skills", () => {
     try {
       const errors = await invoke<string[]>("batch_unlink", { skillIds, agentId });
       await fetchSkills();
+      await useAgentsStore().fetchAgents();
       return errors;
     } catch (e: unknown) {
       throw new Error(String(e));

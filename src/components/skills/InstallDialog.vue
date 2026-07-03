@@ -8,7 +8,6 @@ const skillsStore = useSkillsStore();
 
 const emit = defineEmits<{
   close: [];
-  installed: [];
 }>();
 
 const sourcePath = ref("");
@@ -26,7 +25,6 @@ async function handleInstall() {
 
   try {
     await skillsStore.installSkill(sourcePath.value.trim());
-    emit("installed");
     emit("close");
   } catch (e: unknown) {
     installError.value = String(e);

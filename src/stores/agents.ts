@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { Agent, SkillsTreeNode, SyncResult } from "../types";
+import { useSkillsStore } from "./skills";
 
 export const useAgentsStore = defineStore("agents", () => {
   const agents = ref<Agent[]>([]);
@@ -42,6 +43,7 @@ export const useAgentsStore = defineStore("agents", () => {
         skillsDir: updates.skillsDir ?? null,
       });
       await fetchAgents();
+      await useSkillsStore().fetchSkills();
       return agent;
     } catch (e: unknown) {
       throw new Error(String(e));
@@ -52,6 +54,7 @@ export const useAgentsStore = defineStore("agents", () => {
     try {
       await invoke("remove_custom_agent", { agentId });
       await fetchAgents();
+      await useSkillsStore().fetchSkills();
     } catch (e: unknown) {
       throw new Error(String(e));
     }
@@ -74,6 +77,7 @@ export const useAgentsStore = defineStore("agents", () => {
     try {
       syncResult.value = await invoke<SyncResult>("sync_agent_to_vibe", { agentId });
       await fetchAgents();
+      await useSkillsStore().fetchSkills();
     } catch (e: unknown) {
       throw new Error(String(e));
     } finally {
@@ -90,6 +94,7 @@ export const useAgentsStore = defineStore("agents", () => {
         categoryPath,
       });
       await fetchAgents();
+      await useSkillsStore().fetchSkills();
     } catch (e: unknown) {
       throw new Error(String(e));
     } finally {
@@ -102,6 +107,7 @@ export const useAgentsStore = defineStore("agents", () => {
       syncResult.value = null;
       await invoke("remove_sync", { agentId, path: path ?? null });
       await fetchAgents();
+      await useSkillsStore().fetchSkills();
     } catch (e: unknown) {
       throw new Error(String(e));
     }
@@ -112,6 +118,7 @@ export const useAgentsStore = defineStore("agents", () => {
       const result = await invoke<SyncResult>("remove_sync_skills", { agentId, skillNames });
       syncResult.value = result;
       await fetchAgents();
+      await useSkillsStore().fetchSkills();
       return result;
     } catch (e: unknown) {
       throw new Error(String(e));
@@ -122,6 +129,7 @@ export const useAgentsStore = defineStore("agents", () => {
     try {
       await invoke("set_vibe_skills_path", { newPath, migrate });
       await fetchAgents();
+      await useSkillsStore().fetchSkills();
     } catch (e: unknown) {
       throw new Error(String(e));
     }

@@ -20,7 +20,6 @@ function getSkillCount(agentId: string): number {
 function handleAdded() {
   showAddDialog.value = false;
   agentsStore.fetchAgents();
-  skillsStore.fetchSkills();
 }
 </script>
 
