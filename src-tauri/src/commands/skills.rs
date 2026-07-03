@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+use tracing::warn;
+
 use crate::errors::VabError;
 use crate::models::dashboard::{
     DashboardAgent, DashboardData, DashboardSkill, DashboardStats, SharedSkillInfo,
@@ -9,7 +11,9 @@ use crate::models::dashboard::{
 use crate::models::skill::{Skill, SkillSource};
 use crate::parsers::skill_md::parse_skill_md_full;
 use crate::utils::config::{build_agents_from_config, load_config};
+use crate::utils::datetime;
 use crate::utils::fs as vibe_fs;
+use crate::utils::fs::copy_dir_all;
 use crate::utils::history::record_action;
 use crate::utils::path::vibe_skills_dir;
 use crate::models::history::HistoryAction;
@@ -368,7 +372,9 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
 
     copy_dir_all(source, &dest)?;
 
-    let _ = record_action(HistoryAction::Install, &name, None, None);
+    if let Err(e) = record_action(HistoryAction::Install, &name, None, None) {
+        warn!("Failed to record Install action: {}", e);
+    }
 
     let modified_at = get_modified_at(&dest);
     Ok(Skill {
@@ -410,7 +416,9 @@ pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
 
     fs::remove_dir_all(&skill_path)?;
 
-    let _ = record_action(HistoryAction::Delete, &skill_id, None, None);
+    if let Err(e) = record_action(HistoryAction::Delete, &skill_id, None, None) {
+        warn!("Failed to record Delete action: {}", e);
+    }
 
     Ok(())
 }
@@ -519,53 +527,9 @@ fn find_linked_agents(skill_id: &str, agents: &[crate::models::agent::Agent]) ->
     linked
 }
 
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), VabError> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        let dest = dst.join(entry.file_name());
-        if ty.is_dir() {
-            copy_dir_all(&entry.path(), &dest)?;
-        } else {
-            fs::copy(entry.path(), &dest)?;
-        }
-    }
-    Ok(())
-}
-
 fn get_modified_at(path: &Path) -> String {
-    use std::time::UNIX_EPOCH;
-
     fs::metadata(path)
         .and_then(|m| m.modified())
-        .map(|t| {
-            let duration = t.duration_since(UNIX_EPOCH).unwrap_or_default();
-            let secs = duration.as_secs();
-            let days = secs / 86400;
-            let time_of_day = secs % 86400;
-            let hours = time_of_day / 3600;
-            let minutes = (time_of_day % 3600) / 60;
-            let seconds = time_of_day % 60;
-            let (year, month, day) = days_to_ymd(days);
-            format!(
-                "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-                year, month, day, hours, minutes, seconds
-            )
-        })
+        .map(datetime::system_time_to_iso)
         .unwrap_or_default()
-}
-
-fn days_to_ymd(mut days: u64) -> (u64, u64, u64) {
-    days += 719468;
-    let era = days / 146097;
-    let doe = days % 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-    (y, m, d)
 }

@@ -50,11 +50,13 @@ onMounted(async () => {
   <AppLayout>
     <TabBar v-model="appStore.activeTab" />
 
-    <AgentsTab v-if="appStore.activeTab === 'agents'" />
-    <SkillList v-else-if="appStore.activeTab === 'skills'" />
-    <DashboardTab v-else-if="appStore.activeTab === 'dashboard'" />
-    <SymlinkTab v-else-if="appStore.activeTab === 'symlink'" />
-    <HistoryTab v-else-if="appStore.activeTab === 'history'" />
+    <KeepAlive>
+      <AgentsTab v-if="appStore.activeTab === 'agents'" />
+      <SkillList v-else-if="appStore.activeTab === 'skills'" />
+      <DashboardTab v-else-if="appStore.activeTab === 'dashboard'" />
+      <SymlinkTab v-else-if="appStore.activeTab === 'symlink'" />
+      <HistoryTab v-else-if="appStore.activeTab === 'history'" />
+    </KeepAlive>
   </AppLayout>
 
   <SettingsPage v-if="appStore.showSettings" />

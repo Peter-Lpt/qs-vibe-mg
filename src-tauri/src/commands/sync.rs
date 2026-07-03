@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::Path;
 
+use tracing::warn;
+
 use crate::errors::VabError;
 use crate::models::history::HistoryAction;
 use crate::models::sync::SyncResult;
@@ -33,12 +35,14 @@ pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VabError> {
 
     vibe_fs::create_symlink(&skill_path, &link_path)?;
 
-    let _ = record_action(
+    if let Err(e) = record_action(
         HistoryAction::Link,
         &skill_id,
         Some(&agent_id),
         Some("symlink"),
-    );
+    ) {
+        warn!("Failed to record Link action: {}", e);
+    }
 
     Ok(())
 }
@@ -67,12 +71,14 @@ pub fn remove_link(skill_id: String, agent_id: String) -> Result<(), VabError> {
 
     vibe_fs::remove_symlink(&link_path)?;
 
-    let _ = record_action(
+    if let Err(e) = record_action(
         HistoryAction::Unlink,
         &skill_id,
         Some(&agent_id),
         Some("symlink"),
-    );
+    ) {
+        warn!("Failed to record Unlink action: {}", e);
+    }
 
     Ok(())
 }
@@ -119,12 +125,14 @@ pub fn batch_link(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String
         }
     }
 
-    let _ = record_action(
+    if let Err(e) = record_action(
         HistoryAction::BatchLink,
         &skill_ids.join(","),
         Some(&agent_id),
         Some("symlink"),
-    );
+    ) {
+        warn!("Failed to record BatchLink action: {}", e);
+    }
 
     Ok(errors)
 }
@@ -139,12 +147,14 @@ pub fn batch_unlink(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<Stri
         }
     }
 
-    let _ = record_action(
+    if let Err(e) = record_action(
         HistoryAction::BatchUnlink,
         &skill_ids.join(","),
         Some(&agent_id),
         Some("symlink"),
-    );
+    ) {
+        warn!("Failed to record BatchUnlink action: {}", e);
+    }
 
     Ok(errors)
 }
@@ -179,12 +189,14 @@ pub fn sync_agent_to_vibe(agent_id: String) -> Result<SyncResult, VabError> {
 
     sync_directory_recursive(source_dir, source_dir, &target_dir, &mut result)?;
 
-    let _ = record_action(
+    if let Err(e) = record_action(
         HistoryAction::BatchLink,
         &format!("agent:{}", agent_id),
         Some(&agent_id),
         Some("symlink"),
-    );
+    ) {
+        warn!("Failed to record sync_agent_to_vibe action: {}", e);
+    }
 
     Ok(result)
 }
@@ -224,12 +236,14 @@ pub fn sync_category_to_vibe(
 
     sync_directory_recursive(source_dir, &category_dir, &target_dir, &mut result)?;
 
-    let _ = record_action(
+    if let Err(e) = record_action(
         HistoryAction::BatchLink,
         &format!("category:{}:{}", agent_id, category_path),
         Some(&agent_id),
         Some("symlink"),
-    );
+    ) {
+        warn!("Failed to record sync_category_to_vibe action: {}", e);
+    }
 
     Ok(result)
 }
@@ -262,12 +276,14 @@ pub fn remove_sync(agent_id: String, path: Option<String>) -> Result<(), VabErro
         }
     }
 
-    let _ = record_action(
+    if let Err(e) = record_action(
         HistoryAction::BatchUnlink,
         &action_desc,
         Some(&agent_id),
         Some("symlink"),
-    );
+    ) {
+        warn!("Failed to record remove_sync action: {}", e);
+    }
 
     Ok(())
 }
@@ -352,12 +368,14 @@ pub fn remove_sync_skills(agent_id: String, skill_names: Vec<String>) -> Result<
         }
     }
 
-    let _ = record_action(
+    if let Err(e) = record_action(
         HistoryAction::BatchUnlink,
         &format!("remove-sync-skills:{}:{}", agent_id, skill_names.len()),
         Some(&agent_id),
         Some("symlink"),
-    );
+    ) {
+        warn!("Failed to record remove_sync_skills action: {}", e);
+    }
 
     Ok(result)
 }

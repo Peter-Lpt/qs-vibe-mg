@@ -2,6 +2,7 @@ use std::fs;
 
 use crate::errors::VabError;
 use crate::utils::config::{load_config, save_config, Config};
+use crate::utils::fs::copy_dir_all;
 use crate::utils::path::{expand_tilde, vibe_skills_dir};
 
 /// 获取配置
@@ -95,19 +96,4 @@ pub fn set_vibe_skills_path(new_path: String, migrate: bool) -> Result<Config, V
     save_config(&config)?;
 
     Ok(config)
-}
-
-fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> Result<(), VabError> {
-    fs::create_dir_all(dst)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let ty = entry.file_type()?;
-        let dest = dst.join(entry.file_name());
-        if ty.is_dir() {
-            copy_dir_all(&entry.path(), &dest)?;
-        } else {
-            fs::copy(entry.path(), &dest)?;
-        }
-    }
-    Ok(())
 }

@@ -2,7 +2,6 @@ use std::io;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-#[allow(dead_code)]
 pub enum VabError {
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
@@ -15,12 +14,6 @@ pub enum VabError {
 
     #[error("Invalid SKILL.md: {reason}")]
     InvalidSkillMd { reason: String },
-
-    #[error("Permission denied: {operation}")]
-    PermissionDenied { operation: String },
-
-    #[error("Symlink creation failed: {reason}")]
-    SymlinkFailed { reason: String },
 
     #[error("Link already exists: {skill_id} -> {agent_id}")]
     LinkAlreadyExists { skill_id: String, agent_id: String },

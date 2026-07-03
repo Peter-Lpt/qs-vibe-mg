@@ -4,21 +4,33 @@ use crate::errors::VabError;
 
 /// 获取 vibe-skills 目录路径（可配置）
 pub fn vibe_skills_dir() -> Result<PathBuf, VabError> {
-    // 尝试从配置文件读取自定义路径
-    let config_path = default_vibe_skills_dir()?.join(".vibe-config.json");
-    if config_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&config_path) {
-            if let Ok(config) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(path) = config.get("vibe_skills_path").and_then(|v| v.as_str()) {
-                    let expanded = expand_tilde(path)?;
-                    if expanded.exists() {
-                        return Ok(expanded);
-                    }
-                }
-            }
+    let default_dir = default_vibe_skills_dir()?;
+    let config_path = default_dir.join(".vibe-config.json");
+
+    if let Some(path) = read_vibe_skills_path_from_config(&config_path)? {
+        let expanded = expand_tilde(&path)?;
+        if expanded.exists() {
+            return Ok(expanded);
         }
     }
-    default_vibe_skills_dir()
+
+    Ok(default_dir)
+}
+
+/// 从配置文件读取 vibe_skills_path 字段
+fn read_vibe_skills_path_from_config(config_path: &std::path::Path) -> Result<Option<String>, VabError> {
+    if !config_path.exists() {
+        return Ok(None);
+    }
+
+    let content = std::fs::read_to_string(config_path)?;
+    let config: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| VabError::Config(e.to_string()))?;
+
+    Ok(config
+        .get("vibe_skills_path")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string()))
 }
 
 /// 默认的 vibe-skills 目录路径（~/.vibe-skills/）

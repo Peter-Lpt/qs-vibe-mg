@@ -3,6 +3,22 @@ use std::path::Path;
 
 use crate::errors::VabError;
 
+/// 递归复制目录
+pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), VabError> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let dest = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &dest)?;
+        } else {
+            fs::copy(entry.path(), &dest)?;
+        }
+    }
+    Ok(())
+}
+
 /// 创建 symlink
 /// Windows: 使用 junction（目录链接，无需管理员权限）
 /// macOS/Linux: 使用 symlink

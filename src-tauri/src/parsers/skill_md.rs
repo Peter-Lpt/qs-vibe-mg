@@ -6,17 +6,6 @@ use serde_yaml::Value;
 
 use crate::errors::VabError;
 
-/// 解析 SKILL.md 文件，返回 (name, description)
-#[allow(dead_code)]
-pub fn parse_skill_md(path: &Path) -> Result<(String, String), VabError> {
-    let content = fs::read_to_string(path).map_err(|e| VabError::InvalidSkillMd {
-        reason: format!("Failed to read {}: {}", path.display(), e),
-    })?;
-
-    let (name, description, _, _, _, _) = parse_frontmatter_full(&content)?;
-    Ok((name, description))
-}
-
 /// 解析 SKILL.md 文件，返回全部字段
 pub fn parse_skill_md_full(
     path: &Path,
