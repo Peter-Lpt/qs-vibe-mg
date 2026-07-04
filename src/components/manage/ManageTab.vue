@@ -49,12 +49,14 @@ const displaySkills = computed(() => {
         case "dangling":
           return s.has_dangling;
         case "unlinked":
-          return (
-            s.sources.filter((src) => src.from !== "vibe-lib").length === 0
+          // 没有任何 agent symlink 的 skill
+          return !s.sources.some(
+            (src) => src.from !== "vibe-lib" && src.is_symlink
           );
         case "linked":
-          return (
-            s.sources.filter((src) => src.from !== "vibe-lib").length > 0
+          // 至少有一个 agent symlink 的 skill
+          return s.sources.some(
+            (src) => src.from !== "vibe-lib" && src.is_symlink
           );
         default:
           return true;

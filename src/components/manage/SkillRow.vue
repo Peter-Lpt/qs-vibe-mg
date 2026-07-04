@@ -27,34 +27,33 @@ const showLinkMenu = ref(false);
 const showUnlinkMenu = ref(false);
 const showDeleteConfirm = ref(false);
 
-// 获取非 vibe-lib 的 sources
+// 获取非 vibe-lib 的 sources（全部，包括 symlink 和真实文件）
 const agentSources = computed(() =>
   props.skill.sources.filter((s) => s.from !== "vibe-lib")
 );
 
-// 获取所有可用的 agent（用于 Link 操作）
-const linkableAgents = computed(() => {
-  const linkedIds = new Set(
+// 已通过 symlink 链接的 agent id 集合
+const symlinkedAgentIds = computed(() =>
+  new Set(
     props.skill.sources
-      .filter((s) => s.from !== "vibe-lib")
+      .filter((s) => s.from !== "vibe-lib" && s.is_symlink)
       .map((s) => s.from)
-  );
-  return agentsStore.agents.filter(
-    (a) => a.detected && !linkedIds.has(a.id)
-  );
-});
+  )
+);
 
-// 获取已链接的 agents（用于 Unlink 操作）
-const unlinkableAgents = computed(() => {
-  const linkedIds = new Set(
-    props.skill.sources
-      .filter((s) => s.from !== "vibe-lib")
-      .map((s) => s.from)
-  );
-  return agentsStore.agents.filter(
-    (a) => a.detected && linkedIds.has(a.id)
-  );
-});
+// 可以建立链接的 agent（还没有 symlink 的）
+const linkableAgents = computed(() =>
+  agentsStore.agents.filter(
+    (a) => a.detected && !symlinkedAgentIds.value.has(a.id)
+  )
+);
+
+// 可以取消链接的 agent（已有 symlink 的）
+const unlinkableAgents = computed(() =>
+  agentsStore.agents.filter(
+    (a) => a.detected && symlinkedAgentIds.value.has(a.id)
+  )
+);
 
 // 操作按钮：根据状态决定显示哪种
 const actionType = computed(() => {
@@ -124,9 +123,9 @@ async function handleDelete() {
 }
 
 function getSourceCount() {
-  const count = agentSources.value.length;
+  const linked = symlinkedAgentIds.value.size;
   const total = agentsStore.agents.filter((a) => a.detected).length;
-  return `${count}/${total}`;
+  return `${linked}/${total}`;
 }
 </script>
 
@@ -164,15 +163,23 @@ function getSourceCount() {
         {{ skill.name }}
       </span>
 
-      <!-- Agent tags -->
+      <!-- Agent tags: symlinked vs real file -->
       <div class="flex items-center gap-1 flex-wrap">
         <span
-          v-for="source in agentSources"
-          :key="source.from"
+          v-for="source in agentSources.filter(s => s.is_symlink)"
+          :key="'s-' + source.from"
           class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
           style="background: var(--c-primary-light); color: var(--c-primary);"
         >
-          {{ agents.find(a => a.id === source.from)?.name || source.from }}
+          🔗 {{ agents.find(a => a.id === source.from)?.name || source.from }}
+        </span>
+        <span
+          v-for="source in agentSources.filter(s => !s.is_symlink)"
+          :key="'r-' + source.from"
+          class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+          style="background: var(--c-surface-hover); color: var(--c-text-secondary);"
+        >
+          ● {{ agents.find(a => a.id === source.from)?.name || source.from }}
         </span>
       </div>
 

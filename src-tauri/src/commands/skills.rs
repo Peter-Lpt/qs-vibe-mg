@@ -44,7 +44,7 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
             continue;
         }
         let agent_dir = Path::new(&agent.skills_dir);
-        scan_directory(agent_dir, &agent.id, &mut map, true)?;
+        scan_directory(agent_dir, &agent.id, &mut map, false)?;
     }
 
     let mut skills: Vec<Skill> = map
