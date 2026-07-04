@@ -84,38 +84,6 @@ pub fn remove_link(skill_id: String, agent_id: String) -> Result<(), VabError> {
 }
 
 #[tauri::command]
-pub fn check_link_status(skill_id: String, agent_id: String) -> Result<String, VabError> {
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
-    let agent =
-        agents
-            .iter()
-            .find(|a| a.id == agent_id)
-            .ok_or_else(|| VabError::AgentNotFound {
-                agent_id: agent_id.clone(),
-            })?;
-
-    let link_path = Path::new(&agent.skills_dir).join(&skill_id);
-
-    if !link_path.exists() && !vibe_fs::is_link(&link_path) {
-        return Ok("none".to_string());
-    }
-
-    if vibe_fs::is_link(&link_path) {
-        if let Ok(target) = vibe_fs::read_link_target(&link_path) {
-            let vibe_dir = vibe_skills_dir()?;
-            let expected = vibe_dir.join(&skill_id);
-            if target == expected {
-                return Ok("valid".to_string());
-            }
-        }
-        return Ok("broken".to_string());
-    }
-
-    Ok("copy".to_string())
-}
-
-#[tauri::command]
 pub fn batch_link(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String>, VabError> {
     let mut errors = Vec::new();
 

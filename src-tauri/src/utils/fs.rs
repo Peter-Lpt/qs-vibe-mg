@@ -155,7 +155,6 @@ pub fn read_link_target(link: &Path) -> Result<std::path::PathBuf, VabError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
 
     #[test]
     fn test_is_symlink_nonexistent() {

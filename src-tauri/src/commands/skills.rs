@@ -2,13 +2,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+use sha2::{Digest, Sha256};
 use tracing::warn;
 
 use crate::errors::VabError;
 use crate::models::dashboard::{
     DashboardAgent, DashboardData, DashboardSkill, DashboardStats, SharedSkillInfo,
 };
-use crate::models::skill::{Skill, SkillSource};
+use crate::models::skill::{ConflictType, Skill, SkillIssue, SkillSource};
 use crate::parsers::skill_md::parse_skill_md_full;
 use crate::utils::config::{build_agents_from_config, load_config};
 use crate::utils::datetime;
@@ -17,7 +18,16 @@ use crate::utils::fs::copy_dir_all;
 use crate::utils::history::record_action;
 use crate::utils::path::vibe_skills_dir;
 use crate::models::history::HistoryAction;
-use serde::Serialize;
+
+/// 计算文件内容的 SHA-256 hex hash
+fn content_hash(path: &Path) -> String {
+    let Ok(content) = fs::read_to_string(path) else {
+        return String::new();
+    };
+    let mut hasher = Sha256::new();
+    hasher.update(content.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
 
 #[tauri::command]
 pub fn list_skills() -> Result<Vec<Skill>, VabError> {
@@ -41,6 +51,29 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
         .into_iter()
         .map(|(id, entry)| {
             let linked_agents = find_linked_agents(&id, &agents);
+
+            // 检测冲突：多个 source 的 content_hash 不完全相同
+            let unique_hashes: Vec<&str> = entry
+                .sources
+                .iter()
+                .map(|s| s.content_hash.as_str())
+                .filter(|h| !h.is_empty())
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .collect();
+            let has_conflict = unique_hashes.len() > 1;
+
+            // 检测断链：is_symlink 为 true 但 symlink_target 不存在
+            let has_dangling = entry.sources.iter().any(|s| {
+                if !s.is_symlink {
+                    return false;
+                }
+                match &s.symlink_target {
+                    Some(target) => !Path::new(target).exists(),
+                    None => true,
+                }
+            });
+
             Skill {
                 id,
                 name: entry.name,
@@ -55,11 +88,21 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
                 has_references: entry.has_references,
                 has_assets: entry.has_assets,
                 modified_at: entry.modified_at,
+                has_conflict,
+                has_dangling,
             }
         })
         .collect();
 
-    skills.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    // 排序：冲突和断链置顶，其余按字母排序
+    skills.sort_by(|a, b| {
+        let a_issue = a.has_conflict || a.has_dangling;
+        let b_issue = b.has_conflict || b.has_dangling;
+        b_issue
+            .cmp(&a_issue)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+
     Ok(skills)
 }
 
@@ -76,10 +119,62 @@ pub fn search_skills(query: String) -> Result<Vec<Skill>, VabError> {
         .filter(|s| {
             s.name.to_lowercase().contains(&q)
                 || s.description.to_lowercase().contains(&q)
+                || s.id.to_lowercase().contains(&q)
         })
         .collect();
 
     Ok(results)
+}
+
+#[tauri::command]
+pub fn detect_issues() -> Result<Vec<SkillIssue>, VabError> {
+    let skills = list_skills()?;
+    let mut issues = Vec::new();
+
+    for skill in skills {
+        if skill.has_conflict {
+            let source_names: Vec<String> = skill
+                .sources
+                .iter()
+                .map(|s| {
+                    let agent_name = if s.from == "vibe-lib" {
+                        "Vibe Library"
+                    } else {
+                        &s.from
+                    };
+                    format!("{} ({})", s.name, agent_name)
+                })
+                .collect();
+            issues.push(SkillIssue {
+                skill_id: skill.id.clone(),
+                issue_type: ConflictType::SameNameDiffContent,
+                description: format!(
+                    "同名 skill 有不同内容: {}",
+                    source_names.join(", ")
+                ),
+            });
+        }
+
+        if skill.has_dangling {
+            let broken_sources: Vec<String> = skill
+                .sources
+                .iter()
+                .filter(|s| s.is_symlink)
+                .filter_map(|s| s.symlink_target.as_ref())
+                .cloned()
+                .collect();
+            issues.push(SkillIssue {
+                skill_id: skill.id.clone(),
+                issue_type: ConflictType::DanglingLink,
+                description: format!(
+                    "断链指向已删除路径: {}",
+                    broken_sources.join(", ")
+                ),
+            });
+        }
+    }
+
+    Ok(issues)
 }
 
 #[tauri::command]
@@ -290,7 +385,6 @@ fn collect_vibe_skills(
 
 #[tauri::command]
 pub fn preview_skill(skill_id: String) -> Result<String, VabError> {
-    // 搜索所有可能的位置：vibe-skills + 各 agent 目录
     let vibe_dir = vibe_skills_dir()?;
     let vibe_path = vibe_dir.join(&skill_id).join("SKILL.md");
     if vibe_path.exists() {
@@ -307,7 +401,6 @@ pub fn preview_skill(skill_id: String) -> Result<String, VabError> {
         if agent_path.exists() {
             return fs::read_to_string(&agent_path).map_err(VabError::Io);
         }
-        // 递归搜索子目录
         if let Ok(content) = find_skill_md_recursive(&Path::new(&agent.skills_dir), &skill_id) {
             return Ok(content);
         }
@@ -378,15 +471,22 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
     }
 
     let modified_at = get_modified_at(&dest);
+    let hash = content_hash(&dest.join("SKILL.md"));
+
     Ok(Skill {
         id: name.clone(),
-        name,
+        name: name.clone(),
         description,
         path: dest.to_string_lossy().to_string(),
         linked_agents: Vec::new(),
         sources: vec![SkillSource {
             from: "vibe-lib".to_string(),
             path: dest.to_string_lossy().to_string(),
+            name,
+            description: String::new(),
+            is_symlink: false,
+            symlink_target: None,
+            content_hash: hash,
         }],
         license,
         compatibility,
@@ -395,6 +495,8 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
         has_references: dest.join("references").is_dir(),
         has_assets: dest.join("assets").is_dir(),
         modified_at,
+        has_conflict: false,
+        has_dangling: false,
     })
 }
 
@@ -407,7 +509,6 @@ pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
         return Err(VabError::SkillNotFound { skill_id });
     }
 
-    // Create snapshot before deleting (for undo support)
     let trash_dir = vibe_dir.join(".trash").join(&skill_id);
     if trash_dir.exists() {
         fs::remove_dir_all(&trash_dir)?;
@@ -513,14 +614,29 @@ fn scan_directory(
 
         let skill_md_path = path.join("SKILL.md");
         if skill_md_path.exists() {
-            // 找到 skill，解析并加入 map
             let (name, description, license, compatibility, metadata, _body) =
                 parse_skill_md_full(&skill_md_path)
                     .unwrap_or_else(|_| (id.clone(), String::new(), None, None, None, String::new()));
 
+            let is_symlink = vibe_fs::is_link(&path);
+            let symlink_target = if is_symlink {
+                vibe_fs::read_link_target(&path)
+                    .ok()
+                    .map(|p| p.to_string_lossy().to_string())
+            } else {
+                None
+            };
+
+            let hash = content_hash(&skill_md_path);
+
             let source = SkillSource {
                 from: source_id.to_string(),
                 path: path.to_string_lossy().to_string(),
+                name: name.clone(),
+                description: description.clone(),
+                is_symlink,
+                symlink_target,
+                content_hash: hash,
             };
 
             let modified_at = get_modified_at(&path);
@@ -543,7 +659,6 @@ fn scan_directory(
                     modified_at,
                 });
         } else {
-            // 不是 skill 目录，递归扫描子目录
             scan_directory(&path, source_id, map)?;
         }
     }
@@ -579,69 +694,4 @@ fn get_modified_at(path: &Path) -> String {
         .and_then(|m| m.modified())
         .map(datetime::system_time_to_iso)
         .unwrap_or_default()
-}
-
-#[derive(Serialize)]
-pub struct UpdateInfo {
-    pub skill_id: String,
-    pub source_modified: String,
-    pub local_modified: String,
-}
-
-/// Check for skill updates by comparing source and local modification times
-#[tauri::command]
-pub fn check_updates() -> Result<Vec<UpdateInfo>, VabError> {
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
-    let vibe_dir = vibe_skills_dir()?;
-    let mut updates = Vec::new();
-
-    for agent in &agents {
-        if !agent.detected {
-            continue;
-        }
-        let agent_dir = Path::new(&agent.skills_dir);
-        if !agent_dir.exists() {
-            continue;
-        }
-
-        if let Ok(entries) = fs::read_dir(agent_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if !path.is_dir() {
-                    continue;
-                }
-                let name = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                if name.starts_with('.') {
-                    continue;
-                }
-
-                let skill_md = path.join("SKILL.md");
-                if !skill_md.exists() {
-                    continue;
-                }
-
-                let local_path = vibe_dir.join(&name);
-                if !local_path.exists() {
-                    continue;
-                }
-
-                let source_modified = get_modified_at(&path);
-                let local_modified = get_modified_at(&local_path);
-
-                if source_modified > local_modified {
-                    updates.push(UpdateInfo {
-                        skill_id: name,
-                        source_modified,
-                        local_modified,
-                    });
-                }
-            }
-        }
-    }
-
-    Ok(updates)
 }
