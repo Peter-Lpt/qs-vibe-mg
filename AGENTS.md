@@ -29,13 +29,13 @@ $env:CARGO_HOME = "D:\environment\rust\.cargo"
 
 ### Rust backend (`src-tauri/src/`)
 
-| Module | Files | Purpose |
-|--------|-------|---------|
-| `commands/` | `skills.rs`, `sync.rs`, `agents.rs`, `history.rs`, `config.rs` | Tauri IPC handlers; register new commands in `lib.rs` `invoke_handler` macro |
-| `models/` | `skill.rs`, `agent.rs`, `history.rs`, `dashboard.rs`, `sync.rs` | Data types |
-| `parsers/` | `skill_md.rs` | SKILL.md YAML frontmatter parsing (serde_yaml) |
-| `errors.rs` | — | `VabError` enum — serialized as string for frontend |
-| `utils/` | `path.rs`, `config.rs`, `fs.rs`, `history.rs` | Path resolution (~ expansion), JSON config read/write, cross-platform symlinks, undo/redo history |
+| Module | Purpose |
+|--------|---------|
+| `commands/` | Tauri IPC handlers; register new commands in `lib.rs` `invoke_handler` macro |
+| `models/` | Data types (serde Serialize/Deserialize) |
+| `parsers/` | SKILL.md YAML frontmatter parsing (serde_yaml) |
+| `errors.rs` | `VabError` enum — serialized as string for frontend via custom `Serialize` impl |
+| `utils/` | `path.rs` (~ expansion), `config.rs` (JSON read/write), `fs.rs` (cross-platform symlinks + `copy_dir_all`), `history.rs` (undo/redo), `datetime.rs` (ISO 8601 formatting) |
 
 ### Vue frontend (`src/`)
 
@@ -43,9 +43,9 @@ $env:CARGO_HOME = "D:\environment\rust\.cargo"
 |--------|---------|
 | `components/layout/` | App shell (AppLayout, TabBar navigation) |
 | `components/skills/` | Skill list, card, preview, install dialog |
+| `components/agents/` | Agent list, card, add dialog |
 | `components/symlink/` | Hierarchical batch symlink config, sync preview |
 | `components/dashboard/` | Dashboard showing skill distribution across agents |
-| `components/cli/` | CLI tool discovery and management |
 | `components/history/` | Undo/redo bar |
 | `components/settings/` | Settings page |
 | `components/common/` | Shared dialogs (ConfirmDialog, ErrorBanner) |
@@ -55,13 +55,15 @@ $env:CARGO_HOME = "D:\environment\rust\.cargo"
 
 ### Supported agents
 
-Default paths: `~/.claude/skills/`, `~/.hermes/skills/`, `~/.pi/agent/skills/`, `~/.config/opencode/skills/`, `~/.codex/skills/`, `~/.config/mimocode/skills/`, `~/.agents/skills/`.
+Default paths: `~/.claude/skills/`, `~/.hermes/skills/` (Windows: `%LOCALAPPDATA%\hermes\skills`), `~/.pi/agent/skills/`, `~/.config/opencode/skills/`, `~/.codex/skills/`, `~/.config/mimocode/skills/`, `~/.agents/skills/`.
 
 ### Data flow
 
 - Frontend calls Rust via `invoke()` from `@tauri-apps/api/core`
 - Skill scanning: merges `~/.vibe-skills/` with all agent directories, deduplicates by folder name
-- Symlink direction: `agent_dir/skills/{skill_name}` → symlink → `~/.vibe-skills/{skill_name}`
+- Two symlink directions:
+  - **Sync** (`sync_agent_to_vibe`): agent_dir → vibe — creates symlinks at `~/.vibe-skills/{agent_id}/{skill}` pointing to agent's real directory
+  - **Link** (`create_link`): vibe → agent_dir — creates symlink at `agent_dir/{skill}` pointing to `~/.vibe-skills/{skill}`
 - No database — config in `~/.vibe-skills/.vibe-config.json`, history in `~/.vibe-skills/.vibe-history.json`
 
 ## Conventions
@@ -72,7 +74,4 @@ Default paths: `~/.claude/skills/`, `~/.hermes/skills/`, `~/.pi/agent/skills/`, 
 - **SKILL.md format**: YAML frontmatter (`---` delimiters) with `name`, `description`, optional `license`, `compatibility`, `metadata` fields
 - **Package manager**: pnpm only (not npm/yarn)
 - **CSS**: Tailwind CSS 4 via `@tailwindcss/vite` plugin — use utility classes, no custom CSS files
-
-## Notes
-
-(Add quick notes here as needed — link related memories with [[mention]].)
+- **Rust tests**: Inline `#[cfg(test)] mod tests` (no separate test directory). Files with tests: `utils/path.rs`, `utils/fs.rs`, `utils/datetime.rs`, `parsers/skill_md.rs`
