@@ -17,6 +17,7 @@ use crate::utils::fs::copy_dir_all;
 use crate::utils::history::record_action;
 use crate::utils::path::vibe_skills_dir;
 use crate::models::history::HistoryAction;
+use serde::Serialize;
 
 #[tauri::command]
 pub fn list_skills() -> Result<Vec<Skill>, VabError> {
@@ -399,11 +400,19 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
 
 #[tauri::command]
 pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
-    let skill_path = vibe_skills_dir()?.join(&skill_id);
+    let vibe_dir = vibe_skills_dir()?;
+    let skill_path = vibe_dir.join(&skill_id);
 
     if !skill_path.exists() {
         return Err(VabError::SkillNotFound { skill_id });
     }
+
+    // Create snapshot before deleting (for undo support)
+    let trash_dir = vibe_dir.join(".trash").join(&skill_id);
+    if trash_dir.exists() {
+        fs::remove_dir_all(&trash_dir)?;
+    }
+    copy_dir_all(&skill_path, &trash_dir)?;
 
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
@@ -419,6 +428,44 @@ pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
     if let Err(e) = record_action(HistoryAction::Delete, &skill_id, None, None) {
         warn!("Failed to record Delete action: {}", e);
     }
+
+    Ok(())
+}
+
+/// Restore a deleted skill from trash snapshot
+pub fn restore_from_trash(skill_id: &str) -> Result<(), VabError> {
+    let vibe_dir = vibe_skills_dir()?;
+    let trash_dir = vibe_dir.join(".trash").join(skill_id);
+    let restore_to = vibe_dir.join(skill_id);
+
+    if !trash_dir.exists() {
+        return Err(VabError::History(format!(
+            "No snapshot found for skill '{}'",
+            skill_id
+        )));
+    }
+
+    copy_dir_all(&trash_dir, &restore_to)?;
+    fs::remove_dir_all(&trash_dir)?;
+
+    Ok(())
+}
+
+/// Move a skill to trash (for redo of undo-delete)
+pub fn move_to_trash(skill_id: &str) -> Result<(), VabError> {
+    let vibe_dir = vibe_skills_dir()?;
+    let skill_path = vibe_dir.join(skill_id);
+    let trash_dir = vibe_dir.join(".trash").join(skill_id);
+
+    if !skill_path.exists() {
+        return Ok(());
+    }
+
+    if trash_dir.exists() {
+        fs::remove_dir_all(&trash_dir)?;
+    }
+    copy_dir_all(&skill_path, &trash_dir)?;
+    fs::remove_dir_all(&skill_path)?;
 
     Ok(())
 }
@@ -532,4 +579,69 @@ fn get_modified_at(path: &Path) -> String {
         .and_then(|m| m.modified())
         .map(datetime::system_time_to_iso)
         .unwrap_or_default()
+}
+
+#[derive(Serialize)]
+pub struct UpdateInfo {
+    pub skill_id: String,
+    pub source_modified: String,
+    pub local_modified: String,
+}
+
+/// Check for skill updates by comparing source and local modification times
+#[tauri::command]
+pub fn check_updates() -> Result<Vec<UpdateInfo>, VabError> {
+    let config = load_config()?;
+    let agents = build_agents_from_config(&config)?;
+    let vibe_dir = vibe_skills_dir()?;
+    let mut updates = Vec::new();
+
+    for agent in &agents {
+        if !agent.detected {
+            continue;
+        }
+        let agent_dir = Path::new(&agent.skills_dir);
+        if !agent_dir.exists() {
+            continue;
+        }
+
+        if let Ok(entries) = fs::read_dir(agent_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                if name.starts_with('.') {
+                    continue;
+                }
+
+                let skill_md = path.join("SKILL.md");
+                if !skill_md.exists() {
+                    continue;
+                }
+
+                let local_path = vibe_dir.join(&name);
+                if !local_path.exists() {
+                    continue;
+                }
+
+                let source_modified = get_modified_at(&path);
+                let local_modified = get_modified_at(&local_path);
+
+                if source_modified > local_modified {
+                    updates.push(UpdateInfo {
+                        skill_id: name,
+                        source_modified,
+                        local_modified,
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(updates)
 }

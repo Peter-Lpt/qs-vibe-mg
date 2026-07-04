@@ -1,8 +1,11 @@
 use std::fs;
 
+use serde::{Deserialize, Serialize};
+
 use crate::errors::VabError;
 use crate::utils::config::{load_config, save_config, Config};
 use crate::utils::fs::copy_dir_all;
+use crate::utils::history::load_history;
 use crate::utils::path::{expand_tilde, vibe_skills_dir};
 
 /// 获取配置
@@ -96,4 +99,41 @@ pub fn set_vibe_skills_path(new_path: String, migrate: bool) -> Result<Config, V
     save_config(&config)?;
 
     Ok(config)
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ExportData {
+    pub config: Config,
+    pub history: crate::models::history::HistoryStore,
+}
+
+/// Export config and history as JSON string
+#[tauri::command]
+pub fn export_data() -> Result<String, VabError> {
+    let config = load_config()?;
+    let history = load_history()?;
+    let data = ExportData { config, history };
+    serde_json::to_string_pretty(&data).map_err(|e| VabError::History(e.to_string()))
+}
+
+/// Import config and history from JSON string
+#[tauri::command]
+pub fn import_data(json: String) -> Result<(), VabError> {
+    let data: ExportData =
+        serde_json::from_str(&json).map_err(|e| VabError::History(e.to_string()))?;
+    save_config(&data.config)?;
+    crate::utils::history::save_history(&data.history)?;
+    Ok(())
+}
+
+/// Write content to a file path (used by export)
+#[tauri::command]
+pub fn write_file_to_path(path: String, content: String) -> Result<(), VabError> {
+    fs::write(&path, content).map_err(VabError::Io)
+}
+
+/// Read content from a file path (used by import)
+#[tauri::command]
+pub fn read_file_from_path(path: String) -> Result<String, VabError> {
+    fs::read_to_string(&path).map_err(VabError::Io)
 }

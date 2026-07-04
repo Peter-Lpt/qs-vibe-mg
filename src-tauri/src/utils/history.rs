@@ -168,9 +168,10 @@ pub fn perform_undo(entry: &HistoryEntry) -> Result<(), VabError> {
             }
         }
         HistoryAction::Install => do_delete_skill(&entry.skill_id),
-        HistoryAction::Delete => Err(VabError::History(
-            "Cannot undo delete without snapshot".to_string(),
-        )),
+        HistoryAction::Delete => {
+            use crate::commands::skills::restore_from_trash;
+            restore_from_trash(&entry.skill_id)
+        }
         HistoryAction::BatchLink => {
             let agent = entry.agent_id.as_ref().ok_or_else(|| {
                 VabError::History("BatchLink entry missing agent_id".to_string())
@@ -224,7 +225,10 @@ pub fn perform_redo(entry: &HistoryEntry) -> Result<(), VabError> {
         HistoryAction::Install => Err(VabError::History(
             "Cannot redo install operation".to_string(),
         )),
-        HistoryAction::Delete => do_delete_skill(&entry.skill_id),
+        HistoryAction::Delete => {
+            use crate::commands::skills::move_to_trash;
+            move_to_trash(&entry.skill_id)
+        }
         HistoryAction::BatchLink => {
             let agent = entry.agent_id.as_ref().ok_or_else(|| {
                 VabError::History("BatchLink entry missing agent_id".to_string())

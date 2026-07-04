@@ -16,6 +16,7 @@ pub fn run() {
             commands::skills::delete_skill,
             commands::skills::search_skills,
             commands::skills::get_dashboard_data,
+            commands::skills::check_updates,
             commands::sync::create_link,
             commands::sync::remove_link,
             commands::sync::check_link_status,
@@ -39,6 +40,10 @@ pub fn run() {
             commands::config::get_config,
             commands::config::update_config,
             commands::config::set_vibe_skills_path,
+            commands::config::export_data,
+            commands::config::import_data,
+            commands::config::write_file_to_path,
+            commands::config::read_file_from_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
