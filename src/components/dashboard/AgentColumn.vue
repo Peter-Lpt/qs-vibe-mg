@@ -9,14 +9,14 @@ defineProps<{
 }>();
 
 const dotColors = [
-  "#3b82f6",
-  "#8b5cf6",
-  "#22c55e",
-  "#f59e0b",
-  "#ef4444",
-  "#06b6d4",
-  "#ec4899",
-  "#14b8a6",
+  "var(--dot-1)",
+  "var(--dot-2)",
+  "var(--dot-3)",
+  "var(--dot-4)",
+  "var(--dot-5)",
+  "var(--dot-6)",
+  "var(--dot-7)",
+  "var(--dot-8)",
 ];
 
 function getDotColor(index: number) {
@@ -51,7 +51,7 @@ function getDotColor(index: number) {
         :key="skill.skill_id"
         class="flex items-center gap-2 px-2 py-1 rounded text-xs"
         :style="{
-          background: skill.shared_with.length > 0 ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+          background: skill.shared_with.length > 0 ? 'var(--c-primary-light)' : 'transparent',
         }"
       >
         <span

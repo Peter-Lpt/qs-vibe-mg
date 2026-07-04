@@ -3,10 +3,15 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useHistoryStore } from "../../stores/history";
 import { useSkillsStore } from "../../stores/skills";
+import { useToast } from "../../composables/useToast";
+import ConfirmDialog from "../common/ConfirmDialog.vue";
+import EmptyState from "../common/EmptyState.vue";
+import SkeletonCard from "../common/SkeletonCard.vue";
 
 const { t } = useI18n();
 const historyStore = useHistoryStore();
 const skillsStore = useSkillsStore();
+const toast = useToast();
 
 const currentPage = ref(1);
 const pageSize = 20;
@@ -119,11 +124,11 @@ function getActionColor(action: string): string {
       return "var(--c-primary)";
     case "unlink":
     case "batch_unlink":
-      return "#e67e22";
+      return "var(--c-warning)";
     case "install":
-      return "#27ae60";
+      return "var(--c-success)";
     case "delete":
-      return "#e74c3c";
+      return "var(--c-danger)";
     default:
       return "var(--c-text-secondary)";
   }
@@ -142,17 +147,9 @@ async function handleEntryUndo(entryId: string) {
     await historyStore.undoById(entryId);
     await skillsStore.fetchSkills();
     historyStore.updateUndoRedoState();
-    historyStore.operationMessage = {
-      type: "success",
-      text: t("history.undo_success"),
-    };
-    clearMessageAfterDelay();
+    toast.show(t("history.undo_success"), "success");
   } catch (e: unknown) {
-    historyStore.operationMessage = {
-      type: "error",
-      text: String(e),
-    };
-    clearMessageAfterDelay();
+    toast.show(String(e), "error");
   }
 }
 
@@ -161,17 +158,9 @@ async function handleEntryRedo(entryId: string) {
     await historyStore.redoById(entryId);
     await skillsStore.fetchSkills();
     historyStore.updateUndoRedoState();
-    historyStore.operationMessage = {
-      type: "success",
-      text: t("history.redo_success"),
-    };
-    clearMessageAfterDelay();
+    toast.show(t("history.redo_success"), "success");
   } catch (e: unknown) {
-    historyStore.operationMessage = {
-      type: "error",
-      text: String(e),
-    };
-    clearMessageAfterDelay();
+    toast.show(String(e), "error");
   }
 }
 
@@ -183,24 +172,10 @@ async function handleClearHistory() {
     await skillsStore.fetchSkills();
     historyStore.updateUndoRedoState();
     showClearConfirm.value = false;
-    historyStore.operationMessage = {
-      type: "success",
-      text: t("history.clear_success"),
-    };
-    clearMessageAfterDelay();
+    toast.show(t("history.clear_success"), "success");
   } catch (e: unknown) {
-    historyStore.operationMessage = {
-      type: "error",
-      text: String(e),
-    };
-    clearMessageAfterDelay();
+    toast.show(String(e), "error");
   }
-}
-
-function clearMessageAfterDelay() {
-  setTimeout(() => {
-    historyStore.operationMessage = null;
-  }, 4000);
 }
 </script>
 
@@ -219,29 +194,6 @@ function clearMessageAfterDelay() {
       >
         🗑 {{ t('history.clear') }}
       </button>
-    </div>
-
-    <!-- 操作提示 -->
-    <div
-      v-if="historyStore.operationMessage"
-      class="mb-4 px-3 py-2 text-xs rounded-md"
-      :style="{
-        background:
-          historyStore.operationMessage.type === 'success'
-            ? 'rgba(39, 174, 96, 0.12)'
-            : 'rgba(231, 76, 60, 0.12)',
-        color:
-          historyStore.operationMessage.type === 'success'
-            ? '#27ae60'
-            : '#e74c3c',
-        border: '1px solid',
-        borderColor:
-          historyStore.operationMessage.type === 'success'
-            ? 'rgba(39, 174, 96, 0.3)'
-            : 'rgba(231, 76, 60, 0.3)',
-      }"
-    >
-      {{ historyStore.operationMessage.text }}
     </div>
 
     <!-- 搜索+过滤工具栏 -->
@@ -286,30 +238,16 @@ function clearMessageAfterDelay() {
     </div>
 
     <!-- 加载态 -->
-    <div
-      v-if="historyStore.loading"
-      class="flex items-center justify-center h-40 rounded-lg border"
-      style="border-color: var(--c-border);"
-    >
-      <span class="text-xs" style="color: var(--c-text-secondary);">
-        {{ t('app.loading') }}
-      </span>
+    <div v-if="historyStore.loading" class="space-y-3">
+      <SkeletonCard v-for="i in 3" :key="i" :lines="1" />
     </div>
 
     <!-- 空状态 -->
-    <div
+    <EmptyState
       v-else-if="historyStore.filteredEntries.length === 0"
-      class="flex items-center justify-center h-40 rounded-lg border"
-      style="border-color: var(--c-border);"
-    >
-      <span class="text-xs" style="color: var(--c-text-secondary);">
-        {{
-          historyStore.searchQuery || historyStore.actionFilter
-            ? t('history.no_results')
-            : t('history.empty')
-        }}
-      </span>
-    </div>
+      icon="🕐"
+      :title="historyStore.searchQuery || historyStore.actionFilter ? t('history.no_results') : t('history.empty')"
+    />
 
     <!-- 表格 -->
     <div v-else class="overflow-x-auto">
@@ -356,9 +294,9 @@ function clearMessageAfterDelay() {
                 class="inline-flex items-center px-1.5 py-0.5 rounded text-xs"
                 :style="{
                   background: entry.undone
-                    ? 'rgba(231, 76, 60, 0.1)'
-                    : 'rgba(39, 174, 96, 0.1)',
-                  color: entry.undone ? '#e74c3c' : '#27ae60',
+                    ? 'var(--c-danger-light)'
+                    : 'var(--c-success-light)',
+                  color: entry.undone ? 'var(--c-danger)' : 'var(--c-success)',
                 }"
               >
                 {{ entry.undone ? t('history.status_undone') : t('history.status_normal') }}
@@ -422,39 +360,14 @@ function clearMessageAfterDelay() {
       </button>
     </div>
 
-    <!-- 清空确认弹窗 -->
-    <Teleport to="body">
-      <div
-        v-if="showClearConfirm"
-        class="fixed inset-0 z-50 flex items-center justify-center"
-        style="background: rgba(0, 0, 0, 0.4);"
-        @click.self="showClearConfirm = false"
-      >
-        <div
-          class="rounded-xl p-5 max-w-sm w-full mx-4 shadow-xl"
-          style="background: var(--c-surface);"
-        >
-          <p class="text-sm mb-5" style="color: var(--c-text);">
-            {{ t('history.clear_confirm') }}
-          </p>
-          <div class="flex justify-end gap-2">
-            <button
-              class="px-4 py-1.5 text-xs rounded-md border cursor-pointer transition-colors hover:opacity-80"
-              style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
-              @click="showClearConfirm = false"
-            >
-              {{ t('settings.cancel') }}
-            </button>
-            <button
-              class="px-4 py-1.5 text-xs rounded-md border cursor-pointer transition-colors hover:opacity-80"
-              style="border-color: #e74c3c; color: white; background: #e74c3c;"
-              @click="handleClearHistory"
-            >
-              {{ t('history.clear_confirm_yes') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ConfirmDialog
+      v-if="showClearConfirm"
+      :title="t('history.clear')"
+      :message="t('history.clear_confirm')"
+      :confirm-text="t('history.clear_confirm_yes')"
+      :danger="true"
+      @confirm="handleClearHistory"
+      @cancel="showClearConfirm = false"
+    />
   </div>
 </template>

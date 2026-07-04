@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAgentsStore } from "../../stores/agents";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useEscapeKey } from "../../composables/useEscapeKey";
 
 const { t } = useI18n();
 const agentsStore = useAgentsStore();
@@ -11,6 +12,8 @@ const emit = defineEmits<{
   close: [];
   added: [];
 }>();
+
+useEscapeKey(() => emit("close"));
 
 const name = ref("");
 const agentPath = ref("");

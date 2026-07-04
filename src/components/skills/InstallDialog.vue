@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { open } from "@tauri-apps/plugin-dialog";
+import { useEscapeKey } from "../../composables/useEscapeKey";
 
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
@@ -10,6 +11,8 @@ const skillsStore = useSkillsStore();
 const emit = defineEmits<{
   close: [];
 }>();
+
+useEscapeKey(() => emit("close"));
 
 const sourcePath = ref("");
 const installing = ref(false);
@@ -32,7 +35,7 @@ async function pickFolder() {
 
 async function handleInstall() {
   if (!sourcePath.value.trim()) {
-    installError.value = "Please enter a source path";
+    installError.value = t("skills.source_path_required");
     return;
   }
 
@@ -72,17 +75,14 @@ async function handleInstall() {
           <div class="flex gap-1.5">
             <input
               v-model="sourcePath"
-              placeholder="/path/to/skill-directory"
+              :placeholder="t('skills.source_path_placeholder')"
               class="flex-1 px-3 py-2 text-xs rounded-md border outline-none transition-colors"
               style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
               @keyup.enter="handleInstall"
             />
             <button
-              class="px-2.5 py-2 text-xs rounded-md border cursor-pointer transition-colors shrink-0"
-              style="border-color: var(--c-border); color: var(--c-text-secondary);"
+              class="px-2.5 py-2 text-xs rounded-md border cursor-pointer shrink-0 btn-ghost"
               @click="pickFolder"
-              @mouseenter="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'var(--c-surface-hover)'; }"
-              @mouseleave="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'transparent'; }"
             >
               📁
             </button>

@@ -1,19 +1,36 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useAgentsStore } from "../../stores/agents";
+import { useToast } from "../../composables/useToast";
 import SkillCard from "./SkillCard.vue";
 import InstallDialog from "./InstallDialog.vue";
+import EmptyState from "../common/EmptyState.vue";
+import SkeletonCard from "../common/SkeletonCard.vue";
+import BatchActionBar from "../common/BatchActionBar.vue";
 
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const agentsStore = useAgentsStore();
+const toast = useToast();
 
 const searchQuery = ref("");
 const filterAgent = ref("");
 const showInstall = ref(false);
+const selectMode = ref(false);
+const searchInput = ref<HTMLInputElement | null>(null);
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function handleSkillKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "f")) {
+    e.preventDefault();
+    searchInput.value?.focus();
+  }
+}
+
+onMounted(() => document.addEventListener("keydown", handleSkillKeydown));
+onUnmounted(() => document.removeEventListener("keydown", handleSkillKeydown));
 
 const agentOptions = computed(() => {
   const tags = new Set<string>();
@@ -48,6 +65,47 @@ watch(searchQuery, (val) => {
     skillsStore.searchSkills(val);
   }, 300);
 });
+
+function toggleSelectMode() {
+  selectMode.value = !selectMode.value;
+  if (!selectMode.value) {
+    skillsStore.deselectAll();
+  }
+}
+
+async function handleBatchLink(agentId: string) {
+  const ids = Array.from(skillsStore.selectedIds);
+  if (ids.length === 0) return;
+  try {
+    const errors = await skillsStore.batchLink(ids, agentId);
+    if (errors.length > 0) {
+      toast.show(`${errors.length} errors`, "error");
+    } else {
+      toast.show(t("skills.linked", { agent: agentId }), "success");
+    }
+    skillsStore.deselectAll();
+    selectMode.value = false;
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
+
+async function handleBatchUnlink(agentId: string) {
+  const ids = Array.from(skillsStore.selectedIds);
+  if (ids.length === 0) return;
+  try {
+    const errors = await skillsStore.batchUnlink(ids, agentId);
+    if (errors.length > 0) {
+      toast.show(`${errors.length} errors`, "error");
+    } else {
+      toast.show(t("skills.unlinked", { agent: agentId }), "success");
+    }
+    skillsStore.deselectAll();
+    selectMode.value = false;
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
 </script>
 
 <template>
@@ -59,21 +117,47 @@ watch(searchQuery, (val) => {
           ({{ displaySkills.length }}/{{ skillsStore.skills.length }})
         </span>
       </h2>
-      <button
-        class="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-colors"
-        style="background: var(--c-primary); color: white;"
-        @click="showInstall = true"
-        @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary-hover)'"
-        @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary)'"
-      >
-        + {{ t('skills.install') }}
-      </button>
+      <div class="flex items-center gap-2">
+        <button
+          v-if="selectMode && skillsStore.selectedIds.size > 0"
+          class="text-xs px-2 py-1.5 rounded-md cursor-pointer btn-ghost"
+          @click="skillsStore.selectAll()"
+        >
+          {{ t('skills.select_all') }}
+        </button>
+        <button
+          v-if="selectMode && skillsStore.selectedIds.size > 0"
+          class="text-xs px-2 py-1.5 rounded-md cursor-pointer btn-ghost"
+          @click="skillsStore.deselectAll()"
+        >
+          {{ t('skills.deselect_all') }}
+        </button>
+        <button
+          class="text-xs px-2 py-1.5 rounded-md cursor-pointer"
+          :style="{
+            background: selectMode ? 'var(--c-primary-light)' : 'transparent',
+            color: selectMode ? 'var(--c-primary)' : 'var(--c-text-secondary)',
+            border: '1px solid',
+            borderColor: selectMode ? 'var(--c-primary)' : 'var(--c-border)',
+          }"
+          @click="toggleSelectMode"
+        >
+          {{ selectMode ? t('skills.exit_select') : t('skills.enter_select') }}
+        </button>
+        <button
+          class="text-xs px-3 py-1.5 rounded-md cursor-pointer btn-primary"
+          @click="showInstall = true"
+        >
+          + {{ t('skills.install') }}
+        </button>
+      </div>
     </div>
 
     <div class="flex gap-3 mb-5">
       <input
+        ref="searchInput"
         v-model="searchQuery"
-        :placeholder="t('skills.search')"
+        :placeholder="t('skills.search') + ' (Ctrl+K)'"
         class="flex-1 px-3 py-2 text-xs rounded-md border outline-none transition-colors"
         style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text);"
       />
@@ -105,22 +189,22 @@ watch(searchQuery, (val) => {
       </div>
     </div>
 
-    <div v-if="skillsStore.loading || skillsStore.searching" class="text-sm" style="color: var(--c-text-secondary);">
-      {{ t('app.loading') }}
+    <div v-if="skillsStore.loading || skillsStore.searching" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <SkeletonCard v-for="i in 4" :key="i" />
     </div>
 
     <div v-else-if="skillsStore.error" class="text-sm" style="color: var(--c-danger);">
       {{ skillsStore.error }}
     </div>
 
-    <div
+    <EmptyState
       v-else-if="displaySkills.length === 0"
-      class="text-sm py-8 text-center"
-      style="color: var(--c-text-secondary);"
-    >
-      {{ t('skills.no_skills') }}
-      <p class="text-xs mt-1">{{ t('skills.no_skills_hint') }}</p>
-    </div>
+      icon="📦"
+      :title="t('skills.no_skills')"
+      :description="t('skills.no_skills_hint')"
+      :action-label="t('skills.install')"
+      @action="showInstall = true"
+    />
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <SkillCard
@@ -128,8 +212,17 @@ watch(searchQuery, (val) => {
         :key="skill.id"
         :skill="skill"
         :agents="agentsStore.agents"
+        :selectable="selectMode"
       />
     </div>
+
+    <BatchActionBar
+      :selected-count="skillsStore.selectedIds.size"
+      :agents="agentsStore.agents"
+      @link-to-agent="handleBatchLink"
+      @unlink-from-agent="handleBatchUnlink"
+      @clear-selection="skillsStore.deselectAll()"
+    />
 
     <InstallDialog
       v-if="showInstall"

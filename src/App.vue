@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onMounted, watch } from "vue";
+import { onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAgentsStore } from "./stores/agents";
 import { useSkillsStore } from "./stores/skills";
 import { useHistoryStore } from "./stores/history";
 import { useAppStore } from "./stores/app";
+import { useToast } from "./composables/useToast";
+import type { TabId } from "./types";
 import AppLayout from "./components/layout/AppLayout.vue";
 import TabBar from "./components/layout/TabBar.vue";
 import AgentsTab from "./components/agents/AgentsTab.vue";
@@ -13,12 +15,16 @@ import DashboardTab from "./components/dashboard/DashboardTab.vue";
 import SymlinkTab from "./components/symlink/SymlinkTab.vue";
 import HistoryTab from "./components/history/HistoryTab.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
+import ToastContainer from "./components/common/ToastContainer.vue";
 
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 const agentsStore = useAgentsStore();
 const skillsStore = useSkillsStore();
 const historyStore = useHistoryStore();
 const appStore = useAppStore();
+const toast = useToast();
+
+const tabs: TabId[] = ["agents", "skills", "dashboard", "symlink", "history"];
 
 watch(
   () => appStore.locale,
@@ -36,6 +42,42 @@ watch(
   { deep: true }
 );
 
+function handleGlobalKeydown(e: KeyboardEvent) {
+  // Ctrl+1-5: tab switch
+  if (e.ctrlKey && !e.shiftKey && e.key >= "1" && e.key <= "5") {
+    e.preventDefault();
+    const idx = Number(e.key) - 1;
+    if (idx < tabs.length) {
+      appStore.activeTab = tabs[idx];
+    }
+    return;
+  }
+
+  // Ctrl+Z: undo (in history tab)
+  if (e.ctrlKey && !e.shiftKey && e.key === "z" && appStore.activeTab === "history") {
+    e.preventDefault();
+    if (historyStore.canUndo && historyStore.latestUndoableId) {
+      historyStore.undoById(historyStore.latestUndoableId);
+      skillsStore.fetchSkills();
+      historyStore.updateUndoRedoState();
+      toast.show(t("history.undo_success"), "success");
+    }
+    return;
+  }
+
+  // Ctrl+Shift+Z: redo (in history tab)
+  if (e.ctrlKey && e.shiftKey && e.key === "Z" && appStore.activeTab === "history") {
+    e.preventDefault();
+    if (historyStore.canRedo && historyStore.latestRedoableId) {
+      historyStore.redoById(historyStore.latestRedoableId);
+      skillsStore.fetchSkills();
+      historyStore.updateUndoRedoState();
+      toast.show(t("history.redo_success"), "success");
+    }
+    return;
+  }
+}
+
 onMounted(async () => {
   appStore.init();
   locale.value = appStore.locale;
@@ -43,6 +85,12 @@ onMounted(async () => {
   await skillsStore.fetchSkills();
   await historyStore.fetchHistory();
   historyStore.updateUndoRedoState();
+  skillsStore.checkUpdates();
+  document.addEventListener("keydown", handleGlobalKeydown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("keydown", handleGlobalKeydown);
 });
 </script>
 
@@ -60,4 +108,5 @@ onMounted(async () => {
   </AppLayout>
 
   <SettingsPage v-if="appStore.showSettings" />
+  <ToastContainer />
 </template>

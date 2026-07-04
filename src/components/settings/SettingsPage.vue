@@ -1,13 +1,24 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { invoke } from "@tauri-apps/api/core";
 import { useAppStore, type Locale, type ThemeMode } from "../../stores/app";
 import { useAgentsStore } from "../../stores/agents";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { useToast } from "../../composables/useToast";
+import ConfirmDialog from "../common/ConfirmDialog.vue";
+import { useEscapeKey } from "../../composables/useEscapeKey";
 
 const { t } = useI18n();
 const appStore = useAppStore();
 const agentsStore = useAgentsStore();
+const toast = useToast();
+
+useEscapeKey(() => {
+  if (!showMigrateConfirm.value) {
+    appStore.showSettings = false;
+  }
+});
 
 const themes: { value: ThemeMode; labelKey: string }[] = [
   { value: "system", labelKey: "settings.theme_system" },
@@ -61,6 +72,39 @@ async function handleMigrate(migrate: boolean) {
     pathError.value = String(e);
   } finally {
     savingPath.value = false;
+  }
+}
+
+async function handleExport() {
+  try {
+    const json = await invoke<string>("export_data");
+    const filePath = await save({
+      defaultPath: "vibe-config-backup.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (filePath) {
+      // Write file via Tauri fs - use invoke to write from backend
+      await invoke("write_file_to_path", { path: filePath, content: json });
+      toast.show(t("settings.export_success"), "success");
+    }
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
+
+async function handleImport() {
+  try {
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (selected) {
+      const content = await invoke<string>("read_file_from_path", { path: selected });
+      await invoke("import_data", { json: content });
+      toast.show(t("settings.import_success"), "success");
+    }
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
   }
 }
 </script>
@@ -146,46 +190,41 @@ async function handleMigrate(migrate: boolean) {
             {{ t('settings.pick_vibe_path') }}
           </button>
         </div>
+
+        <div>
+          <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">
+            {{ t('settings.data_management') }}
+          </label>
+          <div class="flex gap-2">
+            <button
+              class="flex-1 px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80"
+              style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+              @click="handleExport"
+            >
+              {{ t('settings.export_data') }}
+            </button>
+            <button
+              class="flex-1 px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80"
+              style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+              @click="handleImport"
+            >
+              {{ t('settings.import_data') }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div
+    <ConfirmDialog
       v-if="showMigrateConfirm"
-      class="fixed inset-0 z-50 flex items-center justify-center"
-      style="background: rgba(0, 0, 0, 0.5);"
-    >
-      <div
-        class="rounded-lg p-5 shadow-xl max-w-sm w-full mx-4"
-        style="background: var(--c-surface); border: 1px solid var(--c-border);"
-      >
-        <h3 class="text-sm font-semibold mb-2" style="color: var(--c-text);">
-          {{ t('settings.migrate_title') }}
-        </h3>
-        <p class="text-xs mb-4" style="color: var(--c-text-secondary);">
-          {{ t('settings.migrate_confirm') }}
-        </p>
-        <div v-if="pathError" class="text-xs mb-3 px-2 py-1 rounded-md" style="background: var(--c-danger-light); color: var(--c-danger);">
-          {{ pathError }}
-        </div>
-        <div class="flex justify-end gap-2">
-          <button
-            class="px-3 py-1.5 text-xs rounded-md border cursor-pointer hover:opacity-80"
-            style="border-color: var(--c-border); color: var(--c-text);"
-            @click="handleMigrate(false)"
-            :disabled="savingPath"
-          >
-            {{ t('settings.migrate_no') }}
-          </button>
-          <button
-            class="px-3 py-1.5 text-xs rounded-md cursor-pointer hover:opacity-80"
-            style="background: var(--c-primary); color: white;"
-            @click="handleMigrate(true)"
-            :disabled="savingPath"
-          >
-            {{ savingPath ? t('app.loading') : t('settings.migrate_yes') }}
-          </button>
-        </div>
-      </div>
-    </div>
+      :title="t('settings.migrate_title')"
+      :message="t('settings.migrate_confirm')"
+      :confirm-text="savingPath ? t('app.loading') : t('settings.migrate_yes')"
+      :cancel-text="t('settings.migrate_no')"
+      :error="pathError"
+      :disabled="savingPath"
+      @confirm="handleMigrate(true)"
+      @cancel="handleMigrate(false)"
+    />
   </div>
 </template>

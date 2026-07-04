@@ -2,6 +2,7 @@
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAgentsStore } from "../../stores/agents";
+import { useToast } from "../../composables/useToast";
 import type { Agent, SkillsTreeNode, SyncResult } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 
@@ -15,17 +16,18 @@ const props = defineProps<{
 
 const { t } = useI18n();
 const agentsStore = useAgentsStore();
+const toast = useToast();
 
 const selectedSkills = ref<Set<string>>(new Set());
 const expandedFolders = ref<Set<string>>(new Set());
 const showDeleteConfirm = ref(false);
-const toastMessage = ref("");
-const toastType = ref<"success" | "error">("success");
+const filterQuery = ref("");
 
 watch(() => props.agent.id, () => {
   agentsStore.syncResult = null;
   selectedSkills.value.clear();
   expandedFolders.value.clear();
+  filterQuery.value = "";
 });
 
 interface TreeItem {
@@ -39,7 +41,21 @@ const flatItems = computed<TreeItem[]>(() => {
   if (!props.tree) return [];
   const items: TreeItem[] = [];
   flattenNode(props.tree, 0, items);
-  return items;
+  if (!filterQuery.value.trim()) return items;
+  const q = filterQuery.value.toLowerCase();
+  return items.filter((item) => {
+    if (item.type === "skill") {
+      return item.node.name.toLowerCase().includes(q) || item.relativePath.toLowerCase().includes(q);
+    }
+    // Show folder if it has matching children
+    const hasMatchingChild = items.some(
+      (child) =>
+        child.type === "skill" &&
+        child.relativePath.startsWith(item.relativePath + "/") &&
+        (child.node.name.toLowerCase().includes(q) || child.relativePath.toLowerCase().includes(q))
+    );
+    return hasMatchingChild;
+  });
 });
 
 function flattenNode(node: SkillsTreeNode, depth: number, items: TreeItem[]) {
@@ -135,12 +151,6 @@ function deselectAll() {
   selectedSkills.value.clear();
 }
 
-function showToast(message: string, type: "success" | "error" = "success") {
-  toastMessage.value = message;
-  toastType.value = type;
-  setTimeout(() => { toastMessage.value = ""; }, 3000);
-}
-
 async function syncSelected() {
   if (selectedSkills.value.size === 0) return;
   const folders = new Set<string>();
@@ -154,13 +164,13 @@ async function syncSelected() {
     try {
       await agentsStore.syncCategoryToVab(props.agent.id, folder);
     } catch (e: unknown) {
-      showToast(String(e), "error");
+      toast.show(String(e), "error");
     }
   }
   const count = agentsStore.syncResult?.synced_count ?? 0;
   selectedSkills.value.clear();
   await agentsStore.getSkillsTree(props.agent.id);
-  showToast(t('symlink.synced_count', { count }));
+  toast.show(t('symlink.synced_count', { count }));
 }
 
 async function deleteSelected() {
@@ -180,9 +190,9 @@ async function deleteSelected() {
     selectedSkills.value.clear();
     await agentsStore.getSkillsTree(props.agent.id);
     showDeleteConfirm.value = false;
-    showToast(t('symlink.synced_count', { count: result.synced_count }));
+    toast.show(t('symlink.synced_count', { count: result.synced_count }));
   } catch (e: unknown) {
-    showToast(String(e), "error");
+    toast.show(String(e), "error");
   }
 }
 
@@ -216,6 +226,16 @@ function canDelete(): boolean {
         <h3 class="text-sm font-semibold" style="color: var(--c-text);">{{ agent.name }}</h3>
         <p class="text-xs mt-0.5 truncate" style="color: var(--c-text-secondary);">{{ agent.skills_dir }}</p>
       </div>
+    </div>
+
+    <!-- Search -->
+    <div class="px-3 py-2 border-b shrink-0" style="border-color: var(--c-border);">
+      <input
+        v-model="filterQuery"
+        :placeholder="t('symlink.search_placeholder')"
+        class="w-full px-2.5 py-1.5 text-xs rounded-md border outline-none transition-colors"
+        style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+      />
     </div>
 
     <!-- Toolbar -->
@@ -253,18 +273,6 @@ function canDelete(): boolean {
           {{ t('symlink.delete_selected', { count: selectedSkills.size }) }}
         </button>
       </div>
-    </div>
-
-    <!-- Toast -->
-    <div
-      v-if="toastMessage"
-      class="mx-3 mt-2 px-3 py-2 rounded-md text-xs"
-      :style="{
-        background: toastType === 'success' ? 'var(--c-success-light)' : 'var(--c-danger-light)',
-        color: toastType === 'success' ? 'var(--c-success)' : 'var(--c-danger)',
-      }"
-    >
-      {{ toastMessage }}
     </div>
 
     <!-- Loading -->

@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAgentsStore } from "../../stores/agents";
+import { useToast } from "../../composables/useToast";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Agent } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
@@ -13,19 +14,18 @@ const props = defineProps<{
 
 const { t } = useI18n();
 const agentsStore = useAgentsStore();
+const toast = useToast();
 const showRemoveConfirm = ref(false);
 const editing = ref(false);
 const editName = ref(props.agent.name);
 const editDir = ref(props.agent.skills_dir);
-const error = ref<string | null>(null);
 
 async function handleRemove() {
   try {
     await agentsStore.removeCustomAgent(props.agent.id);
     showRemoveConfirm.value = false;
   } catch (e: unknown) {
-    error.value = String(e);
-    setTimeout(() => (error.value = null), 3000);
+    toast.show(String(e), "error");
   }
 }
 
@@ -38,8 +38,7 @@ async function handleSaveEdit() {
     });
     editing.value = false;
   } catch (e: unknown) {
-    error.value = String(e);
-    setTimeout(() => (error.value = null), 3000);
+    toast.show(String(e), "error");
   }
 }
 
@@ -110,21 +109,17 @@ async function pickDirectory() {
         </span>
         <div class="flex gap-1">
           <button
-            class="text-xs px-2 py-1 rounded-md cursor-pointer transition-colors"
+            class="text-xs px-2 py-1 rounded-md cursor-pointer hover:bg-[var(--c-primary-light)]"
             style="color: var(--c-primary);"
             @click="editing = true"
-            @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary-light)'"
-            @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'transparent'"
           >
             {{ t('agents.edit') }}
           </button>
           <button
             v-if="!agent.auto_detected"
-            class="text-xs px-2 py-1 rounded-md cursor-pointer transition-colors"
+            class="text-xs px-2 py-1 rounded-md cursor-pointer hover:bg-[var(--c-danger-light)]"
             style="color: var(--c-danger);"
             @click="showRemoveConfirm = true"
-            @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-danger-light)'"
-            @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'transparent'"
           >
             {{ t('agents.remove') }}
           </button>
@@ -147,39 +142,26 @@ async function pickDirectory() {
           :placeholder="t('agents.skills_dir')"
         />
         <button
-          class="px-2.5 py-1.5 text-xs rounded-md border cursor-pointer transition-colors shrink-0"
-          style="border-color: var(--c-border); color: var(--c-text-secondary);"
+          class="px-2.5 py-1.5 text-xs rounded-md border cursor-pointer shrink-0 btn-ghost"
           @click="pickDirectory"
-          @mouseenter="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'var(--c-surface-hover)'; }"
-          @mouseleave="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'transparent'; }"
         >
           {{ t('agents.pick_folder') }}
         </button>
       </div>
       <div class="flex gap-1.5">
         <button
-          class="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-colors font-medium"
-          style="background: var(--c-primary); color: white;"
+          class="text-xs px-3 py-1.5 rounded-md cursor-pointer font-medium btn-primary"
           @click="handleSaveEdit"
-          @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary-hover)'"
-          @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-primary)'"
         >
           {{ t('settings.save') }}
         </button>
         <button
-          class="text-xs px-3 py-1.5 rounded-md border cursor-pointer transition-colors"
-          style="border-color: var(--c-border); color: var(--c-text-secondary);"
+          class="text-xs px-3 py-1.5 rounded-md border cursor-pointer btn-ghost"
           @click="cancelEdit"
-          @mouseenter="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'var(--c-surface-hover)'; }"
-          @mouseleave="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'transparent'; }"
         >
           {{ t('settings.cancel') }}
         </button>
       </div>
-    </div>
-
-    <div v-if="error" class="mt-2 text-[10px] px-2 py-1 rounded-md" style="background: var(--c-danger-light); color: var(--c-danger);">
-      {{ error }}
     </div>
 
     <ConfirmDialog

@@ -4,6 +4,8 @@ import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import AgentColumn from "./AgentColumn.vue";
 import RelationGraph from "./RelationGraph.vue";
+import EmptyState from "../common/EmptyState.vue";
+import SkeletonCard from "../common/SkeletonCard.vue";
 
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
@@ -31,27 +33,26 @@ const sortedAgents = computed(() => {
         {{ t('dashboard.title') }}
       </h2>
       <button
-        class="text-xs px-3 py-1.5 rounded-md border cursor-pointer transition-colors"
-        style="border-color: var(--c-border); color: var(--c-text-secondary);"
+        class="text-xs px-3 py-1.5 rounded-md border cursor-pointer btn-ghost"
         @click="refresh"
-        @mouseenter="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'var(--c-surface-hover)'; }"
-        @mouseleave="(e: MouseEvent) => { (e.target as HTMLElement).style.background = 'transparent'; }"
       >
         {{ t('dashboard.refresh') }}
       </button>
     </div>
 
-    <div v-if="skillsStore.dashboardLoading" class="text-sm py-8 text-center" style="color: var(--c-text-secondary);">
-      {{ t('app.loading') }}
+    <div v-if="skillsStore.dashboardLoading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <SkeletonCard v-for="i in 3" :key="i" />
     </div>
 
     <div v-else-if="skillsStore.error" class="text-sm py-8 text-center" style="color: var(--c-danger);">
       {{ skillsStore.error }}
     </div>
 
-    <div v-else-if="!skillsStore.dashboardData" class="text-sm py-8 text-center" style="color: var(--c-text-secondary);">
-      {{ t('dashboard.no_data') }}
-    </div>
+    <EmptyState
+      v-else-if="!skillsStore.dashboardData"
+      icon="📊"
+      :title="t('dashboard.no_data')"
+    />
 
     <template v-else>
       <div

@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { marked } from "marked";
 import { useSkillsStore } from "../../stores/skills";
+import { useEscapeKey } from "../../composables/useEscapeKey";
 import type { Skill } from "../../types";
 
 const props = defineProps<{
@@ -18,6 +19,8 @@ const skillsStore = useSkillsStore();
 const content = ref<string>("");
 const loading = ref(true);
 const error = ref<string | null>(null);
+
+useEscapeKey(() => emit("close"));
 
 const renderedHtml = computed(() => {
   if (!content.value) return "";
@@ -90,26 +93,26 @@ onMounted(async () => {
             class="text-xs px-2 py-0.5 rounded"
             style="background: var(--c-surface-hover); color: var(--c-text-secondary);"
           >
-            License: {{ skill.license }}
+            {{ t('skills.license_label') }}: {{ skill.license }}
           </span>
           <span
             v-if="skill.has_scripts"
             class="text-xs px-2 py-0.5 rounded"
-            style="background: #dbeafe; color: #1e40af;"
+            style="background: var(--c-info-light); color: var(--c-info);"
           >
             {{ t('skills.has_scripts') }}
           </span>
           <span
             v-if="skill.has_references"
             class="text-xs px-2 py-0.5 rounded"
-            style="background: #f3e8ff; color: #7c3aed;"
+            style="background: var(--c-purple-light); color: var(--c-purple);"
           >
             {{ t('skills.has_references') }}
           </span>
           <span
             v-if="skill.has_assets"
             class="text-xs px-2 py-0.5 rounded"
-            style="background: #fef3c7; color: #92400e;"
+            style="background: var(--c-amber-light); color: var(--c-amber);"
           >
             {{ t('skills.has_assets') }}
           </span>

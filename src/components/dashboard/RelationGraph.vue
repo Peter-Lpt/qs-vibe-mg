@@ -36,8 +36,8 @@ const sharedSkills = computed(() =>
 const uniqueSkills = computed(() => allSkills.value.filter((s) => s.agentIds.length === 1));
 
 const agentColors = [
-  "#6366f1", "#8b5cf6", "#06b6d4", "#10b981",
-  "#f59e0b", "#ef4444", "#ec4899", "#14b8a6",
+  "var(--dot-1)", "var(--dot-2)", "var(--dot-3)", "var(--dot-4)",
+  "var(--dot-5)", "var(--dot-6)", "var(--dot-7)", "var(--dot-8)",
 ];
 
 function getAgentColor(i: number) {
@@ -98,11 +98,11 @@ function hasSkill(agentId: string, skillId: string): boolean {
           >
             <td class="px-3 py-1.5 sticky left-0" :style="{ background: idx % 2 === 0 ? 'var(--c-surface)' : 'rgba(128,128,128,0.03)' }">
               <div class="flex items-center gap-1.5">
-                <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: #f59e0b;" />
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background: var(--c-amber);" />
                 <span class="truncate" style="color: var(--c-text);">{{ skill.skill.skill_name || skill.skill.skill_id }}</span>
                 <span
                   class="text-[10px] px-1 rounded shrink-0"
-                  style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;"
+                  style="background: var(--c-amber-light); color: var(--c-amber);"
                 >{{ skill.agentIds.length }}</span>
               </div>
             </td>

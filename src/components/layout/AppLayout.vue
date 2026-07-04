@@ -32,21 +32,15 @@ const appStore = useAppStore();
 
       <div class="ml-auto flex items-center gap-1">
         <button
-          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer transition-colors"
-          style="color: var(--c-text-secondary);"
+          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer icon-btn"
           @click="appStore.setTheme(appStore.resolvedTheme === 'dark' ? 'light' : 'dark')"
-          @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-surface-hover)'"
-          @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'transparent'"
         >
           {{ appStore.resolvedTheme === 'dark' ? '☀️' : '🌙' }}
         </button>
         <button
-          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer transition-colors"
-          style="color: var(--c-text-secondary);"
+          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer icon-btn"
           @click="appStore.showSettings = true"
           :title="t('app.settings')"
-          @mouseenter="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'var(--c-surface-hover)'"
-          @mouseleave="(e: MouseEvent) => (e.target as HTMLElement).style.background = 'transparent'"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
