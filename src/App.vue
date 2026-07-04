@@ -9,10 +9,8 @@ import { useToast } from "./composables/useToast";
 import type { TabId } from "./types";
 import AppLayout from "./components/layout/AppLayout.vue";
 import TabBar from "./components/layout/TabBar.vue";
-import AgentsTab from "./components/agents/AgentsTab.vue";
-import SkillList from "./components/skills/SkillList.vue";
-import DashboardTab from "./components/dashboard/DashboardTab.vue";
-import SymlinkTab from "./components/symlink/SymlinkTab.vue";
+import OverviewTab from "./components/overview/OverviewTab.vue";
+import ManageTab from "./components/manage/ManageTab.vue";
 import HistoryTab from "./components/history/HistoryTab.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
 import ToastContainer from "./components/common/ToastContainer.vue";
@@ -24,7 +22,7 @@ const historyStore = useHistoryStore();
 const appStore = useAppStore();
 const toast = useToast();
 
-const tabs: TabId[] = ["agents", "skills", "dashboard", "symlink", "history"];
+const tabs: TabId[] = ["overview", "manage", "history"];
 
 watch(
   () => appStore.locale,
@@ -43,8 +41,8 @@ watch(
 );
 
 function handleGlobalKeydown(e: KeyboardEvent) {
-  // Ctrl+1-5: tab switch
-  if (e.ctrlKey && !e.shiftKey && e.key >= "1" && e.key <= "5") {
+  // Ctrl+1-3: tab switch
+  if (e.ctrlKey && !e.shiftKey && e.key >= "1" && e.key <= "3") {
     e.preventDefault();
     const idx = Number(e.key) - 1;
     if (idx < tabs.length) {
@@ -85,7 +83,6 @@ onMounted(async () => {
   await skillsStore.fetchSkills();
   await historyStore.fetchHistory();
   historyStore.updateUndoRedoState();
-  skillsStore.checkUpdates();
   document.addEventListener("keydown", handleGlobalKeydown);
 });
 
@@ -99,10 +96,8 @@ onUnmounted(() => {
     <TabBar v-model="appStore.activeTab" />
 
     <KeepAlive>
-      <AgentsTab v-if="appStore.activeTab === 'agents'" />
-      <SkillList v-else-if="appStore.activeTab === 'skills'" />
-      <DashboardTab v-else-if="appStore.activeTab === 'dashboard'" />
-      <SymlinkTab v-else-if="appStore.activeTab === 'symlink'" />
+      <OverviewTab v-if="appStore.activeTab === 'overview'" />
+      <ManageTab v-else-if="appStore.activeTab === 'manage'" />
       <HistoryTab v-else-if="appStore.activeTab === 'history'" />
     </KeepAlive>
   </AppLayout>
