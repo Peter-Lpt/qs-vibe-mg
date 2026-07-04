@@ -34,7 +34,7 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
     let mut map: HashMap<String, SkillEntry> = HashMap::new();
 
     let vibe_dir = vibe_skills_dir()?;
-    scan_directory(&vibe_dir, "vibe-lib", &mut map)?;
+    scan_directory(&vibe_dir, "vibe-lib", &mut map, false)?;
 
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
@@ -44,7 +44,7 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
             continue;
         }
         let agent_dir = Path::new(&agent.skills_dir);
-        scan_directory(agent_dir, &agent.id, &mut map)?;
+        scan_directory(agent_dir, &agent.id, &mut map, true)?;
     }
 
     let mut skills: Vec<Skill> = map
@@ -586,10 +586,12 @@ struct SkillEntry {
 }
 
 /// 递归扫描目录，找到所有包含 SKILL.md 的子目录
+/// symlink_only=true 时跳过真实文件（仅扫描 symlink/junction）
 fn scan_directory(
     dir: &Path,
     source_id: &str,
     map: &mut HashMap<String, SkillEntry>,
+    symlink_only: bool,
 ) -> Result<(), VabError> {
     if !dir.exists() {
         return Ok(());
@@ -614,11 +616,17 @@ fn scan_directory(
 
         let skill_md_path = path.join("SKILL.md");
         if skill_md_path.exists() {
+            let is_symlink = vibe_fs::is_link(&path);
+
+            // agent 目录：只保留 symlink，跳过真实文件
+            if symlink_only && !is_symlink {
+                continue;
+            }
+
             let (name, description, license, compatibility, metadata, _body) =
                 parse_skill_md_full(&skill_md_path)
                     .unwrap_or_else(|_| (id.clone(), String::new(), None, None, None, String::new()));
 
-            let is_symlink = vibe_fs::is_link(&path);
             let symlink_target = if is_symlink {
                 vibe_fs::read_link_target(&path)
                     .ok()
@@ -659,7 +667,7 @@ fn scan_directory(
                     modified_at,
                 });
         } else {
-            scan_directory(&path, source_id, map)?;
+            scan_directory(&path, source_id, map, symlink_only)?;
         }
     }
 

@@ -124,8 +124,9 @@ async function handleDelete() {
 }
 
 function getSourceCount() {
-  const count = props.skill.sources.length;
-  return t("manage.sources", { count });
+  const count = agentSources.value.length;
+  const total = agentsStore.agents.filter((a) => a.detected).length;
+  return `${count}/${total}`;
 }
 </script>
 
