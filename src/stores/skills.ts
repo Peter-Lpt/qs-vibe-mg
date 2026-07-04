@@ -1,26 +1,20 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import type { Skill, DashboardData } from "../types";
+import type { Skill, DashboardData, SkillIssue } from "../types";
 import { useAgentsStore } from "./agents";
-
-export interface UpdateInfo {
-  skill_id: string;
-  source_modified: string;
-  local_modified: string;
-}
 
 export const useSkillsStore = defineStore("skills", () => {
   const skills = ref<Skill[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
-  const selectedIds = ref<Set<string>>(new Set());
   const searchQuery = ref("");
   const searchResults = ref<Skill[]>([]);
   const searching = ref(false);
   const dashboardData = ref<DashboardData | null>(null);
   const dashboardLoading = ref(false);
-  const updates = ref<UpdateInfo[]>([]);
+  const issues = ref<SkillIssue[]>([]);
+  const issuesLoading = ref(false);
 
   async function fetchSkills() {
     loading.value = true;
@@ -61,6 +55,17 @@ export const useSkillsStore = defineStore("skills", () => {
     }
   }
 
+  async function fetchIssues() {
+    issuesLoading.value = true;
+    try {
+      issues.value = await invoke<SkillIssue[]>("detect_issues");
+    } catch (e: unknown) {
+      console.error("Failed to detect issues:", e);
+    } finally {
+      issuesLoading.value = false;
+    }
+  }
+
   async function createLink(skillId: string, agentId: string) {
     try {
       await invoke("create_link", { skillId, agentId });
@@ -94,7 +99,6 @@ export const useSkillsStore = defineStore("skills", () => {
   async function deleteSkill(skillId: string) {
     try {
       await invoke("delete_skill", { skillId });
-      selectedIds.value.delete(skillId);
       await fetchSkills();
       await useAgentsStore().fetchAgents();
     } catch (e: unknown) {
@@ -110,81 +114,25 @@ export const useSkillsStore = defineStore("skills", () => {
     }
   }
 
-  async function batchLink(skillIds: string[], agentId: string): Promise<string[]> {
-    try {
-      const errors = await invoke<string[]>("batch_link", { skillIds, agentId });
-      await fetchSkills();
-      await useAgentsStore().fetchAgents();
-      return errors;
-    } catch (e: unknown) {
-      throw new Error(String(e));
-    }
-  }
-
-  async function batchUnlink(skillIds: string[], agentId: string): Promise<string[]> {
-    try {
-      const errors = await invoke<string[]>("batch_unlink", { skillIds, agentId });
-      await fetchSkills();
-      await useAgentsStore().fetchAgents();
-      return errors;
-    } catch (e: unknown) {
-      throw new Error(String(e));
-    }
-  }
-
-  function toggleSelect(skillId: string) {
-    if (selectedIds.value.has(skillId)) {
-      selectedIds.value.delete(skillId);
-    } else {
-      selectedIds.value.add(skillId);
-    }
-  }
-
-  function selectAll() {
-    selectedIds.value = new Set(skills.value.map((s) => s.id));
-  }
-
-  function deselectAll() {
-    selectedIds.value.clear();
-  }
-
-  async function checkUpdates() {
-    try {
-      updates.value = await invoke<UpdateInfo[]>("check_updates");
-    } catch (e: unknown) {
-      console.error("Failed to check updates:", e);
-    }
-  }
-
-  function hasUpdate(skillId: string): boolean {
-    return updates.value.some((u) => u.skill_id === skillId);
-  }
-
   return {
     skills,
     loading,
     error,
-    selectedIds,
     searchQuery,
     searchResults,
     searching,
     dashboardData,
     dashboardLoading,
+    issues,
+    issuesLoading,
     fetchSkills,
     searchSkills,
     getDashboardData,
+    fetchIssues,
     createLink,
     removeLink,
     installSkill,
     deleteSkill,
     previewSkill,
-    batchLink,
-    batchUnlink,
-    toggleSelect,
-    selectAll,
-    deselectAll,
-    updates,
-    checkUpdates,
-    hasUpdate,
   };
 });

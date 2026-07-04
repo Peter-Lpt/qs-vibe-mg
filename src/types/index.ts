@@ -1,6 +1,11 @@
 export interface SkillSource {
   from: string;
   path: string;
+  name: string;
+  description: string;
+  is_symlink: boolean;
+  symlink_target?: string;
+  content_hash: string;
 }
 
 export interface Skill {
@@ -17,6 +22,8 @@ export interface Skill {
   has_references: boolean;
   has_assets: boolean;
   modified_at: string;
+  has_conflict: boolean;
+  has_dangling: boolean;
 }
 
 export interface Agent {
@@ -61,7 +68,15 @@ export interface AgentConfig {
   auto_detected: boolean;
 }
 
-export type TabId = 'agents' | 'skills' | 'dashboard' | 'symlink' | 'history';
+export type TabId = "overview" | "manage" | "history";
+
+export type ConflictType = "SameNameDiffContent" | "DanglingLink";
+
+export interface SkillIssue {
+  skill_id: string;
+  issue_type: ConflictType;
+  description: string;
+}
 
 export interface DashboardData {
   agents: DashboardAgent[];
@@ -92,21 +107,4 @@ export interface DashboardStats {
   total_skills: number;
   shared_count: number;
   per_agent_count: Record<string, number>;
-}
-
-export interface SkillsTreeNode {
-  name: string;
-  path: string;
-  is_dir: boolean;
-  skill_count: number;
-  synced: boolean;
-  synced_count: number;
-  children: SkillsTreeNode[];
-  link_target?: string;
-  is_source_link: boolean;
-}
-
-export interface SyncResult {
-  synced_count: number;
-  errors: string[];
 }
