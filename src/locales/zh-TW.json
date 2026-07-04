@@ -1,4 +1,8 @@
 {
+  "common": {
+    "cancel": "取消",
+    "confirm": "確認"
+  },
   "app": {
     "title": "QS-Vab 管理",
     "settings": "設定",
@@ -45,7 +49,14 @@
     "link_to_agent": "關聯到 Agent",
     "no_agents_available": "沒有可關聯的 Agent",
     "select_folder": "選擇 Skill 目錄",
-    "install_hint": "目錄必須包含 SKILL.md 文件"
+    "install_hint": "目錄必須包含 SKILL.md 文件",
+    "enter_select": "多選模式",
+    "exit_select": "退出多選",
+    "has_updates": "有更新",
+    "check_updates": "檢查更新",
+    "source_path_required": "請輸入來源路徑",
+    "source_path_placeholder": "/path/to/skill-directory",
+    "license_label": "授權條款"
   },
   "dashboard": {
     "title": "看板",
@@ -89,7 +100,8 @@
     "linked_elsewhere": "已連結到其他位置",
     "move_link": "挪動到此處",
     "status_synced": "已同步",
-    "status_linked": "已連結"
+    "status_linked": "已連結",
+    "search_placeholder": "搜尋 skills..."
   },
   "agents": {
     "panel": "Agent 關聯面板",
@@ -205,6 +217,11 @@
     "migrate_title": "遷移資料",
     "migrate_confirm": "是否將舊目錄中的資料遷移到新目錄？",
     "migrate_yes": "遷移",
-    "migrate_no": "不遷移"
+    "migrate_no": "不遷移",
+    "data_management": "資料管理",
+    "export_data": "匯出設定",
+    "import_data": "匯入設定",
+    "export_success": "設定已匯出",
+    "import_success": "設定已匯入"
   }
 }

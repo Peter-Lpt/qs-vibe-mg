@@ -1,10 +1,19 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+import { useEscapeKey } from "../../composables/useEscapeKey";
+
+const { t } = useI18n();
+
+useEscapeKey(() => emit("cancel"));
+
 const props = defineProps<{
   title: string;
   message: string;
   confirmText?: string;
   cancelText?: string;
   danger?: boolean;
+  disabled?: boolean;
+  error?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -30,23 +39,28 @@ const emit = defineEmits<{
         <p class="text-sm mb-4" style="color: var(--c-text-secondary);">
           {{ message }}
         </p>
+        <div v-if="error" class="text-xs mb-3 px-2 py-1.5 rounded-md" style="background: var(--c-danger-light); color: var(--c-danger);">
+          {{ error }}
+        </div>
         <div class="flex justify-end gap-2">
           <button
             class="px-3 py-1.5 text-xs rounded-md border cursor-pointer hover:opacity-80"
             style="border-color: var(--c-border); color: var(--c-text);"
+            :disabled="disabled"
             @click="emit('cancel')"
           >
-            {{ cancelText || 'Cancel' }}
+            {{ cancelText || t('common.cancel') }}
           </button>
           <button
-            class="px-3 py-1.5 text-xs rounded-md cursor-pointer hover:opacity-80"
+            class="px-3 py-1.5 text-xs rounded-md cursor-pointer hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
             :style="{
               background: danger ? 'var(--c-danger)' : 'var(--c-primary)',
               color: 'white',
             }"
+            :disabled="disabled"
             @click="emit('confirm')"
           >
-            {{ confirmText || 'Confirm' }}
+            {{ confirmText || t('common.confirm') }}
           </button>
         </div>
       </div>

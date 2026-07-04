@@ -1,4 +1,8 @@
 {
+  "common": {
+    "cancel": "取消",
+    "confirm": "确认"
+  },
   "app": {
     "title": "QS-Vab 管理",
     "settings": "设置",
@@ -45,7 +49,14 @@
     "link_to_agent": "关联到 Agent",
     "no_agents_available": "没有可关联的 Agent",
     "select_folder": "选择 Skill 目录",
-    "install_hint": "目录必须包含 SKILL.md 文件"
+    "install_hint": "目录必须包含 SKILL.md 文件",
+    "enter_select": "多选模式",
+    "exit_select": "退出多选",
+    "has_updates": "有更新",
+    "check_updates": "检查更新",
+    "source_path_required": "请输入源路径",
+    "source_path_placeholder": "/path/to/skill-directory",
+    "license_label": "许可证"
   },
   "symlink": {
     "title": "软连接配置",
@@ -73,7 +84,8 @@
     "linked_elsewhere": "已链接到其他位置",
     "move_link": "挪动到此处",
     "status_synced": "已同步",
-    "status_linked": "已链接"
+    "status_linked": "已链接",
+    "search_placeholder": "搜索 skills..."
   },
   "agents": {
     "panel": "Agent 关联面板",
@@ -189,7 +201,12 @@
     "migrate_title": "迁移数据",
     "migrate_confirm": "是否将旧目录中的数据迁移到新目录？",
     "migrate_yes": "迁移",
-    "migrate_no": "不迁移"
+    "migrate_no": "不迁移",
+    "data_management": "数据管理",
+    "export_data": "导出配置",
+    "import_data": "导入配置",
+    "export_success": "配置已导出",
+    "import_success": "配置已导入"
   },
   "dashboard": {
     "title": "看板",

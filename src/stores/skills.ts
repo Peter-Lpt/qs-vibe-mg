@@ -4,6 +4,12 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Skill, DashboardData } from "../types";
 import { useAgentsStore } from "./agents";
 
+export interface UpdateInfo {
+  skill_id: string;
+  source_modified: string;
+  local_modified: string;
+}
+
 export const useSkillsStore = defineStore("skills", () => {
   const skills = ref<Skill[]>([]);
   const loading = ref(false);
@@ -14,6 +20,7 @@ export const useSkillsStore = defineStore("skills", () => {
   const searching = ref(false);
   const dashboardData = ref<DashboardData | null>(null);
   const dashboardLoading = ref(false);
+  const updates = ref<UpdateInfo[]>([]);
 
   async function fetchSkills() {
     loading.value = true;
@@ -141,6 +148,18 @@ export const useSkillsStore = defineStore("skills", () => {
     selectedIds.value.clear();
   }
 
+  async function checkUpdates() {
+    try {
+      updates.value = await invoke<UpdateInfo[]>("check_updates");
+    } catch (e: unknown) {
+      console.error("Failed to check updates:", e);
+    }
+  }
+
+  function hasUpdate(skillId: string): boolean {
+    return updates.value.some((u) => u.skill_id === skillId);
+  }
+
   return {
     skills,
     loading,
@@ -164,5 +183,8 @@ export const useSkillsStore = defineStore("skills", () => {
     toggleSelect,
     selectAll,
     deselectAll,
+    updates,
+    checkUpdates,
+    hasUpdate,
   };
 });

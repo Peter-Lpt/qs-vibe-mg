@@ -1,4 +1,8 @@
 {
+  "common": {
+    "cancel": "Cancel",
+    "confirm": "Confirm"
+  },
   "app": {
     "title": "QS-Vab Manager",
     "settings": "Settings",
@@ -45,7 +49,14 @@
     "link_to_agent": "Link to Agent",
     "no_agents_available": "No agents available",
     "select_folder": "Select Skill Folder",
-    "install_hint": "Directory must contain a SKILL.md file"
+    "install_hint": "Directory must contain a SKILL.md file",
+    "enter_select": "Select Mode",
+    "exit_select": "Exit Select",
+    "has_updates": "Update available",
+    "check_updates": "Check updates",
+    "source_path_required": "Please enter a source path",
+    "source_path_placeholder": "/path/to/skill-directory",
+    "license_label": "License"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -89,7 +100,8 @@
     "linked_elsewhere": "Linked elsewhere",
     "move_link": "Move here",
     "status_synced": "Synced",
-    "status_linked": "Linked"
+    "status_linked": "Linked",
+    "search_placeholder": "Search skills..."
   },
   "agents": {
     "panel": "Agent Panel",
@@ -205,6 +217,11 @@
     "migrate_title": "Migrate Data",
     "migrate_confirm": "Migrate data from old directory to new location?",
     "migrate_yes": "Migrate",
-    "migrate_no": "Don't migrate"
+    "migrate_no": "Don't migrate",
+    "data_management": "Data Management",
+    "export_data": "Export Config",
+    "import_data": "Import Config",
+    "export_success": "Config exported",
+    "import_success": "Config imported"
   }
 }

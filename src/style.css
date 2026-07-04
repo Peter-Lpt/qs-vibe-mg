@@ -23,6 +23,25 @@
   --c-symlink: #7c3aed;
   --c-junction: #0891b2;
   --c-copy: #ea580c;
+  --c-info: #3b82f6;
+  --c-info-light: rgba(59, 130, 246, 0.08);
+  --c-purple: #7c3aed;
+  --c-purple-light: rgba(124, 58, 237, 0.08);
+  --c-amber: #d97706;
+  --c-amber-light: rgba(217, 119, 6, 0.08);
+  --c-cyan: #0891b2;
+  --c-cyan-light: rgba(8, 145, 178, 0.08);
+  --c-pink: #ec4899;
+  --c-pink-light: rgba(236, 72, 153, 0.08);
+  --c-teal: #14b8a6;
+  --dot-1: #3b82f6;
+  --dot-2: #8b5cf6;
+  --dot-3: #22c55e;
+  --dot-4: #f59e0b;
+  --dot-5: #ef4444;
+  --dot-6: #06b6d4;
+  --dot-7: #ec4899;
+  --dot-8: #14b8a6;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
@@ -54,6 +73,25 @@
   --c-symlink: #a78bfa;
   --c-junction: #22d3ee;
   --c-copy: #fb923c;
+  --c-info: #60a5fa;
+  --c-info-light: rgba(59, 130, 246, 0.12);
+  --c-purple: #a78bfa;
+  --c-purple-light: rgba(124, 58, 237, 0.12);
+  --c-amber: #f59e0b;
+  --c-amber-light: rgba(217, 119, 6, 0.12);
+  --c-cyan: #22d3ee;
+  --c-cyan-light: rgba(8, 145, 178, 0.12);
+  --c-pink: #f472b6;
+  --c-pink-light: rgba(236, 72, 153, 0.12);
+  --c-teal: #2dd4bf;
+  --dot-1: #60a5fa;
+  --dot-2: #a78bfa;
+  --dot-3: #4ade80;
+  --dot-4: #fbbf24;
+  --dot-5: #f87171;
+  --dot-6: #22d3ee;
+  --dot-7: #f472b6;
+  --dot-8: #2dd4bf;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
@@ -105,6 +143,18 @@ body {
   outline-offset: 2px;
 }
 
+/* Skeleton shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--c-surface-hover) 25%, var(--c-surface-active) 50%, var(--c-surface-hover) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
 /* Transition helper */
 .fade-enter-active,
 .fade-leave-active {
@@ -132,6 +182,50 @@ button {
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
+}
+
+/* Hover utility classes for CSS variable themes */
+.btn-primary {
+  background: var(--c-primary);
+  color: white;
+}
+.btn-primary:hover {
+  background: var(--c-primary-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--c-text-secondary);
+}
+.btn-ghost:hover {
+  background: var(--c-surface-hover);
+}
+
+.card-hover {
+  border-color: var(--c-border);
+  box-shadow: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.card-hover:hover {
+  border-color: var(--c-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.icon-btn {
+  background: transparent;
+  color: var(--c-text-secondary);
+}
+.icon-btn:hover {
+  background: var(--c-surface-hover);
+}
+
+.icon-btn-danger {
+  color: var(--c-text-tertiary);
+  background: transparent;
+}
+.icon-btn-danger:hover {
+  color: var(--c-danger);
+  background: var(--c-danger-light);
 }
 
 /* Input base styles */
