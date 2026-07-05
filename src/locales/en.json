@@ -68,7 +68,17 @@
     "batch_unlink_result": "Unlink complete: {success} success, {error} failed",
     "batch_clean_success": "Cleaned {count} broken links",
     "no_syncable_skills": "No skills to sync",
-    "no_dangling_skills": "No broken links to clean"
+    "no_dangling_skills": "No broken links to clean",
+    "group_needs_action": "Needs Action",
+    "group_normal": "Normal",
+    "group_unlinked": "Unlinked",
+    "btn_link": "Link",
+    "btn_unlink": "Unlink",
+    "btn_sync": "Sync to Library",
+    "btn_replace": "Replace with Link",
+    "btn_relink": "Relink",
+    "btn_clean": "Clean Broken",
+    "replaced_with_link": "Replaced with link"
   },
   "overview": {
     "title": "Overview",

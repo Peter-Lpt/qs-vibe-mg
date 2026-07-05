@@ -2,7 +2,6 @@
 import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
-import { useAgentsStore } from "../../stores/agents";
 import { useToast } from "../../composables/useToast";
 import type { Skill, Agent, SkillSource } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
@@ -19,7 +18,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
-const agentsStore = useAgentsStore();
 const toast = useToast();
 
 const expanded = ref(false);
@@ -27,8 +25,6 @@ const previewContent = ref("");
 const previewLoading = ref(false);
 const showPreview = ref(false);
 const showDeleteConfirm = ref(false);
-const showLinkMenu = ref(false);
-const showUnlinkMenu = ref(false);
 const resolvingConflict = ref<string | null>(null);
 
 // 获取 vibe-lib source
@@ -36,88 +32,166 @@ const vibeSource = computed(() =>
   props.skill.sources.find((s) => s.from === "vibe-lib")
 );
 
-// 获取非 vibe-lib 的 sources
-const agentSources = computed(() =>
-  props.skill.sources.filter((s) => s.from !== "vibe-lib")
-);
-
-// 已通过 symlink 链接的 agent id 集合
-const symlinkedAgentIds = computed(() =>
-  new Set(
-    props.skill.sources
-      .filter((s) => s.from !== "vibe-lib" && s.is_symlink)
-      .map((s) => s.from)
-  )
-);
-
-// 可以建立链接的 agent（没有任何 source 的，且技能库有此 skill）
-const linkableAgents = computed(() => {
-  if (!vibeSource.value) return [];
-  return agentsStore.agents.filter(
-    (a) => a.detected && !agentSources.value.some((s) => s.from === a.id)
-  );
-});
-
-// 可以取消链接的 agent（已有 symlink 的）
-const unlinkableAgents = computed(() =>
-  agentsStore.agents.filter(
-    (a) => a.detected && symlinkedAgentIds.value.has(a.id)
-  )
-);
-
-// 需要重新链接的 agent（symlink 指向非 vibe-lib 位置的）
-const relinkableAgents = computed(() =>
-  agentSources.value.filter((s) => {
-    if (!s.is_symlink || !s.symlink_target) return false;
-    // 检查 symlink_target 是否指向 vibe-lib
-    const vibeDir = vibeSource.value?.path;
-    if (!vibeDir) return false;
-    return !s.symlink_target.includes(vibeDir);
-  })
-);
-
-// 获取 agent 名称
-function getAgentName(agentId: string): string {
-  if (agentId === "vibe-lib") return "Vibe 技能库";
-  const agent = props.agents.find((a) => a.id === agentId);
-  return agent?.name || agentId;
+// 获取所有 detected agents 的状态
+interface AgentStatus {
+  agent: Agent;
+  source: SkillSource | null;
+  status: "origin" | "synced" | "linked_elsewhere" | "independent" | "dangling" | "unlinked";
+  action: "none" | "sync_to_vibe" | "replace_with_link" | "relink" | "remove_dangling" | "link" | "unlink";
+  statusLabel: string;
+  statusColor: string;
+  statusIcon: string;
 }
 
-// 获取 agent 状态标签
-function getAgentStatus(source: SkillSource): {
-  icon: string;
-  label: string;
-  color: string;
-} {
-  if (source.from === "vibe-lib") {
-    return { icon: "📦", label: t("manage.status_origin"), color: "var(--c-success)" };
-  }
+const allAgentStatuses = computed<AgentStatus[]>(() => {
+  const detected = props.agents.filter((a) => a.detected);
+  const result: AgentStatus[] = [];
 
-  if (!source.is_symlink) {
-    // 独立副本
-    if (vibeSource.value) {
-      // 技能库有此 skill，检查内容是否一致
-      if (source.content_hash === vibeSource.value.content_hash) {
-        return { icon: "●", label: t("manage.status_independent_same"), color: "var(--c-text-secondary)" };
-      }
-      return { icon: "⚠", label: t("manage.status_independent_conflict"), color: "var(--c-warning)" };
+  for (const agent of detected) {
+    const source = props.skill.sources.find((s) => s.from === agent.id);
+
+    if (!source) {
+      // 未链接
+      result.push({
+        agent,
+        source: null,
+        status: "unlinked",
+        action: vibeSource.value ? "link" : "none",
+        statusLabel: t("manage.status_unlinked"),
+        statusColor: "var(--c-text-secondary)",
+        statusIcon: "○",
+      });
+      continue;
     }
-    return { icon: "●", label: t("manage.status_independent"), color: "var(--c-text-secondary)" };
-  }
 
-  // 是 symlink
-  if (source.symlink_target) {
+    if (source.from === "vibe-lib") {
+      // 正本
+      result.push({
+        agent,
+        source,
+        status: "origin",
+        action: "none",
+        statusLabel: t("manage.status_origin"),
+        statusColor: "var(--c-success)",
+        statusIcon: "📦",
+      });
+      continue;
+    }
+
+    if (!source.is_symlink) {
+      // 独立副本
+      if (vibeSource.value) {
+        if (source.content_hash === vibeSource.value.content_hash) {
+          result.push({
+            agent,
+            source,
+            status: "independent",
+            action: "replace_with_link",
+            statusLabel: t("manage.status_independent_same"),
+            statusColor: "var(--c-text-secondary)",
+            statusIcon: "●",
+          });
+        } else {
+          result.push({
+            agent,
+            source,
+            status: "independent",
+            action: "sync_to_vibe",
+            statusLabel: t("manage.status_independent_conflict"),
+            statusColor: "var(--c-warning)",
+            statusIcon: "⚠",
+          });
+        }
+      } else {
+        result.push({
+          agent,
+          source,
+          status: "independent",
+          action: "sync_to_vibe",
+          statusLabel: t("manage.status_independent"),
+          statusColor: "var(--c-text-secondary)",
+          statusIcon: "●",
+        });
+      }
+      continue;
+    }
+
+    // 是 symlink
+    if (!source.symlink_target) {
+      // 断链
+      result.push({
+        agent,
+        source,
+        status: "dangling",
+        action: "remove_dangling",
+        statusLabel: t("manage.status_dangling"),
+        statusColor: "var(--c-danger)",
+        statusIcon: "❌",
+      });
+      continue;
+    }
+
     // 检查是否指向 vibe-lib
     if (vibeSource.value?.path && source.symlink_target.includes(vibeSource.value.path)) {
-      return { icon: "🔗", label: t("manage.status_synced"), color: "var(--c-primary)" };
+      result.push({
+        agent,
+        source,
+        status: "synced",
+        action: "unlink",
+        statusLabel: t("manage.status_synced"),
+        statusColor: "var(--c-primary)",
+        statusIcon: "🔗",
+      });
+    } else {
+      result.push({
+        agent,
+        source,
+        status: "linked_elsewhere",
+        action: "relink",
+        statusLabel: t("manage.status_linked_elsewhere"),
+        statusColor: "var(--c-warning)",
+        statusIcon: "🔗",
+      });
     }
-    // 指向其他位置
-    return { icon: "🔗", label: t("manage.status_linked_elsewhere"), color: "var(--c-warning)" };
   }
 
-  // 断链
-  return { icon: "❌", label: t("manage.status_dangling"), color: "var(--c-danger)" };
-}
+  return result;
+});
+
+// 按状态分组
+const groupedStatuses = computed(() => {
+  const groups: { label: string; items: AgentStatus[]; color: string }[] = [];
+
+  // 需要处理的（独立副本、断链、链接到其他位置）
+  const needsAction = allAgentStatuses.value.filter(
+    (s) => s.status === "independent" || s.status === "dangling" || s.status === "linked_elsewhere"
+  );
+  if (needsAction.length > 0) {
+    groups.push({ label: t("manage.group_needs_action"), items: needsAction, color: "var(--c-warning)" });
+  }
+
+  // 正常的（正本、已链接）
+  const normal = allAgentStatuses.value.filter(
+    (s) => s.status === "origin" || s.status === "synced"
+  );
+  if (normal.length > 0) {
+    groups.push({ label: t("manage.group_normal"), items: normal, color: "var(--c-success)" });
+  }
+
+  // 未链接的
+  const unlinked = allAgentStatuses.value.filter((s) => s.status === "unlinked");
+  if (unlinked.length > 0) {
+    groups.push({ label: t("manage.group_unlinked"), items: unlinked, color: "var(--c-text-secondary)" });
+  }
+
+  return groups;
+});
+
+// 统计
+const syncedCount = computed(() =>
+  allAgentStatuses.value.filter((s) => s.status === "synced" || s.status === "origin").length
+);
+const totalCount = computed(() => allAgentStatuses.value.length);
 
 async function toggleExpand() {
   expanded.value = !expanded.value;
@@ -137,59 +211,65 @@ async function togglePreview() {
   }
 }
 
-async function handleLink(agentId: string) {
-  try {
-    await skillsStore.createLink(props.skill.id, agentId);
-    toast.show(t("skills.linked", { agent: getAgentName(agentId) }), "success");
-    showLinkMenu.value = false;
-  } catch (e: unknown) {
-    toast.show(String(e), "error");
-  }
-}
+async function handleAction(status: AgentStatus) {
+  if (status.action === "none") return;
 
-async function handleUnlink(agentId: string) {
   try {
-    await skillsStore.removeLink(props.skill.id, agentId);
-    toast.show(t("skills.unlinked", { agent: getAgentName(agentId) }), "success");
-    showUnlinkMenu.value = false;
-  } catch (e: unknown) {
-    toast.show(String(e), "error");
-  }
-}
-
-async function handleSyncToVibe(agentId: string) {
-  resolvingConflict.value = agentId;
-  try {
-    await skillsStore.syncToVibe(props.skill.id, agentId);
-    toast.show(t("manage.synced_to_vibe", { agent: getAgentName(agentId) }), "success");
-  } catch (e: unknown) {
-    const err = String(e);
-    if (err.includes("Conflict")) {
-      // 冲突，需要用户确认
-      toast.show(t("manage.conflict_need_resolve"), "info");
-    } else {
-      toast.show(err, "error");
+    switch (status.action) {
+      case "link":
+        await skillsStore.createLink(props.skill.id, status.agent.id);
+        toast.show(t("skills.linked", { agent: status.agent.name }), "success");
+        break;
+      case "unlink":
+        await skillsStore.removeLink(props.skill.id, status.agent.id);
+        toast.show(t("skills.unlinked", { agent: status.agent.name }), "success");
+        break;
+      case "sync_to_vibe":
+        resolvingConflict.value = status.agent.id;
+        await skillsStore.syncToVibe(props.skill.id, status.agent.id);
+        toast.show(t("manage.synced_to_vibe", { agent: status.agent.name }), "success");
+        break;
+      case "replace_with_link":
+        await skillsStore.syncToVibe(props.skill.id, status.agent.id);
+        toast.show(t("manage.replaced_with_link", { agent: status.agent.name }), "success");
+        break;
+      case "relink":
+        await skillsStore.relink(props.skill.id, status.agent.id);
+        toast.show(t("manage.relinked", { agent: status.agent.name }), "success");
+        break;
+      case "remove_dangling":
+        await skillsStore.removeLink(props.skill.id, status.agent.id);
+        toast.show(t("manage.dangling_removed", { agent: status.agent.name }), "success");
+        break;
     }
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
   } finally {
     resolvingConflict.value = null;
   }
 }
 
-async function handleRelink(agentId: string) {
-  try {
-    await skillsStore.relink(props.skill.id, agentId);
-    toast.show(t("manage.relinked", { agent: getAgentName(agentId) }), "success");
-  } catch (e: unknown) {
-    toast.show(String(e), "error");
+function getActionButtonLabel(status: AgentStatus): string {
+  switch (status.action) {
+    case "link": return t("manage.btn_link");
+    case "unlink": return t("manage.btn_unlink");
+    case "sync_to_vibe": return t("manage.btn_sync");
+    case "replace_with_link": return t("manage.btn_replace");
+    case "relink": return t("manage.btn_relink");
+    case "remove_dangling": return t("manage.btn_clean");
+    default: return "";
   }
 }
 
-async function handleRemoveDangling(source: SkillSource) {
-  try {
-    await skillsStore.removeLink(props.skill.id, source.from);
-    toast.show(t("manage.dangling_removed", { agent: getAgentName(source.from) }), "success");
-  } catch (e: unknown) {
-    toast.show(String(e), "error");
+function getActionButtonStyle(status: AgentStatus): string {
+  switch (status.action) {
+    case "link": return "background: var(--c-primary); color: white;";
+    case "sync_to_vibe": return "background: var(--c-primary); color: white;";
+    case "replace_with_link": return "background: var(--c-surface-hover); color: var(--c-text); border: 1px solid var(--c-border);";
+    case "relink": return "background: var(--c-warning); color: white;";
+    case "remove_dangling": return "background: var(--c-danger); color: white;";
+    case "unlink": return "background: var(--c-surface-hover); color: var(--c-text-secondary); border: 1px solid var(--c-border);";
+    default: return "";
   }
 }
 
@@ -201,13 +281,6 @@ async function handleDelete() {
   } catch (e: unknown) {
     toast.show(String(e), "error");
   }
-}
-
-// 获取链接数/总数
-function getSourceCount() {
-  const linked = symlinkedAgentIds.value.size;
-  const total = agentsStore.agents.filter((a) => a.detected).length;
-  return `${linked}/${total}`;
 }
 </script>
 
@@ -257,31 +330,9 @@ function getSourceCount() {
         {{ skill.name }}
       </span>
 
-      <!-- Agent tags -->
-      <div class="flex items-center gap-1 flex-wrap">
-        <span
-          v-for="source in agentSources.slice(0, 3)"
-          :key="source.from"
-          class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-          :style="{
-            background: source.is_symlink ? 'var(--c-primary-light)' : 'var(--c-surface-hover)',
-            color: source.is_symlink ? 'var(--c-primary)' : 'var(--c-text-secondary)',
-          }"
-        >
-          {{ source.is_symlink ? '🔗' : '●' }} {{ getAgentName(source.from) }}
-        </span>
-        <span
-          v-if="agentSources.length > 3"
-          class="text-[10px] px-1.5 py-0.5 rounded-full"
-          style="background: var(--c-surface-hover); color: var(--c-text-secondary);"
-        >
-          +{{ agentSources.length - 3 }}
-        </span>
-      </div>
-
-      <!-- Source count -->
+      <!-- Sync count -->
       <span class="text-[11px] shrink-0" style="color: var(--c-text-secondary);">
-        {{ getSourceCount() }}
+        {{ syncedCount }}/{{ totalCount }}
       </span>
 
       <!-- Status badges -->
@@ -299,196 +350,113 @@ function getSourceCount() {
       >
         {{ t("manage.status_dangling") }}
       </span>
-      <span
-        v-else-if="skill.is_duplicate"
-        class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
-        style="background: var(--c-info-light); color: var(--c-info);"
-      >
-        {{ t("manage.status_duplicate") }}
-      </span>
 
-      <!-- Delete button -->
-      <button
-        class="w-5 h-5 flex items-center justify-center rounded cursor-pointer shrink-0 ml-auto transition-colors hover:bg-[var(--c-danger-light)]"
-        style="color: var(--c-danger);"
-        @click.stop="showDeleteConfirm = true"
-        :title="t('skills.delete')"
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"/>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Expanded details -->
-    <div v-if="expanded" class="px-3 pb-3 space-y-3">
-      <!-- Agent status list -->
-      <div class="space-y-2 pl-7">
-        <div
-          v-for="source in skill.sources"
-          :key="source.from + source.path"
-          class="flex items-center justify-between gap-2"
-        >
-          <div class="flex items-center gap-2">
-            <span
-              class="w-2 h-2 rounded-full shrink-0"
-              :style="{ background: getAgentStatus(source).color }"
-            />
-            <span class="text-xs font-medium" style="color: var(--c-text);">
-              {{ getAgentName(source.from) }}
-            </span>
-            <span class="text-[10px]" :style="{ color: getAgentStatus(source).color }">
-              {{ getAgentStatus(source).icon }} {{ getAgentStatus(source).label }}
-            </span>
-            <span
-              v-if="source.symlink_target && source.from !== 'vibe-lib'"
-              class="text-[10px] truncate max-w-[200px]"
-              style="color: var(--c-text-secondary);"
-            >
-              → {{ source.symlink_target.split(/[/\\]/).pop() }}
-            </span>
-          </div>
-
-          <!-- Per-agent action buttons -->
-          <div class="flex items-center gap-1">
-            <!-- 同步到技能库 -->
-            <button
-              v-if="!source.is_symlink && source.from !== 'vibe-lib' && vibeSource"
-              class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
-              style="background: var(--c-primary); color: white;"
-              :disabled="resolvingConflict === source.from"
-              @click.stop="handleSyncToVibe(source.from)"
-            >
-              {{ resolvingConflict === source.from ? t("app.loading") : t("manage.sync_to_vibe") }}
-            </button>
-
-            <!-- 替换为链接 -->
-            <button
-              v-if="!source.is_symlink && source.from !== 'vibe-lib' && vibeSource && source.content_hash === vibeSource.content_hash"
-              class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
-              style="background: var(--c-surface-hover); color: var(--c-text-secondary); border: 1px solid var(--c-border);"
-              @click.stop="handleSyncToVibe(source.from)"
-            >
-              {{ t("manage.replace_with_link") }}
-            </button>
-
-            <!-- 重新链接 -->
-            <button
-              v-if="source.is_symlink && source.from !== 'vibe-lib' && relinkableAgents.some(a => a.from === source.from)"
-              class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
-              style="background: var(--c-warning); color: white;"
-              @click.stop="handleRelink(source.from)"
-            >
-              {{ t("manage.relink") }}
-            </button>
-
-            <!-- 清理断链 -->
-            <button
-              v-if="source.is_symlink && !source.symlink_target"
-              class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
-              style="background: var(--c-danger); color: white;"
-              @click.stop="handleRemoveDangling(source)"
-            >
-              {{ t("manage.remove_dangling") }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Duplicate warning -->
-      <div
-        v-if="skill.is_duplicate"
-        class="pl-7 rounded-md p-3 text-xs"
-        style="background: var(--c-info-light); border: 1px solid var(--c-info);"
-      >
-        <div class="flex items-center gap-1.5 mb-2" style="color: var(--c-info);">
-          <span>📋</span>
-          <span class="font-medium">{{ t("manage.duplicate_warning") }}</span>
-        </div>
-        <p style="color: var(--c-text-secondary);">
-          {{ t("manage.duplicate_description") }}
-        </p>
-      </div>
-
-      <!-- Action buttons row -->
-      <div class="pl-7 flex items-center gap-2 relative">
-        <!-- Link to Agent -->
-        <div v-if="linkableAgents.length > 0" class="relative">
-          <button
-            class="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-colors"
-            style="background: var(--c-primary); color: white;"
-            @click.stop="showLinkMenu = !showLinkMenu"
-          >
-            {{ t("manage.link_to_agent") }} ▾
-          </button>
-          <div
-            v-if="showLinkMenu"
-            class="absolute top-full left-0 mt-1 rounded-md border shadow-lg z-10 py-1 min-w-[160px]"
-            style="background: var(--c-surface); border-color: var(--c-border);"
-          >
-            <button
-              v-for="agent in linkableAgents"
-              :key="agent.id"
-              class="block w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--c-surface-hover)] cursor-pointer"
-              style="color: var(--c-text);"
-              @click.stop="handleLink(agent.id)"
-            >
-              {{ agent.name }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Unlink from Agent -->
-        <div v-if="unlinkableAgents.length > 0" class="relative">
-          <button
-            class="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-colors"
-            style="background: var(--c-surface-hover); color: var(--c-text-secondary); border: 1px solid var(--c-border);"
-            @click.stop="showUnlinkMenu = !showUnlinkMenu"
-          >
-            {{ t("manage.remove_link") }} ▾
-          </button>
-          <div
-            v-if="showUnlinkMenu"
-            class="absolute top-full left-0 mt-1 rounded-md border shadow-lg z-10 py-1 min-w-[160px]"
-            style="background: var(--c-surface); border-color: var(--c-border);"
-          >
-            <button
-              v-for="agent in unlinkableAgents"
-              :key="agent.id"
-              class="block w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--c-surface-hover)] cursor-pointer"
-              style="color: var(--c-text);"
-              @click.stop="handleUnlink(agent.id)"
-            >
-              {{ agent.name }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Preview -->
+      <!-- Preview & Delete buttons -->
+      <div class="flex items-center gap-1 ml-auto shrink-0">
         <button
-          class="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-colors"
+          class="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors"
           :style="{
-            background: showPreview ? 'var(--c-primary-light)' : 'var(--c-surface-hover)',
+            background: showPreview ? 'var(--c-primary-light)' : 'transparent',
             color: showPreview ? 'var(--c-primary)' : 'var(--c-text-secondary)',
-            border: '1px solid ' + (showPreview ? 'var(--c-primary)' : 'var(--c-border)'),
           }"
           @click.stop="togglePreview"
+          :title="t('skills.preview')"
         >
-          {{ showPreview ? t("skills.hide_preview") : t("skills.preview") }}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+        <button
+          class="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--c-danger-light)]"
+          style="color: var(--c-danger);"
+          @click.stop="showDeleteConfirm = true"
+          :title="t('skills.delete')"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
         </button>
       </div>
+    </div>
 
-      <!-- SKILL.md preview -->
-      <div v-if="showPreview" class="pl-7">
+    <!-- SKILL.md preview -->
+    <div v-if="showPreview" class="px-3 pb-3">
+      <div
+        v-if="previewContent"
+        class="rounded-md border p-3 text-xs max-h-[200px] overflow-y-auto prose prose-xs"
+        style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text-secondary);"
+        v-html="previewContent"
+      />
+      <div v-else-if="previewLoading" class="text-xs" style="color: var(--c-text-secondary);">
+        {{ t("app.loading") }}
+      </div>
+    </div>
+
+    <!-- Expanded agent matrix -->
+    <div v-if="expanded" class="px-3 pb-3">
+      <!-- Grouped agent rows -->
+      <div
+        v-for="group in groupedStatuses"
+        :key="group.label"
+        class="mb-3 last:mb-0"
+      >
+        <!-- Group header -->
         <div
-          v-if="previewContent"
-          class="rounded-md border p-3 text-xs max-h-[200px] overflow-y-auto prose prose-xs"
-          style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text-secondary);"
-          v-html="previewContent"
-        />
-        <div v-else-if="previewLoading" class="text-xs" style="color: var(--c-text-secondary);">
-          {{ t("app.loading") }}
+          class="flex items-center gap-2 mb-1.5 text-[10px] font-medium uppercase tracking-wide"
+          :style="{ color: group.color }"
+        >
+          <span class="w-1.5 h-1.5 rounded-full" :style="{ background: group.color }" />
+          {{ group.label }} ({{ group.items.length }})
+        </div>
+
+        <!-- Agent rows -->
+        <div class="space-y-1 pl-3.5">
+          <div
+            v-for="item in group.items"
+            :key="item.agent.id"
+            class="flex items-center justify-between gap-2 px-2 py-1.5 rounded"
+            style="background: var(--c-bg);"
+          >
+            <!-- Left: agent name + status -->
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-[10px]" :style="{ color: item.statusColor }">
+                {{ item.statusIcon }}
+              </span>
+              <span class="text-xs font-medium truncate" style="color: var(--c-text);">
+                {{ item.agent.name }}
+              </span>
+              <span class="text-[10px] shrink-0" :style="{ color: item.statusColor }">
+                {{ item.statusLabel }}
+              </span>
+              <span
+                v-if="item.source?.symlink_target && item.status !== 'unlinked'"
+                class="text-[10px] truncate max-w-[150px] shrink-0"
+                style="color: var(--c-text-secondary);"
+              >
+                → {{ item.source.symlink_target.split(/[/\\]/).pop() }}
+              </span>
+            </div>
+
+            <!-- Right: action button -->
+            <button
+              v-if="item.action !== 'none'"
+              class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors shrink-0 whitespace-nowrap"
+              :style="getActionButtonStyle(item)"
+              :disabled="resolvingConflict === item.agent.id"
+              @click.stop="handleAction(item)"
+            >
+              {{ resolvingConflict === item.agent.id ? "..." : getActionButtonLabel(item) }}
+            </button>
+            <span
+              v-else
+              class="text-[10px] shrink-0"
+              style="color: var(--c-text-secondary);"
+            >
+              —
+            </span>
+          </div>
         </div>
       </div>
     </div>

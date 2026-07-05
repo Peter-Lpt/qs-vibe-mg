@@ -68,7 +68,17 @@
     "batch_unlink_result": "取消連結完成：成功 {success}，失敗 {error}",
     "batch_clean_success": "已清理 {count} 個斷鏈",
     "no_syncable_skills": "沒有可同步的 skill",
-    "no_dangling_skills": "沒有可清理的斷鏈"
+    "no_dangling_skills": "沒有可清理的斷鏈",
+    "group_needs_action": "需要處理",
+    "group_normal": "正常",
+    "group_unlinked": "未關聯",
+    "btn_link": "關聯",
+    "btn_unlink": "取消關聯",
+    "btn_sync": "同步到技能庫",
+    "btn_replace": "替換為連結",
+    "btn_relink": "重新連結",
+    "btn_clean": "清理斷鏈",
+    "replaced_with_link": "已替換為連結"
   },
   "overview": {
     "title": "總覽",
