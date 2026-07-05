@@ -10,11 +10,6 @@ import ConfirmDialog from "../common/ConfirmDialog.vue";
 const props = defineProps<{
   skill: Skill;
   agents: Agent[];
-  selected?: boolean;
-}>();
-
-const emit = defineEmits<{
-  toggleSelect: [];
 }>();
 
 const { t } = useI18n();
@@ -384,15 +379,6 @@ async function handleDelete() {
       class="flex items-center gap-3 px-3 py-2.5 cursor-pointer select-none"
       @click="toggleExpand"
     >
-      <!-- Checkbox -->
-      <input
-        type="checkbox"
-        :checked="selected"
-        class="w-4 h-4 rounded cursor-pointer shrink-0"
-        style="accent-color: var(--c-primary);"
-        @click.stop="emit('toggleSelect')"
-      />
-
       <!-- Expand arrow -->
       <span
         class="w-4 text-center text-xs shrink-0 transition-transform"
