@@ -16,6 +16,7 @@ export const useSkillsStore = defineStore("skills", () => {
   const issues = ref<SkillIssue[]>([]);
   const issuesLoading = ref(false);
 
+  /** 首次加载，显示 loading */
   async function fetchSkills() {
     loading.value = true;
     error.value = null;
@@ -25,6 +26,15 @@ export const useSkillsStore = defineStore("skills", () => {
       error.value = String(e);
     } finally {
       loading.value = false;
+    }
+  }
+
+  /** 后台静默刷新，不显示 loading */
+  async function refreshSkills() {
+    try {
+      skills.value = await invoke<Skill[]>("list_skills");
+    } catch (e: unknown) {
+      error.value = String(e);
     }
   }
 
@@ -67,71 +77,43 @@ export const useSkillsStore = defineStore("skills", () => {
   }
 
   async function createLink(skillId: string, agentId: string) {
-    try {
-      await invoke("create_link", { skillId, agentId });
-      await fetchSkills();
-      await useAgentsStore().fetchAgents();
-    } catch (e: unknown) {
-      throw new Error(String(e));
-    }
+    await invoke("create_link", { skillId, agentId });
+    refreshSkills();
+    useAgentsStore().fetchAgents();
   }
 
   async function removeLink(skillId: string, agentId: string) {
-    try {
-      await invoke("remove_link", { skillId, agentId });
-      await fetchSkills();
-      await useAgentsStore().fetchAgents();
-    } catch (e: unknown) {
-      throw new Error(String(e));
-    }
+    await invoke("remove_link", { skillId, agentId });
+    refreshSkills();
+    useAgentsStore().fetchAgents();
   }
 
   async function installSkill(sourcePath: string): Promise<Skill> {
-    try {
-      const skill = await invoke<Skill>("install_skill", { sourcePath });
-      await fetchSkills();
-      return skill;
-    } catch (e: unknown) {
-      throw new Error(String(e));
-    }
+    const skill = await invoke<Skill>("install_skill", { sourcePath });
+    refreshSkills();
+    return skill;
   }
 
   async function deleteSkill(skillId: string) {
-    try {
-      await invoke("delete_skill", { skillId });
-      await fetchSkills();
-      await useAgentsStore().fetchAgents();
-    } catch (e: unknown) {
-      throw new Error(String(e));
-    }
+    await invoke("delete_skill", { skillId });
+    refreshSkills();
+    useAgentsStore().fetchAgents();
   }
 
   async function previewSkill(skillId: string): Promise<string> {
-    try {
-      return await invoke<string>("preview_skill", { skillId });
-    } catch (e: unknown) {
-      throw new Error(String(e));
-    }
+    return await invoke<string>("preview_skill", { skillId });
   }
 
   async function syncToVibe(skillId: string, agentId: string) {
-    try {
-      await invoke("sync_to_vibe", { skillId, agentId });
-      await fetchSkills();
-      await useAgentsStore().fetchAgents();
-    } catch (e: unknown) {
-      throw new Error(String(e));
-    }
+    await invoke("sync_to_vibe", { skillId, agentId });
+    refreshSkills();
+    useAgentsStore().fetchAgents();
   }
 
   async function relink(skillId: string, agentId: string) {
-    try {
-      await invoke("relink", { skillId, agentId });
-      await fetchSkills();
-      await useAgentsStore().fetchAgents();
-    } catch (e: unknown) {
-      throw new Error(String(e));
-    }
+    await invoke("relink", { skillId, agentId });
+    refreshSkills();
+    useAgentsStore().fetchAgents();
   }
 
   return {
@@ -146,6 +128,7 @@ export const useSkillsStore = defineStore("skills", () => {
     issues,
     issuesLoading,
     fetchSkills,
+    refreshSkills,
     searchSkills,
     getDashboardData,
     fetchIssues,
