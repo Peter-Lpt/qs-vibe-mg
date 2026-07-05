@@ -114,6 +114,26 @@ export const useSkillsStore = defineStore("skills", () => {
     }
   }
 
+  async function syncToVibe(skillId: string, agentId: string) {
+    try {
+      await invoke("sync_to_vibe", { skillId, agentId });
+      await fetchSkills();
+      await useAgentsStore().fetchAgents();
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
+  async function relink(skillId: string, agentId: string) {
+    try {
+      await invoke("relink", { skillId, agentId });
+      await fetchSkills();
+      await useAgentsStore().fetchAgents();
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
   return {
     skills,
     loading,
@@ -134,5 +154,7 @@ export const useSkillsStore = defineStore("skills", () => {
     installSkill,
     deleteSkill,
     previewSkill,
+    syncToVibe,
+    relink,
   };
 });

@@ -4,15 +4,17 @@ import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useAgentsStore } from "../../stores/agents";
 import { useToast } from "../../composables/useToast";
-import type { Skill, Agent } from "../../types";
-import AgentStatusBadge from "./AgentStatusBadge.vue";
-import ConflictWarning from "./ConflictWarning.vue";
-import DanglingWarning from "./DanglingWarning.vue";
+import type { Skill, Agent, SkillSource } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 
 const props = defineProps<{
   skill: Skill;
   agents: Agent[];
+  selected?: boolean;
+}>();
+
+const emit = defineEmits<{
+  toggleSelect: [];
 }>();
 
 const { t } = useI18n();
@@ -23,11 +25,18 @@ const toast = useToast();
 const expanded = ref(false);
 const previewContent = ref("");
 const previewLoading = ref(false);
+const showPreview = ref(false);
+const showDeleteConfirm = ref(false);
 const showLinkMenu = ref(false);
 const showUnlinkMenu = ref(false);
-const showDeleteConfirm = ref(false);
+const resolvingConflict = ref<string | null>(null);
 
-// 获取非 vibe-lib 的 sources（全部，包括 symlink 和真实文件）
+// 获取 vibe-lib source
+const vibeSource = computed(() =>
+  props.skill.sources.find((s) => s.from === "vibe-lib")
+);
+
+// 获取非 vibe-lib 的 sources
 const agentSources = computed(() =>
   props.skill.sources.filter((s) => s.from !== "vibe-lib")
 );
@@ -41,10 +50,10 @@ const symlinkedAgentIds = computed(() =>
   )
 );
 
-// 可以建立链接的 agent（还没有 symlink 的）
+// 可以建立链接的 agent（没有任何 source 的）
 const linkableAgents = computed(() =>
   agentsStore.agents.filter(
-    (a) => a.detected && !symlinkedAgentIds.value.has(a.id)
+    (a) => a.detected && !agentSources.value.some((s) => s.from === a.id)
   )
 );
 
@@ -55,18 +64,67 @@ const unlinkableAgents = computed(() =>
   )
 );
 
-// 操作按钮：根据状态决定显示哪种
-const actionType = computed(() => {
-  if (props.skill.has_dangling) return "dangling";
-  if (props.skill.has_conflict) return "conflict";
-  if (linkableAgents.value.length > 0) return "link";
-  if (unlinkableAgents.value.length > 0) return "unlink";
-  return "none";
-});
+// 需要重新链接的 agent（symlink 指向非 vibe-lib 位置的）
+const relinkableAgents = computed(() =>
+  agentSources.value.filter((s) => {
+    if (!s.is_symlink || !s.symlink_target) return false;
+    // 检查 symlink_target 是否指向 vibe-lib
+    const vibeDir = vibeSource.value?.path;
+    if (!vibeDir) return false;
+    return !s.symlink_target.includes(vibeDir);
+  })
+);
+
+// 获取 agent 名称
+function getAgentName(agentId: string): string {
+  if (agentId === "vibe-lib") return "Vibe 技能库";
+  const agent = props.agents.find((a) => a.id === agentId);
+  return agent?.name || agentId;
+}
+
+// 获取 agent 状态标签
+function getAgentStatus(source: SkillSource): {
+  icon: string;
+  label: string;
+  color: string;
+} {
+  if (source.from === "vibe-lib") {
+    return { icon: "📦", label: t("manage.status_origin"), color: "var(--c-success)" };
+  }
+
+  if (!source.is_symlink) {
+    // 独立副本
+    if (vibeSource.value) {
+      // 技能库有此 skill，检查内容是否一致
+      if (source.content_hash === vibeSource.value.content_hash) {
+        return { icon: "●", label: t("manage.status_independent_same"), color: "var(--c-text-secondary)" };
+      }
+      return { icon: "⚠", label: t("manage.status_independent_conflict"), color: "var(--c-warning)" };
+    }
+    return { icon: "●", label: t("manage.status_independent"), color: "var(--c-text-secondary)" };
+  }
+
+  // 是 symlink
+  if (source.symlink_target) {
+    // 检查是否指向 vibe-lib
+    if (vibeSource.value?.path && source.symlink_target.includes(vibeSource.value.path)) {
+      return { icon: "🔗", label: t("manage.status_synced"), color: "var(--c-primary)" };
+    }
+    // 指向其他位置
+    return { icon: "🔗", label: t("manage.status_linked_elsewhere"), color: "var(--c-warning)" };
+  }
+
+  // 断链
+  return { icon: "❌", label: t("manage.status_dangling"), color: "var(--c-danger)" };
+}
 
 async function toggleExpand() {
   expanded.value = !expanded.value;
-  if (expanded.value && !previewContent.value) {
+}
+
+async function togglePreview() {
+  showPreview.value = !showPreview.value;
+  if (showPreview.value && !previewContent.value) {
     previewLoading.value = true;
     try {
       previewContent.value = await skillsStore.previewSkill(props.skill.id);
@@ -81,7 +139,7 @@ async function toggleExpand() {
 async function handleLink(agentId: string) {
   try {
     await skillsStore.createLink(props.skill.id, agentId);
-    toast.show(t("skills.linked", { agent: agentId }), "success");
+    toast.show(t("skills.linked", { agent: getAgentName(agentId) }), "success");
     showLinkMenu.value = false;
   } catch (e: unknown) {
     toast.show(String(e), "error");
@@ -91,25 +149,47 @@ async function handleLink(agentId: string) {
 async function handleUnlink(agentId: string) {
   try {
     await skillsStore.removeLink(props.skill.id, agentId);
-    toast.show(t("skills.unlinked", { agent: agentId }), "success");
+    toast.show(t("skills.unlinked", { agent: getAgentName(agentId) }), "success");
     showUnlinkMenu.value = false;
   } catch (e: unknown) {
     toast.show(String(e), "error");
   }
 }
 
-async function handleRemoveBroken() {
-  // 移除所有断链的 sources
-  for (const source of props.skill.sources.filter(
-    (s) => s.is_symlink && s.from !== "vibe-lib"
-  )) {
-    try {
-      await skillsStore.removeLink(props.skill.id, source.from);
-    } catch {
-      // 忽略单个失败
+async function handleSyncToVibe(agentId: string) {
+  resolvingConflict.value = agentId;
+  try {
+    await skillsStore.syncToVibe(props.skill.id, agentId);
+    toast.show(t("manage.synced_to_vibe", { agent: getAgentName(agentId) }), "success");
+  } catch (e: unknown) {
+    const err = String(e);
+    if (err.includes("Conflict")) {
+      // 冲突，需要用户确认
+      toast.show(t("manage.conflict_need_resolve"), "info");
+    } else {
+      toast.show(err, "error");
     }
+  } finally {
+    resolvingConflict.value = null;
   }
-  toast.show(t("manage.remove_broken"), "success");
+}
+
+async function handleRelink(agentId: string) {
+  try {
+    await skillsStore.relink(props.skill.id, agentId);
+    toast.show(t("manage.relinked", { agent: getAgentName(agentId) }), "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
+
+async function handleRemoveDangling(source: SkillSource) {
+  try {
+    await skillsStore.removeLink(props.skill.id, source.from);
+    toast.show(t("manage.dangling_removed", { agent: getAgentName(source.from) }), "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
 }
 
 async function handleDelete() {
@@ -122,6 +202,7 @@ async function handleDelete() {
   }
 }
 
+// 获取链接数/总数
 function getSourceCount() {
   const linked = symlinkedAgentIds.value.size;
   const total = agentsStore.agents.filter((a) => a.detected).length;
@@ -138,9 +219,11 @@ function getSourceCount() {
         ? 'var(--c-warning)'
         : skill.has_dangling
           ? 'var(--c-danger)'
-          : expanded
-            ? 'var(--c-primary)'
-            : 'var(--c-border)',
+          : skill.is_duplicate
+            ? 'var(--c-info)'
+            : expanded
+              ? 'var(--c-primary)'
+              : 'var(--c-border)',
     }"
   >
     <!-- Collapsed header -->
@@ -148,38 +231,50 @@ function getSourceCount() {
       class="flex items-center gap-3 px-3 py-2.5 cursor-pointer select-none"
       @click="toggleExpand"
     >
+      <!-- Checkbox -->
+      <input
+        type="checkbox"
+        :checked="selected"
+        class="w-4 h-4 rounded cursor-pointer shrink-0"
+        style="accent-color: var(--c-primary);"
+        @click.stop="emit('toggleSelect')"
+      />
+
       <!-- Expand arrow -->
       <span
         class="w-4 text-center text-xs shrink-0 transition-transform"
         :style="{ color: 'var(--c-text-secondary)', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }"
       >▶</span>
 
-      <!-- Status icon -->
+      <!-- Status icons -->
       <span v-if="skill.has_conflict" class="shrink-0" style="color: var(--c-warning);">⚠</span>
       <span v-else-if="skill.has_dangling" class="shrink-0" style="color: var(--c-danger);">❌</span>
+      <span v-else-if="skill.is_duplicate" class="shrink-0" style="color: var(--c-info);">📋</span>
 
       <!-- Skill name -->
       <span class="text-sm font-medium truncate" style="color: var(--c-text);">
         {{ skill.name }}
       </span>
 
-      <!-- Agent tags: symlinked vs real file -->
+      <!-- Agent tags -->
       <div class="flex items-center gap-1 flex-wrap">
         <span
-          v-for="source in agentSources.filter(s => s.is_symlink)"
-          :key="'s-' + source.from"
+          v-for="source in agentSources.slice(0, 3)"
+          :key="source.from"
           class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-          style="background: var(--c-primary-light); color: var(--c-primary);"
+          :style="{
+            background: source.is_symlink ? 'var(--c-primary-light)' : 'var(--c-surface-hover)',
+            color: source.is_symlink ? 'var(--c-primary)' : 'var(--c-text-secondary)',
+          }"
         >
-          🔗 {{ agents.find(a => a.id === source.from)?.name || source.from }}
+          {{ source.is_symlink ? '🔗' : '●' }} {{ getAgentName(source.from) }}
         </span>
         <span
-          v-for="source in agentSources.filter(s => !s.is_symlink)"
-          :key="'r-' + source.from"
-          class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+          v-if="agentSources.length > 3"
+          class="text-[10px] px-1.5 py-0.5 rounded-full"
           style="background: var(--c-surface-hover); color: var(--c-text-secondary);"
         >
-          ● {{ agents.find(a => a.id === source.from)?.name || source.from }}
+          +{{ agentSources.length - 3 }}
         </span>
       </div>
 
@@ -188,25 +283,32 @@ function getSourceCount() {
         {{ getSourceCount() }}
       </span>
 
-      <!-- Status badge -->
+      <!-- Status badges -->
       <span
         v-if="skill.has_conflict"
         class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
         style="background: var(--c-warning-light); color: var(--c-warning);"
       >
-        {{ t("status_conflict") || "冲突" }}
+        {{ t("manage.status_conflict") }}
       </span>
       <span
         v-else-if="skill.has_dangling"
         class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
         style="background: var(--c-danger-light); color: var(--c-danger);"
       >
-        {{ t("status_dangling") || "断链" }}
+        {{ t("manage.status_dangling") }}
+      </span>
+      <span
+        v-else-if="skill.is_duplicate"
+        class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+        style="background: var(--c-info-light); color: var(--c-info);"
+      >
+        {{ t("manage.status_duplicate") }}
       </span>
 
       <!-- Delete button -->
       <button
-        class="w-5 h-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shrink-0 ml-auto"
+        class="w-5 h-5 flex items-center justify-center rounded cursor-pointer shrink-0 ml-auto transition-colors hover:bg-[var(--c-danger-light)]"
         style="color: var(--c-danger);"
         @click.stop="showDeleteConfirm = true"
         :title="t('skills.delete')"
@@ -220,42 +322,104 @@ function getSourceCount() {
 
     <!-- Expanded details -->
     <div v-if="expanded" class="px-3 pb-3 space-y-3">
-      <!-- Agent sources list -->
-      <div class="space-y-1.5 pl-7">
-        <AgentStatusBadge
+      <!-- Agent status list -->
+      <div class="space-y-2 pl-7">
+        <div
           v-for="source in skill.sources"
           :key="source.from + source.path"
-          :source="source"
-          :agents="agents"
-        />
+          class="flex items-center justify-between gap-2"
+        >
+          <div class="flex items-center gap-2">
+            <span
+              class="w-2 h-2 rounded-full shrink-0"
+              :style="{ background: getAgentStatus(source).color }"
+            />
+            <span class="text-xs font-medium" style="color: var(--c-text);">
+              {{ getAgentName(source.from) }}
+            </span>
+            <span class="text-[10px]" :style="{ color: getAgentStatus(source).color }">
+              {{ getAgentStatus(source).icon }} {{ getAgentStatus(source).label }}
+            </span>
+            <span
+              v-if="source.symlink_target && source.from !== 'vibe-lib'"
+              class="text-[10px] truncate max-w-[200px]"
+              style="color: var(--c-text-secondary);"
+            >
+              → {{ source.symlink_target.split(/[/\\]/).pop() }}
+            </span>
+          </div>
+
+          <!-- Per-agent action buttons -->
+          <div class="flex items-center gap-1">
+            <!-- 同步到技能库 -->
+            <button
+              v-if="!source.is_symlink && source.from !== 'vibe-lib' && vibeSource"
+              class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+              style="background: var(--c-primary); color: white;"
+              :disabled="resolvingConflict === source.from"
+              @click.stop="handleSyncToVibe(source.from)"
+            >
+              {{ resolvingConflict === source.from ? t("app.loading") : t("manage.sync_to_vibe") }}
+            </button>
+
+            <!-- 替换为链接 -->
+            <button
+              v-if="!source.is_symlink && source.from !== 'vibe-lib' && vibeSource && source.content_hash === vibeSource.content_hash"
+              class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+              style="background: var(--c-surface-hover); color: var(--c-text-secondary); border: 1px solid var(--c-border);"
+              @click.stop="handleSyncToVibe(source.from)"
+            >
+              {{ t("manage.replace_with_link") }}
+            </button>
+
+            <!-- 重新链接 -->
+            <button
+              v-if="source.is_symlink && source.from !== 'vibe-lib' && relinkableAgents.some(a => a.from === source.from)"
+              class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+              style="background: var(--c-warning); color: white;"
+              @click.stop="handleRelink(source.from)"
+            >
+              {{ t("manage.relink") }}
+            </button>
+
+            <!-- 清理断链 -->
+            <button
+              v-if="source.is_symlink && !source.symlink_target"
+              class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+              style="background: var(--c-danger); color: white;"
+              @click.stop="handleRemoveDangling(source)"
+            >
+              {{ t("manage.remove_dangling") }}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <!-- Conflict warning -->
-      <div v-if="skill.has_conflict" class="pl-7">
-        <ConflictWarning
-          :sources="skill.sources.filter(s => s.from !== 'vibe-lib')"
-          @resolve="(from) => handleLink(from)"
-        />
+      <!-- Duplicate warning -->
+      <div
+        v-if="skill.is_duplicate"
+        class="pl-7 rounded-md p-3 text-xs"
+        style="background: var(--c-info-light); border: 1px solid var(--c-info);"
+      >
+        <div class="flex items-center gap-1.5 mb-2" style="color: var(--c-info);">
+          <span>📋</span>
+          <span class="font-medium">{{ t("manage.duplicate_warning") }}</span>
+        </div>
+        <p style="color: var(--c-text-secondary);">
+          {{ t("manage.duplicate_description") }}
+        </p>
       </div>
 
-      <!-- Dangling warning -->
-      <div v-if="skill.has_dangling" class="pl-7">
-        <DanglingWarning
-          :sources="skill.sources"
-          @remove="handleRemoveBroken"
-        />
-      </div>
-
-      <!-- Action buttons -->
+      <!-- Action buttons row -->
       <div class="pl-7 flex items-center gap-2 relative">
         <!-- Link to Agent -->
-        <div v-if="actionType === 'link'" class="relative">
+        <div v-if="linkableAgents.length > 0" class="relative">
           <button
             class="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-colors"
             style="background: var(--c-primary); color: white;"
             @click.stop="showLinkMenu = !showLinkMenu"
           >
-            {{ t("manage.link_to_agent") || "Link to Agent" }} ▾
+            {{ t("manage.link_to_agent") }} ▾
           </button>
           <div
             v-if="showLinkMenu"
@@ -271,20 +435,17 @@ function getSourceCount() {
             >
               {{ agent.name }}
             </button>
-            <div v-if="linkableAgents.length === 0" class="px-3 py-1.5 text-xs" style="color: var(--c-text-secondary);">
-              {{ t("manage.no_agents_available") || "无可用 Agent" }}
-            </div>
           </div>
         </div>
 
-        <!-- Remove Link -->
-        <div v-if="actionType === 'unlink'" class="relative">
+        <!-- Unlink from Agent -->
+        <div v-if="unlinkableAgents.length > 0" class="relative">
           <button
             class="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-colors"
             style="background: var(--c-surface-hover); color: var(--c-text-secondary); border: 1px solid var(--c-border);"
             @click.stop="showUnlinkMenu = !showUnlinkMenu"
           >
-            {{ t("manage.remove_link") || "Remove Link" }} ▾
+            {{ t("manage.remove_link") }} ▾
           </button>
           <div
             v-if="showUnlinkMenu"
@@ -306,23 +467,28 @@ function getSourceCount() {
         <!-- Preview -->
         <button
           class="text-xs px-3 py-1.5 rounded-md cursor-pointer transition-colors"
-          style="background: var(--c-surface-hover); color: var(--c-text-secondary); border: 1px solid var(--c-border);"
-          @click.stop
+          :style="{
+            background: showPreview ? 'var(--c-primary-light)' : 'var(--c-surface-hover)',
+            color: showPreview ? 'var(--c-primary)' : 'var(--c-text-secondary)',
+            border: '1px solid ' + (showPreview ? 'var(--c-primary)' : 'var(--c-border)'),
+          }"
+          @click.stop="togglePreview"
         >
-          {{ t("skills.preview") || "Preview" }}
+          {{ showPreview ? t("skills.hide_preview") : t("skills.preview") }}
         </button>
       </div>
 
       <!-- SKILL.md preview -->
-      <div v-if="previewContent" class="pl-7">
+      <div v-if="showPreview" class="pl-7">
         <div
+          v-if="previewContent"
           class="rounded-md border p-3 text-xs max-h-[200px] overflow-y-auto prose prose-xs"
           style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text-secondary);"
           v-html="previewContent"
         />
-      </div>
-      <div v-else-if="previewLoading" class="pl-7 text-xs" style="color: var(--c-text-secondary);">
-        {{ t("app.loading") }}
+        <div v-else-if="previewLoading" class="text-xs" style="color: var(--c-text-secondary);">
+          {{ t("app.loading") }}
+        </div>
       </div>
     </div>
 
