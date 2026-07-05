@@ -53,7 +53,22 @@
     "synced_to_vibe": "已同步到技能庫",
     "relinked": "已重新連結",
     "dangling_removed": "已清理斷鏈",
-    "conflict_need_resolve": "存在衝突，請先解決"
+    "conflict_need_resolve": "存在衝突，請先解決",
+    "select_all": "全選",
+    "selected_count": "已選擇 {count} 個 skill",
+    "batch_sync": "批次同步",
+    "batch_link": "批次連結",
+    "batch_unlink": "批次取消連結",
+    "batch_clean_dangling": "清理所有斷鏈",
+    "batch_sync_success": "已同步 {count} 個 skill",
+    "batch_sync_result": "同步完成：成功 {success}，失敗 {error}",
+    "batch_link_success": "已連結 {count} 個 skill",
+    "batch_link_result": "連結完成：成功 {success}，失敗 {error}",
+    "batch_unlink_success": "已取消連結 {count} 個 skill",
+    "batch_unlink_result": "取消連結完成：成功 {success}，失敗 {error}",
+    "batch_clean_success": "已清理 {count} 個斷鏈",
+    "no_syncable_skills": "沒有可同步的 skill",
+    "no_dangling_skills": "沒有可清理的斷鏈"
   },
   "overview": {
     "title": "總覽",

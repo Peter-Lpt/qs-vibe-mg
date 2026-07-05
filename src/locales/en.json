@@ -53,7 +53,22 @@
     "synced_to_vibe": "Synced to library",
     "relinked": "Relinked",
     "dangling_removed": "Broken link removed",
-    "conflict_need_resolve": "Conflict detected, please resolve first"
+    "conflict_need_resolve": "Conflict detected, please resolve first",
+    "select_all": "Select All",
+    "selected_count": "{count} skills selected",
+    "batch_sync": "Batch Sync",
+    "batch_link": "Batch Link",
+    "batch_unlink": "Batch Unlink",
+    "batch_clean_dangling": "Clean All Broken",
+    "batch_sync_success": "Synced {count} skills",
+    "batch_sync_result": "Sync complete: {success} success, {error} failed",
+    "batch_link_success": "Linked {count} skills",
+    "batch_link_result": "Link complete: {success} success, {error} failed",
+    "batch_unlink_success": "Unlinked {count} skills",
+    "batch_unlink_result": "Unlink complete: {success} success, {error} failed",
+    "batch_clean_success": "Cleaned {count} broken links",
+    "no_syncable_skills": "No skills to sync",
+    "no_dangling_skills": "No broken links to clean"
   },
   "overview": {
     "title": "Overview",
