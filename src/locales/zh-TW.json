@@ -78,7 +78,8 @@
     "btn_replace": "替換為連結",
     "btn_relink": "重新連結",
     "btn_clean": "清理斷鏈",
-    "replaced_with_link": "已替換為連結"
+    "replaced_with_link": "已替換為連結",
+    "agent_all": "所有 Agent"
   },
   "overview": {
     "title": "總覽",

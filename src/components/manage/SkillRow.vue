@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
+import { marked } from "marked";
 import type { Skill, Agent, SkillSource } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 
@@ -202,7 +203,8 @@ async function togglePreview() {
   if (showPreview.value && !previewContent.value) {
     previewLoading.value = true;
     try {
-      previewContent.value = await skillsStore.previewSkill(props.skill.id);
+      const md = await skillsStore.previewSkill(props.skill.id);
+      previewContent.value = marked.parse(md) as string;
     } catch {
       previewContent.value = "";
     } finally {

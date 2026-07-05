@@ -16,6 +16,7 @@ const toast = useToast();
 
 const searchQuery = ref("");
 const statusFilter = ref("");
+const agentFilter = ref("");
 const showInstall = ref(false);
 const searchInput = ref<HTMLInputElement | null>(null);
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -61,7 +62,6 @@ const displaySkills = computed(() => {
         case "duplicate":
           return s.is_duplicate;
         case "independent":
-          // 有独立副本（非 symlink）的 agent
           return s.sources.some(
             (src) => src.from !== "vibe-lib" && !src.is_symlink
           );
@@ -77,6 +77,13 @@ const displaySkills = computed(() => {
           return true;
       }
     });
+  }
+
+  // 按 agent 筛选
+  if (agentFilter.value) {
+    list = list.filter((s) =>
+      s.sources.some((src) => src.from === agentFilter.value)
+    );
   }
 
   return list;
@@ -318,6 +325,20 @@ watch(searchQuery, (val) => {
       >
         <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
           {{ opt.label }}
+        </option>
+      </select>
+      <select
+        v-model="agentFilter"
+        class="appearance-none px-3 py-2 pr-8 text-xs rounded-md border outline-none cursor-pointer transition-colors"
+        style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text); min-width: 120px;"
+      >
+        <option value="">{{ t("manage.agent_all") || "所有 Agent" }}</option>
+        <option
+          v-for="agent in agentsStore.agents.filter(a => a.detected)"
+          :key="agent.id"
+          :value="agent.id"
+        >
+          {{ agent.name }}
         </option>
       </select>
       <input

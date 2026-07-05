@@ -78,7 +78,8 @@
     "btn_replace": "Replace with Link",
     "btn_relink": "Relink",
     "btn_clean": "Clean Broken",
-    "replaced_with_link": "Replaced with link"
+    "replaced_with_link": "Replaced with link",
+    "agent_all": "All Agents"
   },
   "overview": {
     "title": "Overview",
