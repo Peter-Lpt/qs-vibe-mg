@@ -28,6 +28,11 @@ const showPreview = ref(false);
 const showDeleteConfirm = ref(false);
 const resolvingConflict = ref<string | null>(null);
 
+// per-skill 批量选择
+const selectedAgents = ref<Set<string>>(new Set());
+const showBatchMenu = ref(false);
+const batchOperating = ref(false);
+
 // 获取 vibe-lib source
 const vibeSource = computed(() =>
   props.skill.sources.find((s) => s.from === "vibe-lib")
@@ -52,7 +57,6 @@ const allAgentStatuses = computed<AgentStatus[]>(() => {
     const source = props.skill.sources.find((s) => s.from === agent.id);
 
     if (!source) {
-      // 未链接
       result.push({
         agent,
         source: null,
@@ -66,7 +70,6 @@ const allAgentStatuses = computed<AgentStatus[]>(() => {
     }
 
     if (source.from === "vibe-lib") {
-      // 正本
       result.push({
         agent,
         source,
@@ -80,7 +83,6 @@ const allAgentStatuses = computed<AgentStatus[]>(() => {
     }
 
     if (!source.is_symlink) {
-      // 独立副本
       if (vibeSource.value) {
         if (source.content_hash === vibeSource.value.content_hash) {
           result.push({
@@ -117,9 +119,7 @@ const allAgentStatuses = computed<AgentStatus[]>(() => {
       continue;
     }
 
-    // 是 symlink
     if (!source.symlink_target) {
-      // 断链
       result.push({
         agent,
         source,
@@ -132,7 +132,6 @@ const allAgentStatuses = computed<AgentStatus[]>(() => {
       continue;
     }
 
-    // 检查是否指向 vibe-lib
     if (vibeSource.value?.path && source.symlink_target.includes(vibeSource.value.path)) {
       result.push({
         agent,
@@ -163,7 +162,6 @@ const allAgentStatuses = computed<AgentStatus[]>(() => {
 const groupedStatuses = computed(() => {
   const groups: { label: string; items: AgentStatus[]; color: string }[] = [];
 
-  // 需要处理的（独立副本、断链、链接到其他位置）
   const needsAction = allAgentStatuses.value.filter(
     (s) => s.status === "independent" || s.status === "dangling" || s.status === "linked_elsewhere"
   );
@@ -171,7 +169,6 @@ const groupedStatuses = computed(() => {
     groups.push({ label: t("manage.group_needs_action"), items: needsAction, color: "var(--c-warning)" });
   }
 
-  // 正常的（正本、已链接）
   const normal = allAgentStatuses.value.filter(
     (s) => s.status === "origin" || s.status === "synced"
   );
@@ -179,7 +176,6 @@ const groupedStatuses = computed(() => {
     groups.push({ label: t("manage.group_normal"), items: normal, color: "var(--c-success)" });
   }
 
-  // 未链接的
   const unlinked = allAgentStatuses.value.filter((s) => s.status === "unlinked");
   if (unlinked.length > 0) {
     groups.push({ label: t("manage.group_unlinked"), items: unlinked, color: "var(--c-text-secondary)" });
@@ -188,31 +184,59 @@ const groupedStatuses = computed(() => {
   return groups;
 });
 
+// 批量：可执行的操作
+const batchAvailableActions = computed(() => {
+  const selected = allAgentStatuses.value.filter((s) =>
+    selectedAgents.value.has(s.agent.id)
+  );
+  if (selected.length === 0) return [];
+
+  const actions: { action: string; label: string; color: string }[] = [];
+
+  // 检查可执行的操作
+  const hasLink = selected.some((s) => s.action === "link");
+  const hasSync = selected.some((s) => s.action === "sync_to_vibe");
+  const hasReplace = selected.some((s) => s.action === "replace_with_link");
+  const hasRelink = selected.some((s) => s.action === "relink");
+  const hasUnlink = selected.some((s) => s.action === "unlink");
+  const hasClean = selected.some((s) => s.action === "remove_dangling");
+
+  if (hasLink) actions.push({ action: "link", label: t("manage.btn_link"), color: "var(--c-primary)" });
+  if (hasSync) actions.push({ action: "sync_to_vibe", label: t("manage.btn_sync"), color: "var(--c-primary)" });
+  if (hasReplace) actions.push({ action: "replace_with_link", label: t("manage.btn_replace"), color: "var(--c-text)" });
+  if (hasRelink) actions.push({ action: "relink", label: t("manage.btn_relink"), color: "var(--c-warning)" });
+  if (hasUnlink) actions.push({ action: "unlink", label: t("manage.btn_unlink"), color: "var(--c-text-secondary)" });
+  if (hasClean) actions.push({ action: "remove_dangling", label: t("manage.btn_clean"), color: "var(--c-danger)" });
+
+  return actions;
+});
+
 // 统计
 const syncedCount = computed(() =>
   allAgentStatuses.value.filter((s) => s.status === "synced" || s.status === "origin").length
 );
 const totalCount = computed(() => allAgentStatuses.value.length);
 
-async function toggleExpand() {
-  expanded.value = !expanded.value;
-}
-
-async function togglePreview() {
-  showPreview.value = !showPreview.value;
-  if (showPreview.value && !previewContent.value) {
-    previewLoading.value = true;
-    try {
-      const md = await skillsStore.previewSkill(props.skill.id);
-      previewContent.value = marked.parse(md) as string;
-    } catch {
-      previewContent.value = "";
-    } finally {
-      previewLoading.value = false;
-    }
+// 切换 agent 选择
+function toggleAgentSelect(agentId: string) {
+  if (selectedAgents.value.has(agentId)) {
+    selectedAgents.value.delete(agentId);
+  } else {
+    selectedAgents.value.add(agentId);
   }
 }
 
+// 全选/取消全选
+function toggleSelectAllAgents() {
+  const allIds = allAgentStatuses.value.map((s) => s.agent.id);
+  if (selectedAgents.value.size === allIds.length) {
+    selectedAgents.value.clear();
+  } else {
+    allIds.forEach((id) => selectedAgents.value.add(id));
+  }
+}
+
+// 执行单个 agent 的操作
 async function handleAction(status: AgentStatus) {
   if (status.action === "none") return;
 
@@ -251,6 +275,37 @@ async function handleAction(status: AgentStatus) {
   }
 }
 
+// 批量执行操作
+async function handleBatchAction(action: string) {
+  const selected = allAgentStatuses.value.filter(
+    (s) => selectedAgents.value.has(s.agent.id) && s.action === action
+  );
+  if (selected.length === 0) return;
+
+  batchOperating.value = true;
+  let successCount = 0;
+  let errorCount = 0;
+
+  for (const status of selected) {
+    try {
+      await handleAction(status);
+      successCount++;
+    } catch {
+      errorCount++;
+    }
+  }
+
+  batchOperating.value = false;
+  selectedAgents.value.clear();
+  showBatchMenu.value = false;
+
+  if (errorCount > 0) {
+    toast.show(t("manage.batch_result", { success: successCount, error: errorCount }), "info");
+  } else {
+    toast.show(t("manage.batch_success", { count: successCount }), "success");
+  }
+}
+
 function getActionButtonLabel(status: AgentStatus): string {
   switch (status.action) {
     case "link": return t("manage.btn_link");
@@ -272,6 +327,28 @@ function getActionButtonStyle(status: AgentStatus): string {
     case "remove_dangling": return "background: var(--c-danger); color: white;";
     case "unlink": return "background: var(--c-surface-hover); color: var(--c-text-secondary); border: 1px solid var(--c-border);";
     default: return "";
+  }
+}
+
+async function toggleExpand() {
+  expanded.value = !expanded.value;
+  if (!expanded.value) {
+    selectedAgents.value.clear();
+  }
+}
+
+async function togglePreview() {
+  showPreview.value = !showPreview.value;
+  if (showPreview.value && !previewContent.value) {
+    previewLoading.value = true;
+    try {
+      const md = await skillsStore.previewSkill(props.skill.id);
+      previewContent.value = marked.parse(md) as string;
+    } catch {
+      previewContent.value = "";
+    } finally {
+      previewLoading.value = false;
+    }
   }
 }
 
@@ -398,6 +475,54 @@ async function handleDelete() {
 
     <!-- Expanded agent matrix -->
     <div v-if="expanded" class="px-3 pb-3">
+      <!-- Select all + batch bar -->
+      <div
+        v-if="allAgentStatuses.length > 0"
+        class="flex items-center gap-2 mb-2 pb-2 border-b"
+        style="border-color: var(--c-border);"
+      >
+        <input
+          type="checkbox"
+          :checked="selectedAgents.size === allAgentStatuses.length && allAgentStatuses.length > 0"
+          class="w-3.5 h-3.5 rounded cursor-pointer"
+          style="accent-color: var(--c-primary);"
+          @change="toggleSelectAllAgents"
+        />
+        <span class="text-[10px]" style="color: var(--c-text-secondary);">
+          {{ t("manage.select_agents") }}
+        </span>
+
+        <!-- Batch action dropdown -->
+        <div v-if="selectedAgents.size > 0" class="relative ml-auto">
+          <button
+            class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+            style="background: var(--c-primary); color: white;"
+            :disabled="batchOperating || batchAvailableActions.length === 0"
+            @click.stop="showBatchMenu = !showBatchMenu"
+          >
+            {{ t("manage.batch_apply") }} ({{ selectedAgents.size }}) ▾
+          </button>
+          <div
+            v-if="showBatchMenu"
+            class="absolute top-full right-0 mt-1 rounded-md border shadow-lg z-10 py-1 min-w-[140px]"
+            style="background: var(--c-surface); border-color: var(--c-border);"
+          >
+            <button
+              v-for="act in batchAvailableActions"
+              :key="act.action"
+              class="block w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--c-surface-hover)] cursor-pointer"
+              :style="{ color: act.color }"
+              @click.stop="handleBatchAction(act.action)"
+            >
+              {{ act.label }}
+            </button>
+            <div v-if="batchAvailableActions.length === 0" class="px-3 py-1.5 text-xs" style="color: var(--c-text-secondary);">
+              {{ t("manage.no_batch_actions") }}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Grouped agent rows -->
       <div
         v-for="group in groupedStatuses"
@@ -419,10 +544,19 @@ async function handleDelete() {
             v-for="item in group.items"
             :key="item.agent.id"
             class="flex items-center justify-between gap-2 px-2 py-1.5 rounded"
-            style="background: var(--c-bg);"
+            :style="{
+              background: selectedAgents.has(item.agent.id) ? 'var(--c-primary-light)' : 'var(--c-bg)',
+            }"
           >
-            <!-- Left: agent name + status -->
+            <!-- Left: checkbox + agent name + status -->
             <div class="flex items-center gap-2 min-w-0">
+              <input
+                type="checkbox"
+                :checked="selectedAgents.has(item.agent.id)"
+                class="w-3.5 h-3.5 rounded cursor-pointer shrink-0"
+                style="accent-color: var(--c-primary);"
+                @click.stop="toggleAgentSelect(item.agent.id)"
+              />
               <span class="text-[10px]" :style="{ color: item.statusColor }">
                 {{ item.statusIcon }}
               </span>

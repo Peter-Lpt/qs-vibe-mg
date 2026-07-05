@@ -82,7 +82,12 @@
     "agent_all": "All Agents",
     "batch_relink": "Batch Relink",
     "batch_relink_success": "Relinked {count} skills",
-    "batch_relink_result": "Relink complete: {success} success, {error} failed"
+    "batch_relink_result": "Relink complete: {success} success, {error} failed",
+    "select_agents": "Select All Agents",
+    "batch_apply": "Apply to Selected",
+    "no_batch_actions": "No actions available for selected agents",
+    "batch_success": "Batch processed {count} agents",
+    "batch_result": "Batch complete: {success} success, {error} failed"
   },
   "overview": {
     "title": "Overview",

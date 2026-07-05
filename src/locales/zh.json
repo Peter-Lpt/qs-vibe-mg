@@ -82,7 +82,12 @@
     "agent_all": "所有 Agent",
     "batch_relink": "批量重新链接",
     "batch_relink_success": "已重新链接 {count} 个 skill",
-    "batch_relink_result": "重新链接完成：成功 {success}，失败 {error}"
+    "batch_relink_result": "重新链接完成：成功 {success}，失败 {error}",
+    "select_agents": "全选 Agent",
+    "batch_apply": "应用到选中",
+    "no_batch_actions": "所选 Agent 无可执行操作",
+    "batch_success": "已批量处理 {count} 个 Agent",
+    "batch_result": "批量处理完成：成功 {success}，失败 {error}"
   },
   "overview": {
     "title": "总览",
