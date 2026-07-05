@@ -106,12 +106,18 @@ function toggleSelect(skillId: string) {
   }
 }
 
-// 可以批量链接的 agent（选中的 skill 都没有 symlink 到该 agent）
+// 可以批量链接的 agent（选中的 skill 都没有 symlink 到该 agent，且都在技能库中）
 const batchLinkableAgents = computed(() => {
   const selected = displaySkills.value.filter((s) =>
     selectedSkills.value.has(s.id)
   );
   if (selected.length === 0) return [];
+
+  // 所有选中的 skill 都必须在技能库中
+  const allInVibeLib = selected.every((s) =>
+    s.sources.some((src) => src.from === "vibe-lib")
+  );
+  if (!allInVibeLib) return [];
 
   return agentsStore.agents.filter((a) => {
     if (!a.detected) return false;

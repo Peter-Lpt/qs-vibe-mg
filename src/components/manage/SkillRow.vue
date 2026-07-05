@@ -50,12 +50,13 @@ const symlinkedAgentIds = computed(() =>
   )
 );
 
-// 可以建立链接的 agent（没有任何 source 的）
-const linkableAgents = computed(() =>
-  agentsStore.agents.filter(
+// 可以建立链接的 agent（没有任何 source 的，且技能库有此 skill）
+const linkableAgents = computed(() => {
+  if (!vibeSource.value) return [];
+  return agentsStore.agents.filter(
     (a) => a.detected && !agentSources.value.some((s) => s.from === a.id)
-  )
-);
+  );
+});
 
 // 可以取消链接的 agent（已有 symlink 的）
 const unlinkableAgents = computed(() =>
