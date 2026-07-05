@@ -79,7 +79,10 @@
     "btn_relink": "重新链接",
     "btn_clean": "清理断链",
     "replaced_with_link": "已替换为链接",
-    "agent_all": "所有 Agent"
+    "agent_all": "所有 Agent",
+    "batch_relink": "批量重新链接",
+    "batch_relink_success": "已重新链接 {count} 个 skill",
+    "batch_relink_result": "重新链接完成：成功 {success}，失败 {error}"
   },
   "overview": {
     "title": "总览",

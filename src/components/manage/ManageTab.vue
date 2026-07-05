@@ -25,6 +25,7 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null;
 const selectedSkills = ref<Set<string>>(new Set());
 const showBatchLinkMenu = ref(false);
 const showBatchUnlinkMenu = ref(false);
+const showBatchRelinkMenu = ref(false);
 const batchOperating = ref(false);
 
 function handleKeydown(e: KeyboardEvent) {
@@ -290,6 +291,61 @@ async function handleBatchCleanDangling() {
   toast.show(t("manage.batch_clean_success", { count: successCount }), "success");
 }
 
+// 可以批量重新链接的 agent（选中的 skill 都有 symlink 指向非 vibe-lib 位置）
+const batchRelinkableAgents = computed(() => {
+  const selected = displaySkills.value.filter((s) =>
+    selectedSkills.value.has(s.id)
+  );
+  if (selected.length === 0) return [];
+
+  // 所有选中的 skill 都必须在技能库中
+  const allInVibeLib = selected.every((s) =>
+    s.sources.some((src) => src.from === "vibe-lib")
+  );
+  if (!allInVibeLib) return [];
+
+  // 找到有 symlink 但指向非 vibe-lib 位置的 agent
+  return agentsStore.agents.filter((a) => {
+    if (!a.detected) return false;
+    return selected.some((s) => {
+      const src = s.sources.find((src) => src.from === a.id);
+      if (!src || !src.is_symlink || !src.symlink_target) return false;
+      const vibeSrc = s.sources.find((src) => src.from === "vibe-lib");
+      if (!vibeSrc?.path) return false;
+      return !src.symlink_target.includes(vibeSrc.path);
+    });
+  });
+});
+
+// 批量重新链接
+async function handleBatchRelink(agentId: string) {
+  batchOperating.value = true;
+  let successCount = 0;
+  let errorCount = 0;
+
+  for (const skillId of selectedSkills.value) {
+    try {
+      await skillsStore.relink(skillId, agentId);
+      successCount++;
+    } catch {
+      errorCount++;
+    }
+  }
+
+  batchOperating.value = false;
+  selectedSkills.value.clear();
+  showBatchRelinkMenu.value = false;
+
+  if (errorCount > 0) {
+    toast.show(
+      t("manage.batch_relink_result", { success: successCount, error: errorCount }),
+      "info"
+    );
+  } else {
+    toast.show(t("manage.batch_relink_success", { count: successCount }), "success");
+  }
+}
+
 watch(searchQuery, (val) => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
@@ -415,6 +471,32 @@ watch(searchQuery, (val) => {
             class="block w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--c-surface-hover)] cursor-pointer"
             style="color: var(--c-text);"
             @click="handleBatchUnlink(agent.id)"
+          >
+            {{ agent.name }}
+          </button>
+        </div>
+      </div>
+
+      <div class="relative">
+        <button
+          class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+          style="background: var(--c-surface); color: var(--c-text); border: 1px solid var(--c-border);"
+          :disabled="batchOperating || batchRelinkableAgents.length === 0"
+          @click="showBatchRelinkMenu = !showBatchRelinkMenu"
+        >
+          {{ t("manage.batch_relink") }} ▾
+        </button>
+        <div
+          v-if="showBatchRelinkMenu"
+          class="absolute top-full left-0 mt-1 rounded-md border shadow-lg z-10 py-1 min-w-[160px]"
+          style="background: var(--c-surface); border-color: var(--c-border);"
+        >
+          <button
+            v-for="agent in batchRelinkableAgents"
+            :key="agent.id"
+            class="block w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--c-surface-hover)] cursor-pointer"
+            style="color: var(--c-text);"
+            @click="handleBatchRelink(agent.id)"
           >
             {{ agent.name }}
           </button>

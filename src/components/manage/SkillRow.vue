@@ -387,8 +387,8 @@ async function handleDelete() {
     <div v-if="showPreview" class="px-3 pb-3">
       <div
         v-if="previewContent"
-        class="rounded-md border p-3 text-xs max-h-[200px] overflow-y-auto prose prose-xs"
-        style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text-secondary);"
+        class="markdown-body rounded-md border p-3 max-h-[300px] overflow-y-auto"
+        style="background: var(--c-bg); border-color: var(--c-border);"
         v-html="previewContent"
       />
       <div v-else-if="previewLoading" class="text-xs" style="color: var(--c-text-secondary);">

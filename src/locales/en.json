@@ -79,7 +79,10 @@
     "btn_relink": "Relink",
     "btn_clean": "Clean Broken",
     "replaced_with_link": "Replaced with link",
-    "agent_all": "All Agents"
+    "agent_all": "All Agents",
+    "batch_relink": "Batch Relink",
+    "batch_relink_success": "Relinked {count} skills",
+    "batch_relink_result": "Relink complete: {success} success, {error} failed"
   },
   "overview": {
     "title": "Overview",
