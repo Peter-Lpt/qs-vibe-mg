@@ -14,10 +14,13 @@ use crate::utils::path::vibe_skills_dir;
 
 #[tauri::command]
 pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VabError> {
+    tracing::info!("create_link: skill={}, agent={}", skill_id, agent_id);
+
     let vibe_dir = vibe_skills_dir()?;
     let skill_path = vibe_dir.join(&skill_id);
 
     if !skill_path.exists() {
+        tracing::error!("create_link: skill not found in vibe-lib: {}", skill_id);
         return Err(VabError::SkillNotFound { skill_id });
     }
 
@@ -27,14 +30,19 @@ pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VabError> {
         agents
             .iter()
             .find(|a| a.id == agent_id)
-            .ok_or_else(|| VabError::AgentNotFound {
-                agent_id: agent_id.clone(),
+            .ok_or_else(|| {
+                tracing::error!("create_link: agent not found: {}", agent_id);
+                VabError::AgentNotFound {
+                    agent_id: agent_id.clone(),
+                }
             })?;
 
     let agent_skills_dir = Path::new(&agent.skills_dir);
     let link_path = agent_skills_dir.join(&skill_id);
 
+    tracing::info!("create_link: creating symlink {} -> {}", link_path.display(), skill_path.display());
     vibe_fs::create_symlink(&skill_path, &link_path)?;
+    tracing::info!("create_link: success");
 
     if let Err(e) = record_action(
         HistoryAction::Link,
@@ -50,27 +58,35 @@ pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VabError> {
 
 #[tauri::command]
 pub fn remove_link(skill_id: String, agent_id: String) -> Result<(), VabError> {
+    tracing::info!("remove_link: skill={}, agent={}", skill_id, agent_id);
+
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
     let agent =
         agents
             .iter()
             .find(|a| a.id == agent_id)
-            .ok_or_else(|| VabError::AgentNotFound {
-                agent_id: agent_id.clone(),
+            .ok_or_else(|| {
+                tracing::error!("remove_link: agent not found: {}", agent_id);
+                VabError::AgentNotFound {
+                    agent_id: agent_id.clone(),
+                }
             })?;
 
     let agent_skills_dir = Path::new(&agent.skills_dir);
     let link_path = agent_skills_dir.join(&skill_id);
 
     if !vibe_fs::is_link(&link_path) {
+        tracing::error!("remove_link: link not found: {}", link_path.display());
         return Err(VabError::LinkNotFound {
             skill_id,
             agent_id,
         });
     }
 
+    tracing::info!("remove_link: removing symlink at {}", link_path.display());
     vibe_fs::remove_symlink(&link_path)?;
+    tracing::info!("remove_link: success");
 
     if let Err(e) = record_action(
         HistoryAction::Unlink,
@@ -380,19 +396,25 @@ fn remove_symlinks_recursive(dir: &Path) -> Result<usize, VabError> {
 /// 将 agent 的 skill 同步到技能库（复制 + 创建 symlink）
 #[tauri::command]
 pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VabError> {
+    tracing::info!("sync_to_vibe: skill={}, agent={}", skill_id, agent_id);
+
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
     let agent = agents
         .iter()
         .find(|a| a.id == agent_id)
-        .ok_or_else(|| VabError::AgentNotFound {
-            agent_id: agent_id.clone(),
+        .ok_or_else(|| {
+            tracing::error!("sync_to_vibe: agent not found: {}", agent_id);
+            VabError::AgentNotFound {
+                agent_id: agent_id.clone(),
+            }
         })?;
 
     let agent_skills_dir = Path::new(&agent.skills_dir);
     let source_path = agent_skills_dir.join(&skill_id);
 
     if !source_path.exists() {
+        tracing::error!("sync_to_vibe: source not found: {}", source_path.display());
         return Err(VabError::SkillNotFound {
             skill_id: skill_id.clone(),
         });
@@ -400,8 +422,11 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VabError> 
 
     // 如果是 symlink，读取真实路径
     let real_source = if vibe_fs::is_link(&source_path) {
-        vibe_fs::read_link_target(&source_path)?
+        let target = vibe_fs::read_link_target(&source_path)?;
+        tracing::info!("sync_to_vibe: source is symlink, target={}", target.display());
+        target
     } else {
+        tracing::info!("sync_to_vibe: source is real file");
         source_path.clone()
     };
 
@@ -410,16 +435,19 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VabError> 
 
     // 如果技能库已有此 skill，检查内容是否一致
     if vibe_path.exists() {
+        tracing::info!("sync_to_vibe: skill already exists in vibe-lib, checking hash...");
         let source_hash = compute_dir_hash(&real_source);
         let vibe_hash = compute_dir_hash(&vibe_path);
 
         if source_hash != vibe_hash {
+            tracing::warn!("sync_to_vibe: hash mismatch, conflict detected");
             return Err(VabError::Conflict {
                 skill_id: skill_id.clone(),
                 details: "技能库已有同名 skill，内容不同".to_string(),
             });
         }
 
+        tracing::info!("sync_to_vibe: hash match, replacing with symlink");
         // 内容一致，只需创建 symlink
         if vibe_fs::is_link(&source_path) {
             // 删除旧 symlink（指向非 vibe-lib 的位置）
@@ -430,6 +458,7 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VabError> 
         }
 
         vibe_fs::create_symlink(&vibe_path, &source_path)?;
+        tracing::info!("sync_to_vibe: symlink created successfully");
 
         record_action(
             HistoryAction::Link,
@@ -443,6 +472,7 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VabError> 
     }
 
     // 技能库没有此 skill，复制过去
+    tracing::info!("sync_to_vibe: copying to vibe-lib: {} -> {}", real_source.display(), vibe_path.display());
     vibe_fs::copy_dir_all(&real_source, &vibe_path)?;
 
     // 如果源是 symlink，删除旧 symlink；如果是独立副本，删除副本
@@ -454,6 +484,7 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VabError> 
 
     // 创建新 symlink 指向技能库
     vibe_fs::create_symlink(&vibe_path, &source_path)?;
+    tracing::info!("sync_to_vibe: sync completed successfully");
 
     record_action(
         HistoryAction::Link,
@@ -469,13 +500,18 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VabError> 
 /// 重新链接：删除旧 symlink，创建新 symlink 指向技能库
 #[tauri::command]
 pub fn relink(skill_id: String, agent_id: String) -> Result<(), VabError> {
+    tracing::info!("relink: skill={}, agent={}", skill_id, agent_id);
+
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
     let agent = agents
         .iter()
         .find(|a| a.id == agent_id)
-        .ok_or_else(|| VabError::AgentNotFound {
-            agent_id: agent_id.clone(),
+        .ok_or_else(|| {
+            tracing::error!("relink: agent not found: {}", agent_id);
+            VabError::AgentNotFound {
+                agent_id: agent_id.clone(),
+            }
         })?;
 
     let agent_skills_dir = Path::new(&agent.skills_dir);
@@ -485,6 +521,7 @@ pub fn relink(skill_id: String, agent_id: String) -> Result<(), VabError> {
 
     // 技能库必须有此 skill
     if !vibe_path.exists() {
+        tracing::error!("relink: skill not found in vibe-lib: {}", skill_id);
         return Err(VabError::SkillNotFound {
             skill_id: skill_id.clone(),
         });
@@ -492,11 +529,14 @@ pub fn relink(skill_id: String, agent_id: String) -> Result<(), VabError> {
 
     // 删除旧的 symlink（如果存在）
     if vibe_fs::is_link(&link_path) {
+        tracing::info!("relink: removing old symlink at {}", link_path.display());
         vibe_fs::remove_symlink(&link_path)?;
     }
 
     // 创建新 symlink 指向技能库
+    tracing::info!("relink: creating symlink {} -> {}", link_path.display(), vibe_path.display());
     vibe_fs::create_symlink(&vibe_path, &link_path)?;
+    tracing::info!("relink: relink completed successfully");
 
     record_action(
         HistoryAction::Link,
