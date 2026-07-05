@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use sha2::Digest;
 use tracing::warn;
 
 use crate::errors::VabError;
@@ -374,4 +375,177 @@ fn remove_symlinks_recursive(dir: &Path) -> Result<usize, VabError> {
     }
 
     Ok(count)
+}
+
+/// 将 agent 的 skill 同步到技能库（复制 + 创建 symlink）
+#[tauri::command]
+pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VabError> {
+    let config = load_config()?;
+    let agents = build_agents_from_config(&config)?;
+    let agent = agents
+        .iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| VabError::AgentNotFound {
+            agent_id: agent_id.clone(),
+        })?;
+
+    let agent_skills_dir = Path::new(&agent.skills_dir);
+    let source_path = agent_skills_dir.join(&skill_id);
+
+    if !source_path.exists() {
+        return Err(VabError::SkillNotFound {
+            skill_id: skill_id.clone(),
+        });
+    }
+
+    // 如果是 symlink，读取真实路径
+    let real_source = if vibe_fs::is_link(&source_path) {
+        vibe_fs::read_link_target(&source_path)?
+    } else {
+        source_path.clone()
+    };
+
+    let vibe_dir = vibe_skills_dir()?;
+    let vibe_path = vibe_dir.join(&skill_id);
+
+    // 如果技能库已有此 skill，检查内容是否一致
+    if vibe_path.exists() {
+        let source_hash = compute_dir_hash(&real_source);
+        let vibe_hash = compute_dir_hash(&vibe_path);
+
+        if source_hash != vibe_hash {
+            return Err(VabError::Conflict {
+                skill_id: skill_id.clone(),
+                details: "技能库已有同名 skill，内容不同".to_string(),
+            });
+        }
+
+        // 内容一致，只需创建 symlink
+        if vibe_fs::is_link(&source_path) {
+            // 删除旧 symlink（指向非 vibe-lib 的位置）
+            vibe_fs::remove_symlink(&source_path)?;
+        } else {
+            // 删除 agent 的独立副本
+            fs::remove_dir_all(&source_path)?;
+        }
+
+        vibe_fs::create_symlink(&vibe_path, &source_path)?;
+
+        record_action(
+            HistoryAction::Link,
+            &skill_id,
+            Some(&agent_id),
+            Some("sync_to_vibe"),
+        )
+        .ok();
+
+        return Ok(());
+    }
+
+    // 技能库没有此 skill，复制过去
+    vibe_fs::copy_dir_all(&real_source, &vibe_path)?;
+
+    // 如果源是 symlink，删除旧 symlink；如果是独立副本，删除副本
+    if vibe_fs::is_link(&source_path) {
+        vibe_fs::remove_symlink(&source_path)?;
+    } else {
+        fs::remove_dir_all(&source_path)?;
+    }
+
+    // 创建新 symlink 指向技能库
+    vibe_fs::create_symlink(&vibe_path, &source_path)?;
+
+    record_action(
+        HistoryAction::Link,
+        &skill_id,
+        Some(&agent_id),
+        Some("sync_to_vibe"),
+    )
+    .ok();
+
+    Ok(())
+}
+
+/// 重新链接：删除旧 symlink，创建新 symlink 指向技能库
+#[tauri::command]
+pub fn relink(skill_id: String, agent_id: String) -> Result<(), VabError> {
+    let config = load_config()?;
+    let agents = build_agents_from_config(&config)?;
+    let agent = agents
+        .iter()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| VabError::AgentNotFound {
+            agent_id: agent_id.clone(),
+        })?;
+
+    let agent_skills_dir = Path::new(&agent.skills_dir);
+    let link_path = agent_skills_dir.join(&skill_id);
+    let vibe_dir = vibe_skills_dir()?;
+    let vibe_path = vibe_dir.join(&skill_id);
+
+    // 技能库必须有此 skill
+    if !vibe_path.exists() {
+        return Err(VabError::SkillNotFound {
+            skill_id: skill_id.clone(),
+        });
+    }
+
+    // 删除旧的 symlink（如果存在）
+    if vibe_fs::is_link(&link_path) {
+        vibe_fs::remove_symlink(&link_path)?;
+    }
+
+    // 创建新 symlink 指向技能库
+    vibe_fs::create_symlink(&vibe_path, &link_path)?;
+
+    record_action(
+        HistoryAction::Link,
+        &skill_id,
+        Some(&agent_id),
+        Some("relink"),
+    )
+    .ok();
+
+    Ok(())
+}
+
+/// 计算目录内容的 hash（用于比较）
+fn compute_dir_hash(dir: &Path) -> String {
+    if !dir.exists() {
+        return String::new();
+    }
+    let mut hasher = sha2::Sha256::new();
+    hash_dir_recursive(dir, &mut hasher);
+    format!("{:x}", hasher.finalize())
+}
+
+fn hash_dir_recursive(dir: &Path, hasher: &mut sha2::Sha256) {
+    use sha2::Digest;
+
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    let mut sorted: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+    sorted.sort_by_key(|e| e.file_name());
+
+    for entry in sorted {
+        let path = entry.path();
+        let name = entry.file_name();
+
+        if path.is_dir() {
+            hasher.update(b"dir:");
+            let name_str = name.to_string_lossy();
+            hasher.update(name_str.as_bytes());
+            hasher.update(b"\n");
+            hash_dir_recursive(&path, hasher);
+        } else if let Ok(content) = fs::read(&path) {
+            hasher.update(b"file:");
+            let name_str = name.to_string_lossy();
+            hasher.update(name_str.as_bytes());
+            hasher.update(b":");
+            hasher.update(&content);
+            hasher.update(b"\n");
+        }
+    }
 }

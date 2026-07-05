@@ -24,6 +24,7 @@ export interface Skill {
   modified_at: string;
   has_conflict: boolean;
   has_dangling: boolean;
+  is_duplicate: boolean;
 }
 
 export interface Agent {

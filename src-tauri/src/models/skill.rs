@@ -32,6 +32,8 @@ pub struct Skill {
     pub has_conflict: bool,
     /// 是否存在断链（symlink 目标不存在）
     pub has_dangling: bool,
+    /// 是否为重复条目（同文件夹名但 SKILL.md name 不同）
+    pub is_duplicate: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

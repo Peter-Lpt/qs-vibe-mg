@@ -19,14 +19,47 @@ use crate::utils::history::record_action;
 use crate::utils::path::vibe_skills_dir;
 use crate::models::history::HistoryAction;
 
-/// 计算文件内容的 SHA-256 hex hash
-fn content_hash(path: &Path) -> String {
-    let Ok(content) = fs::read_to_string(path) else {
+/// 计算目录内容的 SHA-256 hex hash（递归哈希所有文件）
+fn content_hash(dir: &Path) -> String {
+    if !dir.exists() {
         return String::new();
-    };
+    }
+
     let mut hasher = Sha256::new();
-    hasher.update(content.as_bytes());
+    hash_directory_recursive(dir, &mut hasher);
     format!("{:x}", hasher.finalize())
+}
+
+/// 递归哈希目录中的所有文件
+fn hash_directory_recursive(dir: &Path, hasher: &mut Sha256) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+
+    let mut sorted_entries: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+    sorted_entries.sort_by_key(|e| e.file_name());
+
+    for entry in sorted_entries {
+        let path = entry.path();
+        let name = entry.file_name();
+
+        if path.is_dir() {
+            // 哈希目录名 + 递归
+            hasher.update(b"dir:");
+            let name_str = name.to_string_lossy();
+            hasher.update(name_str.as_bytes());
+            hasher.update(b"\n");
+            hash_directory_recursive(&path, hasher);
+        } else if let Ok(content) = fs::read(&path) {
+            // 哈希文件名 + 内容
+            hasher.update(b"file:");
+            let name_str = name.to_string_lossy();
+            hasher.update(name_str.as_bytes());
+            hasher.update(b":");
+            hasher.update(&content);
+            hasher.update(b"\n");
+        }
+    }
 }
 
 #[tauri::command]
@@ -69,10 +102,18 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
                     return false;
                 }
                 match &s.symlink_target {
-                    Some(target) => !Path::new(target).exists(),
+                    Some(target) => !vibe_fs::normalize_path(Path::new(target)).exists(),
                     None => true,
                 }
             });
+
+            // 检测重复：同文件夹名但 SKILL.md name 不同
+            let unique_names: std::collections::HashSet<&str> = entry
+                .sources
+                .iter()
+                .map(|s| s.name.as_str())
+                .collect();
+            let is_duplicate = unique_names.len() > 1;
 
             Skill {
                 id,
@@ -90,6 +131,7 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
                 modified_at: entry.modified_at,
                 has_conflict,
                 has_dangling,
+                is_duplicate,
             }
         })
         .collect();
@@ -471,7 +513,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
     }
 
     let modified_at = get_modified_at(&dest);
-    let hash = content_hash(&dest.join("SKILL.md"));
+    let hash = content_hash(&dest);
 
     Ok(Skill {
         id: name.clone(),
@@ -497,6 +539,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
         modified_at,
         has_conflict: false,
         has_dangling: false,
+        is_duplicate: false,
     })
 }
 
@@ -635,7 +678,7 @@ fn scan_directory(
                 None
             };
 
-            let hash = content_hash(&skill_md_path);
+            let hash = content_hash(&path);
 
             let source = SkillSource {
                 from: source_id.to_string(),
@@ -686,7 +729,7 @@ fn find_linked_agents(skill_id: &str, agents: &[crate::models::agent::Agent]) ->
             if let Ok(target) = vibe_fs::read_link_target(&link_path) {
                 if let Ok(vibe_dir) = vibe_skills_dir() {
                     let expected = vibe_dir.join(skill_id);
-                    if target == expected {
+                    if vibe_fs::normalize_path(&target) == vibe_fs::normalize_path(&expected) {
                         linked.push(agent.id.clone());
                     }
                 }

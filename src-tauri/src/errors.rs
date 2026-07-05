@@ -53,6 +53,12 @@ pub enum VabError {
 
     #[error("Skill already exists: {skill_id}")]
     SkillAlreadyExists { skill_id: String },
+
+    #[error("Conflict: {skill_id} - {details}")]
+    Conflict {
+        skill_id: String,
+        details: String,
+    },
 }
 
 impl serde::Serialize for VabError {
