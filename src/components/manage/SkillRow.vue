@@ -702,7 +702,7 @@ async function handleDelete() {
                   style="color: var(--c-success);"
                   :title="vibeSource?.path || ''"
                 >
-                  应→ vibe-lib
+                  → 库
                 </span>
               </template>
               <!-- synced: 显示链接目标 -->
