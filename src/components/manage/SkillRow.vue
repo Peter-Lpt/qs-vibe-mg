@@ -380,6 +380,24 @@ async function previewConflictPath(path: string) {
   }
 }
 
+// 从路径中提取 agent 名称
+function getAgentNameFromPath(path: string): string {
+  const lowerPath = path.toLowerCase();
+  if (lowerPath.includes(".claude/skills") || lowerPath.includes(".claude\\skills")) return "Claude";
+  if (lowerPath.includes(".hermes/skills") || lowerPath.includes(".hermes\\skills")) return "Hermes";
+  if (lowerPath.includes(".pi/agent/skills") || lowerPath.includes(".pi\\agent\\skills")) return "Pi";
+  if (lowerPath.includes(".config/opencode/skills") || lowerPath.includes(".config\\opencode\\skills")) return "OpenCode";
+  if (lowerPath.includes(".codex/skills") || lowerPath.includes(".codex\\skills")) return "Codex";
+  if (lowerPath.includes(".config/mimocode/skills") || lowerPath.includes(".config\\mimocode\\skills")) return "MimoCode";
+  if (lowerPath.includes(".agents/skills") || lowerPath.includes(".agents\\skills")) return "Agents";
+  // 尝试从路径中提取常见的 agent 目录名
+  const match = path.match(/[/\\]\.?([^/\\]+)[/\\]skills/);
+  if (match && match[1]) {
+    return match[1].charAt(0).toUpperCase() + match[1].slice(1);
+  }
+  return "";
+}
+
 async function useThisVersion(source: SkillSource) {
   try {
     // 找到对应的 agent id
@@ -669,8 +687,27 @@ async function handleDelete() {
               <span class="text-[10px] shrink-0" :style="{ color: item.statusColor }">
                 {{ item.statusLabel }}
               </span>
+              <!-- linked_elsewhere: 显示当前链接和期望链接 -->
+              <template v-if="item.status === 'linked_elsewhere' && item.source?.symlink_target">
+                <span
+                  class="text-[10px] truncate max-w-[120px] shrink-0 cursor-help"
+                  style="color: var(--c-warning);"
+                  :title="item.source.symlink_target"
+                >
+                  → {{ getAgentNameFromPath(item.source.symlink_target) || item.source.symlink_target.split(/[/\\]/).slice(-2, -1)[0] || '未知' }}
+                </span>
+                <span class="text-[10px] shrink-0" style="color: var(--c-text-secondary);">|</span>
+                <span
+                  class="text-[10px] shrink-0 cursor-help"
+                  style="color: var(--c-success);"
+                  :title="vibeSource?.path || ''"
+                >
+                  应→ vibe-lib
+                </span>
+              </template>
+              <!-- synced: 显示链接目标 -->
               <span
-                v-if="item.source?.symlink_target && item.status !== 'unlinked'"
+                v-else-if="item.source?.symlink_target && item.status !== 'unlinked'"
                 class="text-[10px] truncate max-w-[150px] shrink-0"
                 style="color: var(--c-text-secondary);"
               >
