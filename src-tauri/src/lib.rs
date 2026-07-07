@@ -9,7 +9,7 @@ use tracing_subscriber::{fmt, EnvFilter};
 fn init_logger() {
     let log_dir = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join("vibe-skills-manager")
+        .join("qs-vibe-mg")
         .join("logs");
 
     std::fs::create_dir_all(&log_dir).ok();

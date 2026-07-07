@@ -1,12 +1,12 @@
 [package]
-name = "vibe-skills-manager"
+name = "qs-vibe-mg"
 version = "0.1.0"
 description = "Cross-platform AI agent skills manager"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "vibe_skills_manager_lib"
+name = "qs_vibe_mg_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
