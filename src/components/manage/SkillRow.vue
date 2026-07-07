@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
+import { useFileLogger } from "../../composables/useFileLogger";
 import { marked } from "marked";
 import type { Skill, Agent, SkillSource } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
@@ -15,6 +16,7 @@ const props = defineProps<{
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const toast = useToast();
+const logger = useFileLogger();
 
 const expanded = ref(false);
 const previewContent = ref("");
@@ -143,6 +145,7 @@ const allAgentStatuses = computed<AgentStatus[]>(() => {
         statusIcon: "🔗",
       });
     } else {
+      logger.debug(`[SkillRow] linked_elsewhere: skillId=${props.skill.id}, agentId=${agent.id}, agentName=${agent.name}, symlinkTarget=${source.symlink_target}, vibeSourcePath=${vibeSource.value?.path}`);
       result.push({
         agent,
         source,
@@ -382,6 +385,7 @@ async function previewConflictPath(path: string) {
 
 // 从路径中提取 agent 名称
 function getAgentNameFromPath(path: string): string {
+  logger.debug(`[getAgentNameFromPath] input: ${path}`);
   const lowerPath = path.toLowerCase();
   if (lowerPath.includes(".claude/skills") || lowerPath.includes(".claude\\skills")) return "Claude";
   if (lowerPath.includes(".hermes/skills") || lowerPath.includes(".hermes\\skills")) return "Hermes";
@@ -390,11 +394,14 @@ function getAgentNameFromPath(path: string): string {
   if (lowerPath.includes(".codex/skills") || lowerPath.includes(".codex\\skills")) return "Codex";
   if (lowerPath.includes(".config/mimocode/skills") || lowerPath.includes(".config\\mimocode\\skills")) return "MimoCode";
   if (lowerPath.includes(".agents/skills") || lowerPath.includes(".agents\\skills")) return "Agents";
+  if (lowerPath.includes(".vibe-skills") || lowerPath.includes(".vibe_skills")) return "VibeLib";
   // 尝试从路径中提取常见的 agent 目录名
   const match = path.match(/[/\\]\.?([^/\\]+)[/\\]skills/);
   if (match && match[1]) {
+    logger.debug(`[getAgentNameFromPath] regex match: ${match[1]}`);
     return match[1].charAt(0).toUpperCase() + match[1].slice(1);
   }
+  logger.debug("[getAgentNameFromPath] no match, returning empty");
   return "";
 }
 

@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use sha2::Digest;
 use tracing::warn;
@@ -497,7 +497,7 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VabError> 
     Ok(())
 }
 
-/// 重新链接：删除旧 symlink，创建新 symlink 指向技能库
+/// 重新链接：如果技能库没有则先同步，然后创建 symlink 指向技能库
 #[tauri::command]
 pub fn relink(skill_id: String, agent_id: String) -> Result<(), VabError> {
     tracing::info!("relink: skill={}, agent={}", skill_id, agent_id);
@@ -519,12 +519,27 @@ pub fn relink(skill_id: String, agent_id: String) -> Result<(), VabError> {
     let vibe_dir = vibe_skills_dir()?;
     let vibe_path = vibe_dir.join(&skill_id);
 
-    // 技能库必须有此 skill
+    // 技能库没有此 skill，先从 agent 复制过去
     if !vibe_path.exists() {
-        tracing::error!("relink: skill not found in vibe-lib: {}", skill_id);
-        return Err(VabError::SkillNotFound {
-            skill_id: skill_id.clone(),
-        });
+        tracing::info!("relink: skill not in vibe-lib, copying from agent: {}", link_path.display());
+
+        // 找到 agent 中的真实路径（可能是嵌套目录）
+        let real_source = find_skill_path_recursive(&link_path, &skill_id)
+            .or_else(|| {
+                // 尝试直接使用 agent_skills_dir
+                let direct = agent_skills_dir.join(&skill_id);
+                if direct.exists() { Some(direct) } else { None }
+            })
+            .ok_or_else(|| {
+                tracing::error!("relink: skill not found in agent: {}", agent_id);
+                VabError::SkillNotFound {
+                    skill_id: skill_id.clone(),
+                }
+            })?;
+
+        // 复制到 vibe-lib
+        vibe_fs::copy_dir_all(&real_source, &vibe_path)?;
+        tracing::info!("relink: copied to vibe-lib: {}", vibe_path.display());
     }
 
     // 删除旧的 symlink（如果存在）
@@ -547,6 +562,32 @@ pub fn relink(skill_id: String, agent_id: String) -> Result<(), VabError> {
     .ok();
 
     Ok(())
+}
+
+/// 递归查找 skill 路径
+fn find_skill_path_recursive(dir: &Path, skill_id: &str) -> Option<PathBuf> {
+    if !dir.exists() {
+        return None;
+    }
+
+    // 直接检查当前目录
+    let direct = dir.join(skill_id);
+    if direct.exists() && direct.join("SKILL.md").exists() {
+        return Some(direct);
+    }
+
+    // 递归搜索子目录
+    for entry in fs::read_dir(dir).ok()? {
+        let entry = entry.ok()?;
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_skill_path_recursive(&path, skill_id) {
+                return Some(found);
+            }
+        }
+    }
+
+    None
 }
 
 /// 批量操作：对同一个 skill 执行多个 agent 的操作

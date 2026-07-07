@@ -4,8 +4,36 @@ mod models;
 mod parsers;
 mod utils;
 
+use tracing_subscriber::{fmt, EnvFilter};
+
+fn init_logger() {
+    let log_dir = dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("vibe-skills-manager")
+        .join("logs");
+
+    std::fs::create_dir_all(&log_dir).ok();
+
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "app.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    // 保持 _guard 在整个程序运行期间存活
+    std::mem::forget(_guard);
+
+    fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_writer(non_blocking)
+        .with_ansi(false)
+        .init();
+
+    tracing::info!("Logger initialized, log dir: {:?}", log_dir);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_logger();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -47,6 +75,7 @@ pub fn run() {
             commands::config::import_data,
             commands::config::write_file_to_path,
             commands::config::read_file_from_path,
+            commands::logger::log_message,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
