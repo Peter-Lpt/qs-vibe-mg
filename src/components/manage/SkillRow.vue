@@ -23,6 +23,11 @@ const showPreview = ref(false);
 const showDeleteConfirm = ref(false);
 const resolvingConflict = ref<string | null>(null);
 
+// 冲突路径预览
+const conflictPreviewPath = ref<string | null>(null);
+const conflictPreviewContent = ref("");
+const conflictPreviewLoading = ref(false);
+
 // per-skill 批量选择
 const selectedAgents = ref<Set<string>>(new Set());
 const showBatchMenu = ref(false);
@@ -347,6 +352,38 @@ async function togglePreview() {
   }
 }
 
+async function previewConflictPath(path: string) {
+  if (conflictPreviewPath.value === path) {
+    conflictPreviewPath.value = null;
+    conflictPreviewContent.value = "";
+    return;
+  }
+
+  conflictPreviewPath.value = path;
+  conflictPreviewLoading.value = true;
+  try {
+    const md = await skillsStore.previewSkillAtPath(path);
+    conflictPreviewContent.value = marked.parse(md) as string;
+  } catch {
+    conflictPreviewContent.value = "";
+  } finally {
+    conflictPreviewLoading.value = false;
+  }
+}
+
+async function useThisVersion(source: SkillSource) {
+  try {
+    // 找到对应的 agent id
+    const agent = props.agents.find(a => a.id === source.from);
+    if (agent) {
+      await skillsStore.syncToVibe(props.skill.id, agent.id);
+      toast.show(t("manage.synced_to_vibe"), "success");
+    }
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
+
 async function handleDelete() {
   try {
     await skillsStore.deleteSkill(props.skill.id);
@@ -390,9 +427,18 @@ async function handleDelete() {
       <span v-else-if="skill.has_dangling" class="shrink-0" style="color: var(--c-danger);">❌</span>
       <span v-else-if="skill.is_duplicate" class="shrink-0" style="color: var(--c-info);">📋</span>
 
-      <!-- Skill name -->
+      <!-- Skill name (显示文件夹名或 name，如果 name 为空则显示 id) -->
       <span class="text-sm font-medium truncate" style="color: var(--c-text);">
-        {{ skill.name }}
+        {{ skill.name || skill.id }}
+      </span>
+
+      <!-- Missing name badge -->
+      <span
+        v-if="skill.missing_name"
+        class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+        style="background: var(--c-danger-light); color: var(--c-danger);"
+      >
+        {{ t("manage.missing_name") }}
       </span>
 
       <!-- Sync count -->
@@ -456,6 +502,68 @@ async function handleDelete() {
       />
       <div v-else-if="previewLoading" class="text-xs" style="color: var(--c-text-secondary);">
         {{ t("app.loading") }}
+      </div>
+    </div>
+
+    <!-- Conflict paths list -->
+    <div v-if="skill.has_conflict && expanded" class="px-3 pb-3">
+      <div class="mb-2 text-[10px] font-medium uppercase tracking-wide" style="color: var(--c-warning);">
+        {{ t("manage.conflict_paths") }}
+      </div>
+      <div class="space-y-2">
+        <div
+          v-for="source in skill.sources"
+          :key="source.path"
+          class="rounded-md border p-2"
+          style="background: var(--c-bg); border-color: var(--c-border);"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-[10px]" :style="{ color: source.is_symlink ? 'var(--c-primary)' : 'var(--c-text-secondary)' }">
+                {{ source.is_symlink ? '🔗' : '📁' }}
+              </span>
+              <span class="text-[10px] truncate" style="color: var(--c-text-secondary);">
+                {{ source.from }}: {{ source.path.split(/[/\\]/).slice(-2, -1)[0] || source.path.split(/[/\\]/).pop() }}
+              </span>
+              <span class="text-[10px] shrink-0" :style="{ color: source.is_symlink ? 'var(--c-primary)' : 'var(--c-text-secondary)' }">
+                {{ source.is_symlink ? t("manage.symlink_to", { target: source.symlink_target?.split(/[/\\]/).pop() || '' }) : t("manage.real_file") }}
+              </span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                class="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                :style="{
+                  background: conflictPreviewPath === source.path ? 'var(--c-primary-light)' : 'transparent',
+                  color: conflictPreviewPath === source.path ? 'var(--c-primary)' : 'var(--c-text-secondary)',
+                  border: '1px solid var(--c-border)',
+                }"
+                @click.stop="previewConflictPath(source.path)"
+              >
+                {{ t("manage.preview_path") }}
+              </button>
+              <button
+                v-if="source.from !== 'vibe-lib'"
+                class="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                style="background: var(--c-primary); color: white;"
+                @click.stop="useThisVersion(source)"
+              >
+                {{ t("manage.use_this_version") }}
+              </button>
+            </div>
+          </div>
+          <!-- Conflict path preview -->
+          <div v-if="conflictPreviewPath === source.path" class="mt-2">
+            <div
+              v-if="conflictPreviewContent"
+              class="markdown-body rounded border p-2 max-h-[200px] overflow-y-auto text-[11px]"
+              style="background: var(--c-surface); border-color: var(--c-border);"
+              v-html="conflictPreviewContent"
+            />
+            <div v-else-if="conflictPreviewLoading" class="text-[10px]" style="color: var(--c-text-secondary);">
+              {{ t("app.loading") }}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

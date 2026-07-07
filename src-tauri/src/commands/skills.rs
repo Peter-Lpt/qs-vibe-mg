@@ -115,6 +115,9 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
                 .collect();
             let is_duplicate = unique_names.len() > 1;
 
+            // 检测 name 是否为空
+            let missing_name = entry.name.is_empty();
+
             Skill {
                 id,
                 name: entry.name,
@@ -132,6 +135,7 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
                 has_conflict,
                 has_dangling,
                 is_duplicate,
+                missing_name,
             }
         })
         .collect();
@@ -238,7 +242,7 @@ pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
         }
 
         let mut skills = Vec::new();
-        collect_skills_recursive(skills_dir, skills_dir, &mut skills, &mut all_skill_agents, &agent.id);
+        collect_skills_recursive(skills_dir, skills_dir, &mut skills, &mut all_skill_agents, &agent.id, &vibe_dir);
 
         agent_skills.insert(agent.id.clone(), skills);
     }
@@ -346,6 +350,7 @@ fn collect_skills_recursive(
     skills: &mut Vec<(String, String)>,
     all_skill_agents: &mut HashMap<String, Vec<String>>,
     agent_id: &str,
+    vibe_dir: &Path,
 ) {
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -361,6 +366,15 @@ fn collect_skills_recursive(
                 continue;
             }
 
+            // 跳过指向 vibe-lib 的 symlink，避免重复计数
+            if vibe_fs::is_link(&path) {
+                if let Ok(target) = vibe_fs::read_link_target(&path) {
+                    if target.starts_with(vibe_dir) {
+                        continue;
+                    }
+                }
+            }
+
             let skill_md_path = path.join("SKILL.md");
             if skill_md_path.exists() {
                 let id = name.clone();
@@ -374,7 +388,7 @@ fn collect_skills_recursive(
                     .push(agent_id.to_string());
                 skills.push((id, skill_name));
             } else {
-                collect_skills_recursive(base_dir, &path, skills, all_skill_agents, agent_id);
+                collect_skills_recursive(base_dir, &path, skills, all_skill_agents, agent_id, vibe_dir);
             }
         }
     }
@@ -449,6 +463,23 @@ pub fn preview_skill(skill_id: String) -> Result<String, VabError> {
     }
 
     Err(VabError::SkillNotFound { skill_id })
+}
+
+/// 按路径预览 SKILL.md 内容
+#[tauri::command]
+pub fn preview_skill_at_path(path: String) -> Result<String, VabError> {
+    let skill_path = Path::new(&path);
+    if !skill_path.exists() {
+        return Err(VabError::SkillNotFound { skill_id: path });
+    }
+
+    let skill_md_path = if skill_path.join("SKILL.md").exists() {
+        skill_path.join("SKILL.md")
+    } else {
+        skill_path.to_path_buf()
+    };
+
+    fs::read_to_string(&skill_md_path).map_err(VabError::Io)
 }
 
 fn find_skill_md_recursive(dir: &Path, skill_id: &str) -> Result<String, VabError> {
@@ -540,6 +571,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
         has_conflict: false,
         has_dangling: false,
         is_duplicate: false,
+        missing_name: false,
     })
 }
 

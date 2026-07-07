@@ -181,7 +181,7 @@ function handleAgentFilter(_agentId: string) {
                     style="background: var(--c-primary);"
                   />
                   <span class="truncate" style="color: var(--c-text);">
-                    {{ row.skill.name }}
+                    {{ row.skill.name || row.skill.id }}
                   </span>
                 </div>
               </td>
@@ -223,7 +223,7 @@ function handleAgentFilter(_agentId: string) {
         >
           <span v-if="skill.has_conflict" style="color: var(--c-warning);">⚠</span>
           <span v-else style="color: var(--c-danger);">❌</span>
-          <span class="font-medium" style="color: var(--c-text);">{{ skill.name }}</span>
+          <span class="font-medium" style="color: var(--c-text);">{{ skill.name || skill.id }}</span>
           <span style="color: var(--c-text-secondary);">—</span>
           <span style="color: var(--c-text-secondary);">
             {{

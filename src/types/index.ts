@@ -25,6 +25,7 @@ export interface Skill {
   has_conflict: boolean;
   has_dangling: boolean;
   is_duplicate: boolean;
+  missing_name: boolean;
 }
 
 export interface Agent {

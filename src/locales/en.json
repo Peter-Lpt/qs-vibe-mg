@@ -29,11 +29,12 @@
     "status_independent_conflict": "Independent (conflict)",
     "status_linked_elsewhere": "Linked elsewhere",
     "status_duplicate": "Duplicate",
+    "missing_name": "Missing",
     "sources": "{count} sources",
     "real_file": "Real file",
     "symlink_to": "symlink → {target}",
     "broken_symlink": "symlink (broken)",
-    "use_version": "Use {agent} version",
+    "use_version": "Use this version",
     "remove_broken": "Remove broken link",
     "conflict_warning": "Same-name skills have different content",
     "dangling_warning": "Link target has been deleted",
@@ -87,7 +88,11 @@
     "batch_apply": "Apply to Selected",
     "no_batch_actions": "No actions available for selected agents",
     "batch_success": "Batch processed {count} agents",
-    "batch_result": "Batch complete: {success} success, {error} failed"
+    "batch_result": "Batch complete: {success} success, {error} failed",
+    "conflict_paths": "Conflict Paths",
+    "preview_path": "Preview",
+    "use_this_version": "Use this version",
+    "sync_from": "Sync from {source}"
   },
   "overview": {
     "title": "Overview",

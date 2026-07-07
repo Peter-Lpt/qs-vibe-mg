@@ -12,6 +12,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::skills::list_skills,
             commands::skills::preview_skill,
+            commands::skills::preview_skill_at_path,
             commands::skills::install_skill,
             commands::skills::delete_skill,
             commands::skills::search_skills,

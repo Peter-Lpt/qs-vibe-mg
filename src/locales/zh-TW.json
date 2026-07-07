@@ -29,11 +29,12 @@
     "status_independent_conflict": "獨立副本 (衝突)",
     "status_linked_elsewhere": "連結到其他位置",
     "status_duplicate": "重複",
+    "missing_name": "缺欄位",
     "sources": "{count} 個來源",
     "real_file": "真實檔案",
     "symlink_to": "symlink → {target}",
     "broken_symlink": "symlink (斷鏈)",
-    "use_version": "使用 {agent} 版本",
+    "use_version": "使用此版本",
     "remove_broken": "移除斷鏈",
     "conflict_warning": "同名 skill 有不同內容",
     "dangling_warning": "連結目標已刪除",
@@ -87,7 +88,11 @@
     "batch_apply": "套用到選取",
     "no_batch_actions": "所選 Agent 無可執行操作",
     "batch_success": "已批次處理 {count} 個 Agent",
-    "batch_result": "批次處理完成：成功 {success}，失敗 {error}"
+    "batch_result": "批次處理完成：成功 {success}，失敗 {error}",
+    "conflict_paths": "衝突路徑",
+    "preview_path": "預覽",
+    "use_this_version": "使用此版本",
+    "sync_from": "從 {source} 同步"
   },
   "overview": {
     "title": "總覽",

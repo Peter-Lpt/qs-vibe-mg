@@ -104,6 +104,10 @@ export const useSkillsStore = defineStore("skills", () => {
     return await invoke<string>("preview_skill", { skillId });
   }
 
+  async function previewSkillAtPath(path: string): Promise<string> {
+    return await invoke<string>("preview_skill_at_path", { path });
+  }
+
   async function syncToVibe(skillId: string, agentId: string) {
     await invoke("sync_to_vibe", { skillId, agentId });
     refreshSkills();
@@ -137,6 +141,7 @@ export const useSkillsStore = defineStore("skills", () => {
     installSkill,
     deleteSkill,
     previewSkill,
+    previewSkillAtPath,
     syncToVibe,
     relink,
   };

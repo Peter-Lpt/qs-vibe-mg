@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct Skill {
     /// 文件夹名，作为唯一标识
     pub id: String,
-    /// SKILL.md frontmatter 中的 name
+    /// SKILL.md frontmatter 中的 name（可能为空）
     pub name: String,
     /// SKILL.md frontmatter 中的 description
     pub description: String,
@@ -34,6 +34,8 @@ pub struct Skill {
     pub has_dangling: bool,
     /// 是否为重复条目（同文件夹名但 SKILL.md name 不同）
     pub is_duplicate: bool,
+    /// 是否缺少 name 字段（frontmatter 中没有 name 或 name 为空）
+    pub missing_name: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
