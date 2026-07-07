@@ -549,6 +549,63 @@ pub fn relink(skill_id: String, agent_id: String) -> Result<(), VabError> {
     Ok(())
 }
 
+/// 批量操作：对同一个 skill 执行多个 agent 的操作
+#[tauri::command]
+pub fn batch_skill_action(
+    skill_id: String,
+    agent_ids: Vec<String>,
+    action: String,
+) -> Result<SyncResult, VabError> {
+    tracing::info!(
+        "batch_skill_action: skill={}, agents={}, action={}",
+        skill_id,
+        agent_ids.join(","),
+        action
+    );
+
+    let mut result = SyncResult {
+        synced_count: 0,
+        errors: Vec::new(),
+    };
+
+    for agent_id in &agent_ids {
+        let op_result = match action.as_str() {
+            "link" => create_link(skill_id.clone(), agent_id.clone()),
+            "unlink" => remove_link(skill_id.clone(), agent_id.clone()),
+            "sync_to_vibe" => sync_to_vibe(skill_id.clone(), agent_id.clone()),
+            "replace_with_link" => sync_to_vibe(skill_id.clone(), agent_id.clone()),
+            "relink" => relink(skill_id.clone(), agent_id.clone()),
+            "remove_dangling" => remove_link(skill_id.clone(), agent_id.clone()),
+            _ => {
+                result.errors.push(format!("Unknown action: {}", action));
+                continue;
+            }
+        };
+
+        match op_result {
+            Ok(()) => result.synced_count += 1,
+            Err(e) => result.errors.push(format!("{}: {}", agent_id, e)),
+        }
+    }
+
+    // 记录批量操作历史
+    let history_action = match action.as_str() {
+        "link" | "relink" => HistoryAction::BatchLink,
+        _ => HistoryAction::BatchUnlink,
+    };
+
+    if let Err(e) = record_action(
+        history_action,
+        &skill_id,
+        None,
+        Some(&action),
+    ) {
+        warn!("Failed to record batch_skill_action: {}", e);
+    }
+
+    Ok(result)
+}
+
 /// 计算目录内容的 hash（用于比较）
 fn compute_dir_hash(dir: &Path) -> String {
     if !dir.exists() {

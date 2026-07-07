@@ -283,26 +283,35 @@ async function handleBatchAction(action: string) {
   if (selected.length === 0) return;
 
   batchOperating.value = true;
-  let successCount = 0;
-  let errorCount = 0;
 
-  for (const status of selected) {
-    try {
-      await handleAction(status);
-      successCount++;
-    } catch {
-      errorCount++;
+  try {
+    const agentIds = selected.map((s) => s.agent.id);
+    const result = await skillsStore.batchSkillAction(
+      props.skill.id,
+      agentIds,
+      action
+    );
+
+    if (result.errors.length > 0) {
+      toast.show(
+        t("manage.batch_result", {
+          success: result.synced_count,
+          error: result.errors.length,
+        }),
+        "info"
+      );
+    } else {
+      toast.show(
+        t("manage.batch_success", { count: result.synced_count }),
+        "success"
+      );
     }
-  }
-
-  batchOperating.value = false;
-  selectedAgents.value.clear();
-  showBatchMenu.value = false;
-
-  if (errorCount > 0) {
-    toast.show(t("manage.batch_result", { success: successCount, error: errorCount }), "info");
-  } else {
-    toast.show(t("manage.batch_success", { count: successCount }), "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  } finally {
+    batchOperating.value = false;
+    selectedAgents.value.clear();
+    showBatchMenu.value = false;
   }
 }
 

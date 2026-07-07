@@ -28,6 +28,7 @@ pub fn run() {
             commands::sync::remove_sync_skills,
             commands::sync::sync_to_vibe,
             commands::sync::relink,
+            commands::sync::batch_skill_action,
             commands::agents::list_agents,
             commands::agents::add_custom_agent,
             commands::agents::update_agent,
