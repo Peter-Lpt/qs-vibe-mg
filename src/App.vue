@@ -9,7 +9,6 @@ import { useToast } from "./composables/useToast";
 import type { TabId } from "./types";
 import AppLayout from "./components/layout/AppLayout.vue";
 import TabBar from "./components/layout/TabBar.vue";
-import OverviewTab from "./components/overview/OverviewTab.vue";
 import ManageTab from "./components/manage/ManageTab.vue";
 import HistoryTab from "./components/history/HistoryTab.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
@@ -22,7 +21,7 @@ const historyStore = useHistoryStore();
 const appStore = useAppStore();
 const toast = useToast();
 
-const tabs: TabId[] = ["overview", "manage", "history"];
+const tabs: TabId[] = ["manage", "history"];
 
 watch(
   () => appStore.locale,
@@ -41,8 +40,8 @@ watch(
 );
 
 function handleGlobalKeydown(e: KeyboardEvent) {
-  // Ctrl+1-3: tab switch
-  if (e.ctrlKey && !e.shiftKey && e.key >= "1" && e.key <= "3") {
+  // Ctrl+1-2: tab switch
+  if (e.ctrlKey && !e.shiftKey && e.key >= "1" && e.key <= "2") {
     e.preventDefault();
     const idx = Number(e.key) - 1;
     if (idx < tabs.length) {
@@ -96,8 +95,7 @@ onUnmounted(() => {
     <TabBar v-model="appStore.activeTab" />
 
     <KeepAlive>
-      <OverviewTab v-if="appStore.activeTab === 'overview'" />
-      <ManageTab v-else-if="appStore.activeTab === 'manage'" />
+      <ManageTab v-if="appStore.activeTab === 'manage'" />
       <HistoryTab v-else-if="appStore.activeTab === 'history'" />
     </KeepAlive>
   </AppLayout>

@@ -13,7 +13,6 @@ const emit = defineEmits<{
 }>();
 
 const tabs: { id: TabId; icon: string; labelKey: string }[] = [
-  { id: "overview", icon: "📊", labelKey: "tabs.overview" },
   { id: "manage", icon: "🔗", labelKey: "tabs.manage" },
   { id: "history", icon: "🕐", labelKey: "tabs.history" },
 ];

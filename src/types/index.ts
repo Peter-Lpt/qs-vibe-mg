@@ -70,7 +70,7 @@ export interface AgentConfig {
   auto_detected: boolean;
 }
 
-export type TabId = "overview" | "manage" | "history";
+export type TabId = "manage" | "history";
 
 export type ConflictType = "SameNameDiffContent" | "DanglingLink";
 

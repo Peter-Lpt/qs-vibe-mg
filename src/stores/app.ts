@@ -18,12 +18,12 @@ export const useAppStore = defineStore("app", () => {
   // 兼容旧值：将旧 tab id 映射到新 id
   const storedTab = localStorage.getItem("vibe-active-tab") as TabId | null;
   const initialTab: TabId =
-    storedTab === "overview" || storedTab === "manage" || storedTab === "history"
+    storedTab === "manage" || storedTab === "history"
       ? storedTab
-      : storedTab === "symlink" || storedTab === "skills"
+      : storedTab === "overview" || storedTab === "symlink" || storedTab === "skills"
         ? "manage"
         : storedTab === "agents" || storedTab === "dashboard"
-          ? "overview"
+          ? "manage"
           : "manage";
 
   const activeTab = ref<TabId>(initialTab);
