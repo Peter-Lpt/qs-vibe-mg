@@ -2,7 +2,7 @@ import { ref } from "vue";
 
 export interface Toast {
   id: number;
-  type: "success" | "error" | "info";
+  type: "success" | "error" | "info" | "warning";
   message: string;
   duration: number;
 }

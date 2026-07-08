@@ -11,7 +11,6 @@
     "version": "v0.1"
   },
   "tabs": {
-    "overview": "Overview",
     "manage": "Manage",
     "history": "History"
   },
@@ -92,11 +91,31 @@
     "conflict_paths": "Conflict Paths",
     "preview_path": "Preview",
     "use_this_version": "Use this version",
-    "sync_from": "Sync from {source}"
-  },
-  "overview": {
-    "title": "Overview",
-    "issues_title": "Issues"
+    "sync_from": "Sync from {source}",
+    "view_list": "List View",
+    "view_card": "Card View",
+    "agent_matrix": "Agent-Skill Matrix",
+    "filter_status": "Status",
+    "filter_exclude": "Exclude these Agents",
+    "filter_include": "Include these Agents",
+    "clear_filters": "Clear Filters",
+    "agent_overview": "Agent Overview",
+    "agent_selected": "selected",
+    "filter_group_issue": "Issues",
+    "filter_group_status": "Status",
+    "filter_group_other": "Other",
+    "deselect_all": "Cancel",
+    "quick_filter_missing_lib": "Not in library",
+    "quick_filter_only_lib": "Library only",
+    "sort_by_name": "Name",
+    "sort_by_status": "Status",
+    "sort_by_sources": "Sources",
+    "sort_by_status_priority": "Action needed",
+    "card_synced_count": "{count} synced",
+    "card_synced_all": "All synced",
+    "card_needs_action_count": "{count} need action",
+    "card_unlinked_count": "{count} unlinked",
+    "expand_detail": "Expand"
   },
   "skills": {
     "install": "Install Skill",

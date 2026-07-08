@@ -3,141 +3,508 @@ import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useAgentsStore } from "../../stores/agents";
+import { useToast } from "../../composables/useToast";
 import SkillRow from "./SkillRow.vue";
+import SkillCard from "./SkillCard.vue";
+import AgentMatrix from "./AgentMatrix.vue";
 import InstallDialog from "../skills/InstallDialog.vue";
 import EmptyState from "../common/EmptyState.vue";
 import SkeletonCard from "../common/SkeletonCard.vue";
+import type { Agent } from "../../types";
 
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const agentsStore = useAgentsStore();
+const toast = useToast();
 
+// ── 初始化 ──────────────────────────────────────
+onMounted(async () => {
+  if (skillsStore.skills.length === 0) await skillsStore.fetchSkills();
+  if (skillsStore.issues.length === 0) await skillsStore.fetchIssues();
+});
+
+// ── 视图模式 ──────────────────────────────────────
+type ViewMode = "list" | "card";
+const viewMode = ref<ViewMode>(
+  (localStorage.getItem("vibe-manage-view") as ViewMode) || "list"
+);
+function setViewMode(mode: ViewMode) {
+  viewMode.value = mode;
+  localStorage.setItem("vibe-manage-view", mode);
+}
+
+// ── 筛选状态 ──────────────────────────────────────
+type StatusFilter = "conflict" | "dangling" | "independent" | "unlinked" | "linked" | "missing_lib" | "only_lib" | "duplicate";
+const activeStatusFilters = ref<Set<StatusFilter>>(new Set());
+const selectedAgentFilter = ref<Set<string>>(new Set());
+const agentFilterMode = ref<"include" | "exclude">("include");
+const sortBy = ref<"status" | "name" | "sources">("status");
 const searchQuery = ref("");
-const statusFilter = ref("");
-const agentFilter = ref("");
-const showInstall = ref(false);
 const searchInput = ref<HTMLInputElement | null>(null);
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
+// ── Skill 多选 ──────────────────────────────────────
+const selectedSkills = ref<Set<string>>(new Set());
+const lastClickedIndex = ref<number>(-1);
+
+function toggleSkillSelect(skillId: string, index?: number, shiftKey = false) {
+  const newSet = new Set(selectedSkills.value);
+  if (shiftKey && lastClickedIndex.value >= 0 && index !== undefined) {
+    // Shift+click 范围选择
+    const start = Math.min(lastClickedIndex.value, index);
+    const end = Math.max(lastClickedIndex.value, index);
+    const visibleIds = displaySkills.value.map((s) => s.id);
+    for (let i = start; i <= end; i++) {
+      newSet.add(visibleIds[i]);
+    }
+  } else {
+    if (newSet.has(skillId)) newSet.delete(skillId);
+    else newSet.add(skillId);
+  }
+  selectedSkills.value = newSet;
+  if (index !== undefined) lastClickedIndex.value = index;
+}
+
+function selectAllSkills() {
+  selectedSkills.value = new Set(displaySkills.value.map((s) => s.id));
+}
+
+function deselectAllSkills() {
+  selectedSkills.value = new Set();
+}
+
+// ── 折叠状态 ──────────────────────────────────────
+const agentOverviewExpanded = ref(true);
+const matrixExpanded = ref(false);
+const expandedSkillId = ref<string | null>(null);
+
+// ── 安装弹窗 ──────────────────────────────────────
+const showInstall = ref(false);
+
+// ── 快捷键 ──────────────────────────────────────
 function handleKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "f")) {
     e.preventDefault();
     searchInput.value?.focus();
   }
 }
-
 onMounted(() => document.addEventListener("keydown", handleKeydown));
 onUnmounted(() => document.removeEventListener("keydown", handleKeydown));
 
-const statusOptions = computed(() => [
-  { value: "", label: t("manage.status_all") || "全部" },
-  { value: "conflict", label: t("manage.status_conflict") || "有冲突" },
-  { value: "dangling", label: t("manage.status_dangling") || "有断链" },
-  { value: "independent", label: t("manage.status_independent") || "需要同步" },
-  { value: "unlinked", label: t("manage.status_unlinked") || "未链接" },
-  { value: "linked", label: t("manage.status_linked") || "已链接" },
-  { value: "duplicate", label: t("manage.status_duplicate") || "重复" },
-]);
+// ── Agent 概览（= Agent 筛选） ──────────────────────
+const detectedAgents = computed(() => agentsStore.agents.filter((a) => a.detected));
 
-const displaySkills = computed(() => {
-  let list = searchQuery.value.trim()
-    ? skillsStore.searchResults
-    : skillsStore.skills;
+interface AgentOverview {
+  agent: Agent;
+  skillCount: number;
+  linkedCount: number;
+  conflictCount: number;
+}
 
-  if (statusFilter.value) {
-    list = list.filter((s) => {
-      switch (statusFilter.value) {
-        case "conflict":
-          return s.has_conflict;
-        case "dangling":
-          return s.has_dangling;
-        case "duplicate":
-          return s.is_duplicate;
-        case "independent":
-          return s.sources.some(
-            (src) => src.from !== "vibe-lib" && !src.is_symlink
-          );
-        case "unlinked":
-          return !s.sources.some(
-            (src) => src.from !== "vibe-lib" && src.is_symlink
-          );
-        case "linked":
-          return s.sources.some(
-            (src) => src.from !== "vibe-lib" && src.is_symlink
-          );
-        default:
-          return true;
-      }
+const agentOverviews = computed<AgentOverview[]>(() =>
+  detectedAgents.value.map((agent) => ({
+    agent,
+    skillCount: skillsStore.skills.filter((s) =>
+      s.sources.some((src) => src.from === agent.id)
+    ).length,
+    linkedCount: skillsStore.skills.filter((s) =>
+      s.sources.some((src) => src.from === agent.id && src.is_symlink)
+    ).length,
+    conflictCount: skillsStore.skills.filter(
+      (s) => s.has_conflict && s.sources.some((src) => src.from === agent.id)
+    ).length,
+  }))
+);
+
+function selectAgentFromOverview(agentId: string) {
+  const set = new Set(selectedAgentFilter.value);
+  if (set.has(agentId)) set.delete(agentId);
+  else set.add(agentId);
+  selectedAgentFilter.value = set;
+}
+
+// ── 状态 chips 定义 ──────────────────────────────
+const hasAnyDuplicate = computed(() => skillsStore.skills.some((s) => s.is_duplicate));
+
+interface StatusChipDef {
+  id: StatusFilter;
+  labelKey: string;
+  color: string;
+  group: "issue" | "status" | "other";
+  icon: string;
+}
+
+const statusChipDefs: StatusChipDef[] = [
+  { id: "conflict", labelKey: "manage.status_conflict", color: "var(--c-warning)", group: "issue", icon: "⚠" },
+  { id: "dangling", labelKey: "manage.status_dangling", color: "var(--c-danger)", group: "issue", icon: "❌" },
+  { id: "independent", labelKey: "manage.status_independent", color: "var(--c-primary)", group: "status", icon: "●" },
+  { id: "unlinked", labelKey: "manage.status_unlinked", color: "var(--c-text-secondary)", group: "status", icon: "○" },
+  { id: "linked", labelKey: "manage.status_linked", color: "var(--c-primary)", group: "status", icon: "●" },
+  { id: "missing_lib", labelKey: "manage.quick_filter_missing_lib", color: "var(--c-text-secondary)", group: "other", icon: "◇" },
+  { id: "only_lib", labelKey: "manage.quick_filter_only_lib", color: "var(--c-text-secondary)", group: "other", icon: "◇" },
+  { id: "duplicate", labelKey: "manage.status_duplicate", color: "var(--c-info)", group: "other", icon: "📋" },
+];
+
+function toggleStatusFilter(id: StatusFilter) {
+  const set = new Set(activeStatusFilters.value);
+  if (set.has(id)) set.delete(id);
+  else set.add(id);
+  activeStatusFilters.value = set;
+}
+
+// ── Chip 计数（基于 displaySkills 的筛选子集） ──────
+const chipCounts = computed(() => {
+  // 先应用除当前 chip 类型以外的所有筛选，得到"基础列表"
+  let base = searchQuery.value.trim() ? skillsStore.searchResults : skillsStore.skills;
+
+  // Agent 筛选
+  if (selectedAgentFilter.value.size > 0) {
+    base = base.filter((s) => {
+      const hasAny = [...selectedAgentFilter.value].some((agentId) =>
+        s.sources.some((src) => src.from === agentId)
+      );
+      return agentFilterMode.value === "include" ? hasAny : !hasAny;
     });
   }
 
-  if (agentFilter.value) {
-    list = list.filter((s) =>
-      s.sources.some((src) => src.from === agentFilter.value)
-    );
+  // 其他 status 筛选（排除当前 chip 自身）
+  const otherFilters = new Set(activeStatusFilters.value);
+  if (otherFilters.size > 0) {
+    base = base.filter((s) => {
+      for (const filter of otherFilters) {
+        if (!matchesFilter(s, filter)) return false;
+      }
+      return true;
+    });
   }
 
-  return list;
+  return {
+    conflict: base.filter((s) => s.has_conflict).length,
+    dangling: base.filter((s) => s.has_dangling).length,
+    independent: base.filter((s) => s.sources.some((src) => !src.is_symlink && src.from !== "vibe-lib")).length,
+    unlinked: base.filter((s) => !s.sources.some((src) => src.from !== "vibe-lib" && src.is_symlink)).length,
+    linked: base.filter((s) => s.sources.some((src) => src.from !== "vibe-lib" && src.is_symlink)).length,
+    missing_lib: base.filter((s) => !s.sources.some((src) => src.from === "vibe-lib")).length,
+    only_lib: base.filter((s) => s.sources.filter((src) => src.from !== "vibe-lib").length === 0).length,
+    duplicate: base.filter((s) => s.is_duplicate).length,
+  };
+});
+
+function matchesFilter(s: { has_conflict: boolean; has_dangling: boolean; is_duplicate: boolean; sources: { from: string; is_symlink: boolean }[] }, filter: StatusFilter): boolean {
+  switch (filter) {
+    case "conflict": return s.has_conflict;
+    case "dangling": return s.has_dangling;
+    case "independent": return s.sources.some((src) => !src.is_symlink && src.from !== "vibe-lib");
+    case "unlinked": return !s.sources.some((src) => src.from !== "vibe-lib" && src.is_symlink);
+    case "linked": return s.sources.some((src) => src.from !== "vibe-lib" && src.is_symlink);
+    case "missing_lib": return !s.sources.some((src) => src.from === "vibe-lib");
+    case "only_lib": return s.sources.filter((src) => src.from !== "vibe-lib").length === 0;
+    case "duplicate": return s.is_duplicate;
+  }
+}
+
+// ── 排序选项 ──────────────────────────────────────
+const sortOptions = computed(() => [
+  { value: "status", label: t("manage.sort_by_status_priority") || "需操作优先" },
+  { value: "name", label: t("manage.sort_by_name") || "名称" },
+  { value: "sources", label: t("manage.sort_by_sources") || "来源数" },
+]);
+
+// ── 清除筛选 ──────────────────────────────────────
+function clearAllFilters() {
+  activeStatusFilters.value = new Set();
+  selectedAgentFilter.value = new Set();
+  agentFilterMode.value = "include";
+  searchQuery.value = "";
+}
+
+const hasActiveFilters = computed(
+  () =>
+    activeStatusFilters.value.size > 0 ||
+    selectedAgentFilter.value.size > 0 ||
+    searchQuery.value.trim() !== ""
+);
+
+// ── Stats bar ──────────────────────────────────────
+const totalSkills = computed(() => skillsStore.skills.length);
+const sharedSkills = computed(() =>
+  skillsStore.skills.filter((s) => s.sources.filter((src) => src.from !== "vibe-lib").length > 1)
+);
+const uniqueSkills = computed(() =>
+  skillsStore.skills.filter((s) => s.sources.filter((src) => src.from !== "vibe-lib").length === 1)
+);
+const issueSkills = computed(() =>
+  skillsStore.skills.filter((s) => s.has_conflict || s.has_dangling)
+);
+
+// ── 核心筛选逻辑 ──────────────────────────────────
+const displaySkills = computed(() => {
+  let list = searchQuery.value.trim() ? skillsStore.searchResults : skillsStore.skills;
+
+  // 状态筛选
+  if (activeStatusFilters.value.size > 0) {
+    list = list.filter((s) => {
+      for (const filter of activeStatusFilters.value) {
+        if (!matchesFilter(s, filter)) return false;
+      }
+      return true;
+    });
+  }
+
+  // Agent 筛选
+  if (selectedAgentFilter.value.size > 0) {
+    list = list.filter((s) => {
+      const hasAny = [...selectedAgentFilter.value].some((agentId) =>
+        s.sources.some((src) => src.from === agentId)
+      );
+      return agentFilterMode.value === "include" ? hasAny : !hasAny;
+    });
+  }
+
+  // 排序
+  const sorted = [...list];
+  sorted.sort((a, b) => {
+    if (sortBy.value === "status") {
+      const priority = (s: typeof a): number => {
+        if (s.has_conflict) return 0;
+        if (s.has_dangling) return 1;
+        if (s.sources.some((src) => !src.is_symlink && src.from !== "vibe-lib")) return 2;
+        if (!s.sources.some((src) => src.from !== "vibe-lib" && src.is_symlink)) return 3;
+        return 4;
+      };
+      return priority(a) - priority(b);
+    }
+    if (sortBy.value === "name") return (a.name || a.id).localeCompare(b.name || b.id);
+    if (sortBy.value === "sources") return b.sources.length - a.sources.length;
+    return 0;
+  });
+
+  return sorted;
 });
 
 watch(searchQuery, (val) => {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    skillsStore.searchSkills(val);
-  }, 300);
+  searchTimer = setTimeout(() => skillsStore.searchSkills(val), 300);
+});
+
+// ── 批量同步逻辑 ──────────────────────────────────
+const batchOperating = ref(false);
+
+async function batchSyncSelected() {
+  const skills = displaySkills.value.filter((s) => selectedSkills.value.has(s.id));
+  if (skills.length === 0) return;
+
+  batchOperating.value = true;
+
+  // 按 skill 分组：每个 skill 找出需要操作的 agent
+  const operations: { skillId: string; agentIds: string[] }[] = [];
+  for (const skill of skills) {
+    const agentIds = skill.sources
+      .filter((src) => !src.is_symlink && src.from !== "vibe-lib")
+      .map((src) => src.from);
+    if (agentIds.length > 0) {
+      operations.push({ skillId: skill.id, agentIds });
+    }
+  }
+
+  let total = 0;
+  const errors: string[] = [];
+
+  for (const op of operations) {
+    try {
+      const r = await skillsStore.batchSkillAction(op.skillId, op.agentIds, "sync_to_vibe", true);
+      total += r.synced_count;
+      errors.push(...r.errors);
+    } catch (e) {
+      errors.push(`${op.skillId}: ${String(e)}`);
+    }
+  }
+
+  await skillsStore.refreshSkills();
+  useAgentsStore().fetchAgents();
+  selectedSkills.value = new Set();
+  batchOperating.value = false;
+
+  if (errors.length > 0) {
+    toast.show(`成功 ${total} 个，失败 ${errors.length} 个`, "warning");
+  } else {
+    toast.show(`已同步 ${total} 个 skill`, "success");
+  }
+}
+
+// ── 矩阵操作 ──────────────────────────────────────
+function handleMatrixExpand(skillId: string) {
+  expandedSkillId.value = skillId;
+  setTimeout(() => {
+    document.getElementById(`skill-${skillId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 100);
+}
+
+// ── 状态 chips 分组 ──────────────────────────────
+const chipGroups = computed(() => {
+  const groups: { label: string; chips: StatusChipDef[] }[] = [];
+  const issue = statusChipDefs.filter((c) => c.group === "issue");
+  const status = statusChipDefs.filter((c) => c.group === "status");
+  const other = statusChipDefs.filter((c) => c.group === "other");
+  if (issue.length) groups.push({ label: t("manage.filter_group_issue") || "异常", chips: issue });
+  if (status.length) groups.push({ label: t("manage.filter_group_status") || "状态", chips: status });
+  if (other.length) groups.push({ label: t("manage.filter_group_other") || "其他", chips: other });
+  return groups;
 });
 </script>
 
 <template>
   <div>
     <!-- Header -->
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-3">
       <h2 class="text-base font-semibold" style="color: var(--c-text);">
         {{ t("manage.title") || "软连接管理" }}
         <span class="text-sm font-normal ml-1.5" style="color: var(--c-text-secondary);">
-          ({{ displaySkills.length }}/{{ skillsStore.skills.length }})
+          ({{ displaySkills.length }}/{{ totalSkills }})
         </span>
       </h2>
-      <button
-        class="text-xs px-3 py-1.5 rounded-md cursor-pointer btn-primary"
-        @click="showInstall = true"
-      >
-        + {{ t("skills.install") }}
-      </button>
+      <div class="flex items-center gap-2">
+        <button
+          v-if="hasActiveFilters"
+          class="text-[10px] px-2 py-1 rounded cursor-pointer"
+          style="border: 1px solid var(--c-border); color: var(--c-text-secondary); background: var(--c-bg);"
+          @click="clearAllFilters"
+        >
+          {{ t("manage.clear_filters") || "清除筛选" }}
+        </button>
+        <button
+          class="text-xs px-3 py-1.5 rounded-md cursor-pointer btn-primary"
+          @click="showInstall = true"
+        >
+          + {{ t("skills.install") }}
+        </button>
+        <div class="flex items-center rounded border" style="border-color: var(--c-border);">
+          <button
+            class="px-2 py-1 text-[10px] cursor-pointer transition-colors"
+            :style="{ background: viewMode === 'list' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'var(--c-text-secondary)' }"
+            @click="setViewMode('list')"
+          >≡</button>
+          <button
+            class="px-2 py-1 text-[10px] cursor-pointer transition-colors"
+            :style="{ background: viewMode === 'card' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'card' ? 'white' : 'var(--c-text-secondary)' }"
+            @click="setViewMode('card')"
+          >⊞</button>
+        </div>
+      </div>
     </div>
 
-    <!-- Filters -->
-    <div class="flex gap-3 mb-4">
-      <select
-        v-model="statusFilter"
-        class="appearance-none px-3 py-2 pr-8 text-xs rounded-md border outline-none cursor-pointer transition-colors"
-        style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text); min-width: 120px;"
+    <!-- Agent 概览（= Agent 筛选入口） -->
+    <div class="mb-3" v-if="detectedAgents.length > 0">
+      <div
+        class="flex items-center gap-2 cursor-pointer mb-2 select-none"
+        @click="agentOverviewExpanded = !agentOverviewExpanded"
       >
-        <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-          {{ opt.label }}
-        </option>
-      </select>
-      <select
-        v-model="agentFilter"
-        class="appearance-none px-3 py-2 pr-8 text-xs rounded-md border outline-none cursor-pointer transition-colors"
-        style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text); min-width: 120px;"
-      >
-        <option value="">{{ t("manage.agent_all") || "所有 Agent" }}</option>
-        <option
-          v-for="agent in agentsStore.agents.filter(a => a.detected)"
-          :key="agent.id"
-          :value="agent.id"
+        <span class="text-xs transition-transform" :style="{ transform: agentOverviewExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }">▶</span>
+        <span class="text-xs font-semibold" style="color: var(--c-text);">
+          {{ t("manage.agent_overview") || "Agent 概览" }}
+        </span>
+        <span v-if="selectedAgentFilter.size > 0" class="text-[10px] ml-1" style="color: var(--c-primary);">
+          {{ selectedAgentFilter.size }} {{ t("manage.agent_selected") || "个已选" }}
+        </span>
+      </div>
+      <div v-if="agentOverviewExpanded" class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));">
+        <div
+          v-for="overview in agentOverviews"
+          :key="overview.agent.id"
+          class="rounded-lg border p-2.5 cursor-pointer transition-all hover:shadow-sm"
+          :style="{
+            background: selectedAgentFilter.has(overview.agent.id)
+              ? (agentFilterMode === 'include' ? 'var(--c-primary-light)' : 'var(--c-danger-light)')
+              : 'var(--c-surface)',
+            borderColor: selectedAgentFilter.has(overview.agent.id)
+              ? (agentFilterMode === 'include' ? 'var(--c-primary)' : 'var(--c-danger)')
+              : 'var(--c-border)',
+          }"
+          @click="selectAgentFromOverview(overview.agent.id)"
         >
-          {{ agent.name }}
-        </option>
+          <div class="flex items-center gap-1.5 mb-1">
+            <span class="w-1.5 h-1.5 rounded-full shrink-0" :style="{ background: overview.agent.detected ? 'var(--c-success)' : '#94a3b8' }" />
+            <span class="text-xs font-medium truncate" style="color: var(--c-text);">{{ overview.agent.name }}</span>
+          </div>
+          <div class="flex items-center gap-2 text-[10px]">
+            <span style="color: var(--c-text-secondary);">{{ overview.skillCount }}</span>
+            <span style="color: var(--c-primary);">{{ overview.linkedCount }} ✓</span>
+            <span v-if="overview.conflictCount > 0" style="color: var(--c-warning);">{{ overview.conflictCount }} ⚠</span>
+          </div>
+        </div>
+      </div>
+      <!-- include/exclude 切换 -->
+      <div v-if="selectedAgentFilter.size > 0" class="flex items-center gap-2 mt-1.5">
+        <span class="text-[10px]" style="color: var(--c-text-secondary);">
+          {{ t("manage.agent_selected") || "已选" }} {{ selectedAgentFilter.size }}
+        </span>
+        <button
+          class="text-[10px] px-1.5 py-0.5 rounded cursor-pointer"
+          style="border: 1px solid var(--c-border); background: var(--c-bg);"
+          :style="{ color: agentFilterMode === 'include' ? 'var(--c-primary)' : 'var(--c-danger)' }"
+          @click="agentFilterMode = agentFilterMode === 'include' ? 'exclude' : 'include'"
+        >
+          {{ agentFilterMode === "include" ? t("manage.filter_include") : t("manage.filter_exclude") }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 状态筛选 chips（分组 + 计数） -->
+    <div class="mb-2">
+      <div v-for="(group, gIdx) in chipGroups" :key="group.label" class="flex gap-1.5 mb-1.5 flex-wrap items-center">
+        <span v-if="gIdx > 0" class="w-px h-3 mx-1" style="background: var(--c-border);" />
+        <span class="text-[9px] mr-0.5 shrink-0 uppercase tracking-wider" style="color: var(--c-text-secondary);">
+          {{ group.label }}
+        </span>
+        <button
+          v-for="chip in group.chips"
+          :key="chip.id"
+          class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors"
+          :style="
+            (chip.id === 'duplicate' && !hasAnyDuplicate) || chipCounts[chip.id] === 0
+              ? 'opacity: 0.35; pointer-events: none; background: var(--c-bg); color: var(--c-text-secondary); border: 1px solid var(--c-border);'
+              : activeStatusFilters.has(chip.id)
+                ? `background: ${chip.color}; color: white;`
+                : 'background: var(--c-bg); color: var(--c-text-secondary); border: 1px solid var(--c-border);'
+          "
+          @click="toggleStatusFilter(chip.id)"
+        >
+          <span class="text-[9px]">{{ chip.icon }}</span>
+          {{ t(chip.labelKey) }}
+          <span class="text-[9px] opacity-70">({{ chipCounts[chip.id] }})</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 工具行：排序 + 搜索 -->
+    <div class="flex gap-2 mb-3 items-center">
+      <select
+        v-model="sortBy"
+        class="appearance-none px-2 py-1 pr-6 text-[10px] rounded-md border outline-none cursor-pointer"
+        style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text-secondary); min-width: 90px;"
+      >
+        <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
       <input
         ref="searchInput"
         v-model="searchQuery"
         :placeholder="t('skills.search') + ' (Ctrl+K)'"
-        class="flex-1 px-3 py-2 text-xs rounded-md border outline-none transition-colors"
+        class="flex-1 px-3 py-1.5 text-xs rounded-md border outline-none transition-colors min-w-[140px]"
         style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text);"
       />
+    </div>
+
+    <!-- Stats bar -->
+    <div class="flex items-center gap-4 mb-3 px-3 py-2 rounded-lg text-[11px]" style="background: var(--c-surface); border: 1px solid var(--c-border);">
+      <span style="color: var(--c-text);">{{ t("manage.total_skills") || "共" }} {{ totalSkills }}</span>
+      <span style="color: var(--c-text-secondary);">|</span>
+      <span style="color: var(--c-primary);">{{ sharedSkills.length }} {{ t("manage.linked_count") || "共享" }}</span>
+      <span style="color: var(--c-text-secondary);">|</span>
+      <span style="color: var(--c-text-secondary);">{{ uniqueSkills.length }} {{ t("manage.status_unlinked") || "独立" }}</span>
+      <template v-if="issueSkills.length > 0">
+        <span style="color: var(--c-text-secondary);">|</span>
+        <span style="color: var(--c-warning);">{{ issueSkills.length }} {{ t("manage.conflict_count") || "异常" }}</span>
+      </template>
     </div>
 
     <!-- Loading -->
@@ -146,9 +513,7 @@ watch(searchQuery, (val) => {
     </div>
 
     <!-- Error -->
-    <div v-else-if="skillsStore.error" class="text-sm" style="color: var(--c-danger);">
-      {{ skillsStore.error }}
-    </div>
+    <div v-else-if="skillsStore.error" class="text-sm" style="color: var(--c-danger);">{{ skillsStore.error }}</div>
 
     <!-- Empty -->
     <EmptyState
@@ -160,20 +525,113 @@ watch(searchQuery, (val) => {
       @action="showInstall = true"
     />
 
-    <!-- Skill list -->
-    <div v-else class="space-y-2">
+    <!-- Skill list (list mode) -->
+    <div
+      v-else-if="viewMode === 'list'"
+      class="space-y-2"
+      :style="{ paddingBottom: selectedSkills.size > 0 ? '56px' : '0' }"
+    >
       <SkillRow
         v-for="skill in displaySkills"
         :key="skill.id"
+        :id="`skill-${skill.id}`"
         :skill="skill"
         :agents="agentsStore.agents"
+        :expanded="expandedSkillId === skill.id"
+        :selected="selectedSkills.has(skill.id)"
+        @update:expanded="(v) => expandedSkillId = v ? skill.id : null"
+        @toggle:select="toggleSkillSelect"
+      />
+    </div>
+
+    <!-- Skill grid (card mode) -->
+    <div
+      v-else
+      class="grid gap-3"
+      style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));"
+      :style="{ paddingBottom: selectedSkills.size > 0 ? '56px' : '0' }"
+    >
+      <SkillCard
+        v-for="skill in displaySkills"
+        :key="skill.id"
+        :id="`skill-${skill.id}`"
+        :skill="skill"
+        :agents="agentsStore.agents"
+        :expanded="expandedSkillId === skill.id"
+        :selected="selectedSkills.has(skill.id)"
+        @update:expanded="(v) => expandedSkillId = v ? skill.id : null"
+        @toggle:select="toggleSkillSelect"
+      />
+    </div>
+
+    <!-- 浮动批量操作栏 -->
+    <Transition name="slide-up">
+      <div
+        v-if="selectedSkills.size > 0"
+        class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-lg shadow-lg"
+        style="background: var(--c-surface); border: 1px solid var(--c-border);"
+      >
+        <input
+          type="checkbox"
+          :checked="selectedSkills.size === displaySkills.length && displaySkills.length > 0"
+          class="w-3.5 h-3.5 rounded cursor-pointer"
+          style="accent-color: var(--c-primary);"
+          @change="selectedSkills.size === displaySkills.length ? deselectAllSkills() : selectAllSkills()"
+        />
+        <span class="text-xs" style="color: var(--c-text);">
+          {{ t("manage.selected_count", { count: selectedSkills.size }) }}
+        </span>
+        <button
+          class="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors"
+          style="background: var(--c-primary); color: white;"
+          :disabled="batchOperating"
+          @click="batchSyncSelected"
+        >
+          {{ batchOperating ? "..." : (t("manage.btn_sync") || "同步到库") }}
+        </button>
+        <button
+          class="text-[11px] px-2 py-1 rounded cursor-pointer"
+          style="color: var(--c-text-secondary);"
+          @click="deselectAllSkills"
+        >
+          {{ t("manage.deselect_all") || "取消" }}
+        </button>
+      </div>
+    </Transition>
+
+    <!-- 关系矩阵 -->
+    <div class="mt-4" v-if="detectedAgents.length > 0">
+      <div class="flex items-center gap-2 cursor-pointer mb-2 select-none" @click="matrixExpanded = !matrixExpanded">
+        <span class="text-xs transition-transform" :style="{ transform: matrixExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }">▶</span>
+        <span class="text-xs font-semibold" style="color: var(--c-text);">{{ t("manage.agent_matrix") }}</span>
+      </div>
+      <AgentMatrix
+        v-if="matrixExpanded"
+        :skills="skillsStore.skills"
+        :agents="agentsStore.agents"
+        :expanded-skill-id="expandedSkillId"
+        @expand-skill="handleMatrixExpand"
       />
     </div>
 
     <!-- Install dialog -->
-    <InstallDialog
-      v-if="showInstall"
-      @close="showInstall = false"
-    />
+    <InstallDialog v-if="showInstall" @close="showInstall = false" />
   </div>
 </template>
+
+<style scoped>
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  transform: translate(-50%, 100%);
+  opacity: 0;
+}
+.slide-up-enter-to,
+.slide-up-leave-from {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+</style>

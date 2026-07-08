@@ -123,14 +123,17 @@ export const useSkillsStore = defineStore("skills", () => {
   async function batchSkillAction(
     skillId: string,
     agentIds: string[],
-    action: string
+    action: string,
+    silent = false
   ): Promise<{ synced_count: number; errors: string[] }> {
     const result = await invoke<{ synced_count: number; errors: string[] }>(
       "batch_skill_action",
       { skillId, agentIds, action }
     );
-    refreshSkills();
-    useAgentsStore().fetchAgents();
+    if (!silent) {
+      refreshSkills();
+      useAgentsStore().fetchAgents();
+    }
     return result;
   }
 

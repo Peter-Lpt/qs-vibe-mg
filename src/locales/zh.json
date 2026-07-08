@@ -11,7 +11,6 @@
     "version": "v0.1"
   },
   "tabs": {
-    "overview": "总览",
     "manage": "管理",
     "history": "操作历史"
   },
@@ -92,11 +91,31 @@
     "conflict_paths": "冲突路径",
     "preview_path": "预览",
     "use_this_version": "使用此版本",
-    "sync_from": "从 {source} 同步"
-  },
-  "overview": {
-    "title": "总览",
-    "issues_title": "异常检测"
+    "sync_from": "从 {source} 同步",
+    "view_list": "列表视图",
+    "view_card": "卡片视图",
+    "agent_matrix": "Agent-Skill 关系矩阵",
+    "filter_status": "状态",
+    "filter_exclude": "不包含这些 Agent",
+    "filter_include": "包含这些 Agent",
+    "clear_filters": "清除筛选",
+    "agent_overview": "Agent 概览",
+    "agent_selected": "个已选",
+    "filter_group_issue": "异常",
+    "filter_group_status": "状态",
+    "filter_group_other": "其他",
+    "deselect_all": "取消",
+    "quick_filter_missing_lib": "未入库",
+    "quick_filter_only_lib": "仅库中",
+    "sort_by_name": "名称",
+    "sort_by_status": "状态",
+    "sort_by_sources": "来源数",
+    "sort_by_status_priority": "需操作优先",
+    "card_synced_count": "已同步 {count} 个",
+    "card_synced_all": "已全部同步",
+    "card_needs_action_count": "需操作 {count} 个",
+    "card_unlinked_count": "未链接 {count} 个",
+    "expand_detail": "展开详情"
   },
   "skills": {
     "install": "安装 Skill",
