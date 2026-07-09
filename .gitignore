@@ -56,3 +56,6 @@ $RECYCLE.BIN/
 
 # MiMoCode local config
 .mimocode/
+
+# WorkBuddy local project memory/data (not for version control)
+.workbuddy/
