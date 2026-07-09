@@ -3,10 +3,10 @@ import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useAgentsStore } from "../../stores/agents";
-import { useToast } from "../../composables/useToast";
 import SkillRow from "./SkillRow.vue";
 import SkillCard from "./SkillCard.vue";
 import AgentMatrix from "./AgentMatrix.vue";
+import BatchSyncPanel from "./BatchSyncPanel.vue";
 import InstallDialog from "../skills/InstallDialog.vue";
 import EmptyState from "../common/EmptyState.vue";
 import SkeletonCard from "../common/SkeletonCard.vue";
@@ -15,7 +15,6 @@ import type { Agent } from "../../types";
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const agentsStore = useAgentsStore();
-const toast = useToast();
 
 // ── 初始化 ──────────────────────────────────────
 onMounted(async () => {
@@ -287,49 +286,27 @@ watch(searchQuery, (val) => {
   searchTimer = setTimeout(() => skillsStore.searchSkills(val), 300);
 });
 
-// ── 批量同步逻辑 ──────────────────────────────────
-const batchOperating = ref(false);
+// ── 批量操作面板（多 skill 同步交互，详见 docs/multi-skill-sync-interaction.v3.md） ──
+const showBatch = ref(false);
+const selectedSkillIds = computed(() => [...selectedSkills.value]);
 
-async function batchSyncSelected() {
-  const skills = displaySkills.value.filter((s) => selectedSkills.value.has(s.id));
-  if (skills.length === 0) return;
+function openBatchPanel() {
+  if (selectedSkills.value.size === 0) return;
+  showBatch.value = true;
+}
 
-  batchOperating.value = true;
+function removeSkillFromSelection(skillId: string) {
+  const s = new Set(selectedSkills.value);
+  s.delete(skillId);
+  selectedSkills.value = s;
+}
 
-  // 按 skill 分组：每个 skill 找出需要操作的 agent
-  const operations: { skillId: string; agentIds: string[] }[] = [];
-  for (const skill of skills) {
-    const agentIds = skill.sources
-      .filter((src) => !src.is_symlink && src.from !== "vibe-lib")
-      .map((src) => src.from);
-    if (agentIds.length > 0) {
-      operations.push({ skillId: skill.id, agentIds });
-    }
-  }
+function closeBatchPanel() {
+  showBatch.value = false;
+}
 
-  let total = 0;
-  const errors: string[] = [];
-
-  for (const op of operations) {
-    try {
-      const r = await skillsStore.batchSkillAction(op.skillId, op.agentIds, "sync_to_vibe", true);
-      total += r.synced_count;
-      errors.push(...r.errors);
-    } catch (e) {
-      errors.push(`${op.skillId}: ${String(e)}`);
-    }
-  }
-
-  await skillsStore.refreshSkills();
-  useAgentsStore().fetchAgents();
-  selectedSkills.value = new Set();
-  batchOperating.value = false;
-
-  if (errors.length > 0) {
-    toast.show(`成功 ${total} 个，失败 ${errors.length} 个`, "warning");
-  } else {
-    toast.show(`已同步 ${total} 个 skill`, "success");
-  }
+function onBatchApplied() {
+  // 面板内部已统一 refreshSkills + fetchAgents；此处保留选择，便于继续操作
 }
 
 // ── 矩阵操作 ──────────────────────────────────────
@@ -584,10 +561,9 @@ const chipGroups = computed(() => {
         <button
           class="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors"
           style="background: var(--c-primary); color: white;"
-          :disabled="batchOperating"
-          @click="batchSyncSelected"
+          @click="openBatchPanel"
         >
-          {{ batchOperating ? "..." : (t("manage.btn_sync") || "同步到库") }}
+          {{ t("manage.batch_panel_open") || "批量操作" }}
         </button>
         <button
           class="text-[11px] px-2 py-1 rounded cursor-pointer"
@@ -616,6 +592,15 @@ const chipGroups = computed(() => {
 
     <!-- Install dialog -->
     <InstallDialog v-if="showInstall" @close="showInstall = false" />
+
+    <!-- 批量同步矩阵面板 -->
+    <BatchSyncPanel
+      v-if="showBatch"
+      :selected-skill-ids="selectedSkillIds"
+      @close="closeBatchPanel"
+      @remove-skill="removeSkillFromSelection"
+      @applied="onBatchApplied"
+    />
   </div>
 </template>
 
