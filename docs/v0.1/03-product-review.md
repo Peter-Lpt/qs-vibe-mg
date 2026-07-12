@@ -179,7 +179,7 @@ Description...
 | TabBar | `cli` | 与实际功能（Agent 管理）不符 |
 | agentsStore | `agents` | 正确，但与 Tab 名不一致 |
 | AddCLIDialog | `cli` | 表单字段是 Agent 属性 |
-| SettingsPage | `vibe_skills_path` | "VAB" 术语突然出现 |
+| SettingsPage | `vibe_skills_path` | "VIBE" 术语突然出现 |
 | SkillSource.from | `vibe-lib` / agent id | 混用 |
 | errors.rs | `AgentNotFound` / `SkillNotFound` | 正确 |
 
@@ -206,7 +206,7 @@ for (const src of skill.sources) {
 ```
 - `from` 可能是 `"vibe-lib"` 或 agent id，混用导致需要条件判断
 
-**证据 3: 设置中的 VAB 术语**
+**证据 3: 设置中的 VIBE 术语**
 ```json
 // locales/zh.json
 "settings.vibe_skills_path": "Vibe Skills 路径"
@@ -381,7 +381,7 @@ historyStore.operationMessage = {
 
 **建议**: 
 - 统一使用自定义 Toast/Message 组件
-- 将 Rust 端的 `VabError` 映射为用户友好的文案
+- 将 Rust 端的 `VibeError` 映射为用户友好的文案
   ```typescript
   // errors.ts
   export function mapError(error: string): string {
@@ -535,7 +535,7 @@ v-for="agent in agentsStore.agents.filter(a => a.detected)"
 
 ### 10.4 Rust 后端架构 ✅
 - 清晰的模块划分（commands/models/parsers/utils）
-- 错误类型化（VabError 枚举）
+- 错误类型化（VibeError 枚举）
 - 配置系统灵活（JSON + 动态 Agent）
 - **建议**: 保持，未来可以增加 API 文档生成（如 OpenAPI）
 
@@ -552,7 +552,7 @@ v-for="agent in agentsStore.agents.filter(a => a.detected)"
 | SymlinkTab 过滤未检测 Agent | `src/components/symlink/SymlinkTab.vue` | 35 |
 | History undo/redo | `src/components/history/HistoryTab.vue` | 140-176 |
 | Agent 模型 | `src-tauri/src/models/agent.rs` | 4-19 |
-| VabError 枚举 | `src-tauri/src/errors.rs` | 6-63 |
+| VibeError 枚举 | `src-tauri/src/errors.rs` | 6-63 |
 
 ---
 

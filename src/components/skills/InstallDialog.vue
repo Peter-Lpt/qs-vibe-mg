@@ -70,7 +70,7 @@ async function handleInstall() {
 
         <div class="mb-3">
           <label class="text-xs block mb-1" style="color: var(--c-text-secondary);">
-            {{ t('settings.skills_dir') }}
+            {{ t('agents.skills_dir') }}
           </label>
           <div class="flex gap-1.5">
             <input

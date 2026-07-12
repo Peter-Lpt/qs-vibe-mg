@@ -1,4 +1,4 @@
-# VAB Agent Manager - 模块规划
+# VIBE Agent Manager - 模块规划
 
 ## 已规划模块
 

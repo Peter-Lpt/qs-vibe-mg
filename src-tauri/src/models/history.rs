@@ -7,6 +7,9 @@ pub struct HistoryEntry {
     pub timestamp: String,
     pub action: HistoryAction,
     pub skill_id: String,
+    /// 受影响 skill 列表（批量/同步操作使用）；单条操作为空，回退到 `skill_id`
+    #[serde(default)]
+    pub skill_ids: Vec<String>,
     pub agent_id: Option<String>,
     /// "symlink" | "junction" | "copy"
     pub mode: Option<String>,

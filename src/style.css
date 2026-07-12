@@ -143,18 +143,6 @@ body {
   outline-offset: 2px;
 }
 
-/* Skeleton shimmer animation */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-.skeleton {
-  background: linear-gradient(90deg, var(--c-surface-hover) 25%, var(--c-surface-active) 50%, var(--c-surface-hover) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: var(--radius-sm);
-}
-
 /* Transition helper */
 .fade-enter-active,
 .fade-leave-active {
@@ -209,23 +197,6 @@ button {
 .card-hover:hover {
   border-color: var(--c-primary);
   box-shadow: var(--shadow-sm);
-}
-
-.icon-btn {
-  background: transparent;
-  color: var(--c-text-secondary);
-}
-.icon-btn:hover {
-  background: var(--c-surface-hover);
-}
-
-.icon-btn-danger {
-  color: var(--c-text-tertiary);
-  background: transparent;
-}
-.icon-btn-danger:hover {
-  color: var(--c-danger);
-  background: var(--c-danger-light);
 }
 
 /* Input base styles */

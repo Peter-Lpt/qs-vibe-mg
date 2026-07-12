@@ -7,7 +7,14 @@ const { toasts, dismiss } = useToast();
 <template>
   <Teleport to="body">
     <div class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none" style="max-width: 360px;">
-      <TransitionGroup name="toast">
+      <TransitionGroup
+        enter-active-class="transition duration-200 ease-out"
+        leave-active-class="transition duration-150 ease-in"
+        enter-from-class="opacity-0 translate-x-10"
+        enter-to-class="opacity-100 translate-x-0"
+        leave-from-class="opacity-100 translate-x-0"
+        leave-to-class="opacity-0 translate-x-10"
+      >
         <div
           v-for="toast in toasts"
           :key="toast.id"
@@ -39,20 +46,3 @@ const { toasts, dismiss } = useToast();
     </div>
   </Teleport>
 </template>
-
-<style scoped>
-.toast-enter-active {
-  transition: all 0.2s ease-out;
-}
-.toast-leave-active {
-  transition: all 0.15s ease-in;
-}
-.toast-enter-from {
-  opacity: 0;
-  transform: translateX(40px);
-}
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(40px);
-}
-</style>

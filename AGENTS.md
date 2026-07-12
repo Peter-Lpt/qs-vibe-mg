@@ -34,7 +34,7 @@ $env:CARGO_HOME = "D:\environment\rust\.cargo"
 | `commands/` | Tauri IPC handlers; register new commands in `lib.rs` `invoke_handler` macro |
 | `models/` | Data types (serde Serialize/Deserialize) |
 | `parsers/` | SKILL.md YAML frontmatter parsing (serde_yaml) |
-| `errors.rs` | `VabError` enum — serialized as string for frontend via custom `Serialize` impl |
+| `errors.rs` | `VibeError` enum — serialized as string for frontend via custom `Serialize` impl |
 | `utils/` | `path.rs` (~ expansion), `config.rs` (JSON read/write), `fs.rs` (cross-platform symlinks + `copy_dir_all`), `history.rs` (undo/redo), `datetime.rs` (ISO 8601 formatting) |
 
 ### Vue frontend (`src/`)
@@ -69,7 +69,7 @@ Default paths: `~/.claude/skills/`, `~/.hermes/skills/` (Windows: `%LOCALAPPDATA
 ## Conventions
 
 - **Language**: UI text must be i18n-compatible. Add keys to all three locale files (`zh.json`, `en.json`, `zh-TW.json`)
-- **Rust errors**: Use `VabError` enum. Add variant to `errors.rs`, it auto-serializes to string for frontend
+- **Rust errors**: Use `VibeError` enum. Add variant to `errors.rs`, it auto-serializes to string for frontend
 - **Frontend state**: All backend calls go through Pinia stores, not directly from components
 - **SKILL.md format**: YAML frontmatter (`---` delimiters) with `name`, `description`, optional `license`, `compatibility`, `metadata` fields
 - **Package manager**: pnpm only (not npm/yarn)

@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import type { TabId } from "../types";
 
 export type ThemeMode = "system" | "light" | "dark";
@@ -73,6 +74,23 @@ export const useAppStore = defineStore("app", () => {
       });
   }
 
+  // 数据管理：导出/导入配置（后端调用统一收口到 store）
+  async function exportData(): Promise<string> {
+    return await invoke<string>("export_data");
+  }
+
+  async function readFileFromPath(path: string): Promise<string> {
+    return await invoke<string>("read_file_from_path", { path });
+  }
+
+  async function writeFileToPath(path: string, content: string): Promise<void> {
+    await invoke("write_file_to_path", { path, content });
+  }
+
+  async function importData(json: string): Promise<void> {
+    await invoke("import_data", { json });
+  }
+
   return {
     theme,
     locale,
@@ -83,5 +101,9 @@ export const useAppStore = defineStore("app", () => {
     setLocale,
     setActiveTab,
     init,
+    exportData,
+    readFileFromPath,
+    writeFileToPath,
+    importData,
   };
 });

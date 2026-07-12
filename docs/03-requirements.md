@@ -1,4 +1,4 @@
-# VAB Skills Manager v0.1 - 开发需求清单
+# VIBE Skills Manager v0.1 - 开发需求清单
 
 > 从实施计划中提取的当前版本待开发需求，按优先级排列。
 > 与 docs/v0.1/01-plan.md 保持同步。

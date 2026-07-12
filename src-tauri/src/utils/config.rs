@@ -2,7 +2,7 @@ use std::fs;
 
 use serde::{Deserialize, Serialize};
 
-use crate::errors::VabError;
+use crate::errors::VibeError;
 use crate::models::agent::Agent;
 use crate::utils::path::{expand_tilde, vibe_skills_dir};
 
@@ -167,7 +167,7 @@ fn hermes_skills_dir() -> String {
 }
 
 /// 读取配置文件，不存在则返回默认配置
-pub fn load_config() -> Result<Config, VabError> {
+pub fn load_config() -> Result<Config, VibeError> {
     let config_path = vibe_skills_dir()?.join(CONFIG_FILE);
 
     if !config_path.exists() {
@@ -185,12 +185,12 @@ pub fn load_config() -> Result<Config, VabError> {
 
     let content = fs::read_to_string(&config_path)?;
     let config: Config =
-        serde_json::from_str(&content).map_err(|e| VabError::Config(e.to_string()))?;
+        serde_json::from_str(&content).map_err(|e| VibeError::Config(e.to_string()))?;
     Ok(config)
 }
 
 /// 保存配置文件
-pub fn save_config(config: &Config) -> Result<(), VabError> {
+pub fn save_config(config: &Config) -> Result<(), VibeError> {
     let dir = vibe_skills_dir()?;
     if !dir.exists() {
         fs::create_dir_all(&dir)?;
@@ -198,13 +198,13 @@ pub fn save_config(config: &Config) -> Result<(), VabError> {
 
     let config_path = dir.join(CONFIG_FILE);
     let content =
-        serde_json::to_string_pretty(config).map_err(|e| VabError::Config(e.to_string()))?;
+        serde_json::to_string_pretty(config).map_err(|e| VibeError::Config(e.to_string()))?;
     fs::write(&config_path, content)?;
     Ok(())
 }
 
 /// 从配置构建 Agent 列表（检测是否已安装）
-pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VabError> {
+pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VibeError> {
     let mut agents = Vec::new();
 
     for ac in &config.agents {

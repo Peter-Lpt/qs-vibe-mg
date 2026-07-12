@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
-use crate::errors::VabError;
+use crate::errors::VibeError;
 
 /// 获取 vibe-skills 目录路径（可配置）
-pub fn vibe_skills_dir() -> Result<PathBuf, VabError> {
+pub fn vibe_skills_dir() -> Result<PathBuf, VibeError> {
     let default_dir = default_vibe_skills_dir()?;
     let config_path = default_dir.join(".vibe-config.json");
 
@@ -18,14 +18,14 @@ pub fn vibe_skills_dir() -> Result<PathBuf, VabError> {
 }
 
 /// 从配置文件读取 vibe_skills_path 字段
-fn read_vibe_skills_path_from_config(config_path: &std::path::Path) -> Result<Option<String>, VabError> {
+fn read_vibe_skills_path_from_config(config_path: &std::path::Path) -> Result<Option<String>, VibeError> {
     if !config_path.exists() {
         return Ok(None);
     }
 
     let content = std::fs::read_to_string(config_path)?;
     let config: serde_json::Value =
-        serde_json::from_str(&content).map_err(|e| VabError::Config(e.to_string()))?;
+        serde_json::from_str(&content).map_err(|e| VibeError::Config(e.to_string()))?;
 
     Ok(config
         .get("vibe_skills_path")
@@ -34,17 +34,17 @@ fn read_vibe_skills_path_from_config(config_path: &std::path::Path) -> Result<Op
 }
 
 /// 默认的 vibe-skills 目录路径（~/.vibe-skills/）
-fn default_vibe_skills_dir() -> Result<PathBuf, VabError> {
+fn default_vibe_skills_dir() -> Result<PathBuf, VibeError> {
     let home = dirs::home_dir()
-        .ok_or_else(|| VabError::Path("Cannot determine home directory".to_string()))?;
+        .ok_or_else(|| VibeError::Path("Cannot determine home directory".to_string()))?;
     Ok(home.join(".vibe-skills"))
 }
 
 /// 展开 ~ 为用户主目录
-pub fn expand_tilde(path: &str) -> Result<PathBuf, VabError> {
+pub fn expand_tilde(path: &str) -> Result<PathBuf, VibeError> {
     if path.starts_with("~/") || path.starts_with("~\\") {
         let home = dirs::home_dir()
-            .ok_or_else(|| VabError::Path("Cannot determine home directory".to_string()))?;
+            .ok_or_else(|| VibeError::Path("Cannot determine home directory".to_string()))?;
         Ok(home.join(&path[2..]))
     } else {
         Ok(PathBuf::from(path))

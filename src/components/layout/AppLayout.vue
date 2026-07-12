@@ -32,13 +32,13 @@ const appStore = useAppStore();
 
       <div class="ml-auto flex items-center gap-1">
         <button
-          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer icon-btn"
+          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer bg-transparent text-[var(--c-text-secondary)] hover:bg-[var(--c-surface-hover)]"
           @click="appStore.setTheme(appStore.resolvedTheme === 'dark' ? 'light' : 'dark')"
         >
           {{ appStore.resolvedTheme === 'dark' ? '☀️' : '🌙' }}
         </button>
         <button
-          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer icon-btn"
+          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer bg-transparent text-[var(--c-text-secondary)] hover:bg-[var(--c-surface-hover)]"
           @click="appStore.showSettings = true"
           :title="t('app.settings')"
         >

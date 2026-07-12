@@ -1,7 +1,7 @@
-use crate::errors::VabError;
+use crate::errors::VibeError;
 
 #[tauri::command]
-pub fn log_message(level: String, message: String) -> Result<(), VabError> {
+pub fn log_message(level: String, message: String) -> Result<(), VibeError> {
     match level.as_str() {
         "error" => tracing::error!(target: "frontend", "{}", message),
         "warn" => tracing::warn!(target: "frontend", "{}", message),

@@ -1,4 +1,4 @@
-# VAB Skills Manager v0.0 - 先行版实施计划
+# VIBE Skills Manager v0.0 - 先行版实施计划
 
 > 版本: v0.0 | 更新: 2026-06-27
 > 最小可用版本：Skill 展示 + Symlink 管理，架构骨架完整，后续版本在此基础上扩展。
@@ -171,7 +171,7 @@ pub struct Agent {
 ### F06 Dashboard 界面
 ```
 ┌──────────────────────────────────────────────────────┐
-│  VAB Skills Manager                          v0.0    │
+│  VIBE Skills Manager                          v0.0    │
 ├────────────────────────┬─────────────────────────────┤
 │ Skills (3)             │ Agents (2/7)                 │
 │                        │                              │
@@ -202,16 +202,16 @@ pub struct Agent {
 ```rust
 // v0.0 实际暴露的命令
 #[tauri::command]
-fn list_skills() -> Result<Vec<Skill>, VabError>  // 扫描所有目录，合并去重
+fn list_skills() -> Result<Vec<Skill>, VibeError>  // 扫描所有目录，合并去重
 
 #[tauri::command]
-fn list_agents() -> Result<Vec<Agent>, VabError>
+fn list_agents() -> Result<Vec<Agent>, VibeError>
 
 #[tauri::command]
-fn create_link(skill_id: String, agent_id: String) -> Result<(), VabError>
+fn create_link(skill_id: String, agent_id: String) -> Result<(), VibeError>
 
 #[tauri::command]
-fn remove_link(skill_id: String, agent_id: String) -> Result<(), VabError>
+fn remove_link(skill_id: String, agent_id: String) -> Result<(), VibeError>
 ```
 
 > v0.1 在此基础上追加：install_skill、delete_skill、preview_skill、batch_link、undo、redo 等。
@@ -222,7 +222,7 @@ fn remove_link(skill_id: String, agent_id: String) -> Result<(), VabError>
 
 ```rust
 #[derive(Debug, Error)]
-pub enum VabError {
+pub enum VibeError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -282,7 +282,7 @@ Step 1: 项目初始化 ✅
 
 Step 2: Rust 后端骨架 ✅
   - 定义 models（Skill、SkillSource、Agent）
-  - 定义 errors（VabError）
+  - 定义 errors（VibeError）
   - 实现 parsers/skill_md.rs（frontmatter 解析）
   - 实现 utils/（path.rs、fs.rs、config.rs）
   - 实现 commands/（skills、agents、sync）

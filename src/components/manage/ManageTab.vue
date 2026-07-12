@@ -44,24 +44,12 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ── Skill 多选 ──────────────────────────────────────
 const selectedSkills = ref<Set<string>>(new Set());
-const lastClickedIndex = ref<number>(-1);
 
-function toggleSkillSelect(skillId: string, index?: number, shiftKey = false) {
+function toggleSkillSelect(skillId: string) {
   const newSet = new Set(selectedSkills.value);
-  if (shiftKey && lastClickedIndex.value >= 0 && index !== undefined) {
-    // Shift+click 范围选择
-    const start = Math.min(lastClickedIndex.value, index);
-    const end = Math.max(lastClickedIndex.value, index);
-    const visibleIds = displaySkills.value.map((s) => s.id);
-    for (let i = start; i <= end; i++) {
-      newSet.add(visibleIds[i]);
-    }
-  } else {
-    if (newSet.has(skillId)) newSet.delete(skillId);
-    else newSet.add(skillId);
-  }
+  if (newSet.has(skillId)) newSet.delete(skillId);
+  else newSet.add(skillId);
   selectedSkills.value = newSet;
-  if (index !== undefined) lastClickedIndex.value = index;
 }
 
 function selectAllSkills() {
@@ -542,7 +530,14 @@ const chipGroups = computed(() => {
     </div>
 
     <!-- 浮动批量操作栏 -->
-    <Transition name="slide-up">
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      leave-active-class="transition duration-200 ease-in"
+      enter-from-class="translate-y-full opacity-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-from-class="translate-y-0 opacity-100"
+      leave-to-class="translate-y-full opacity-0"
+    >
       <div
         v-if="selectedSkills.size > 0"
         class="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-2.5 rounded-lg shadow-lg"
@@ -603,20 +598,3 @@ const chipGroups = computed(() => {
     />
   </div>
 </template>
-
-<style scoped>
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-.slide-up-enter-from,
-.slide-up-leave-to {
-  transform: translate(-50%, 100%);
-  opacity: 0;
-}
-.slide-up-enter-to,
-.slide-up-leave-from {
-  transform: translate(-50%, 0);
-  opacity: 1;
-}
-</style>

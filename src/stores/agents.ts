@@ -56,7 +56,7 @@ export const useAgentsStore = defineStore("agents", () => {
     }
   }
 
-  async function setVabSkillsPath(newPath: string, migrate: boolean) {
+  async function setVibeSkillsPath(newPath: string, migrate: boolean) {
     try {
       await invoke("set_vibe_skills_path", { newPath, migrate });
       await fetchAgents();
@@ -74,6 +74,6 @@ export const useAgentsStore = defineStore("agents", () => {
     addCustomAgent,
     updateAgent,
     removeCustomAgent,
-    setVabSkillsPath,
+    setVibeSkillsPath,
   };
 });

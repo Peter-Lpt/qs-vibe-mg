@@ -1,4 +1,4 @@
-use crate::errors::VabError;
+use crate::errors::VibeError;
 use crate::models::agent::Agent;
 use crate::models::sync::SkillsTreeNode;
 use crate::utils::config::{build_agents_from_config, load_config, save_config, AgentConfig};
@@ -8,13 +8,13 @@ use std::fs;
 use std::path::Path;
 
 #[tauri::command]
-pub fn list_agents() -> Result<Vec<Agent>, VabError> {
+pub fn list_agents() -> Result<Vec<Agent>, VibeError> {
     let config = load_config()?;
     build_agents_from_config(&config)
 }
 
 #[tauri::command]
-pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VabError> {
+pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VibeError> {
     let mut config = load_config()?;
 
     let id = name
@@ -24,11 +24,11 @@ pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VabEr
         .to_string();
 
     if id.is_empty() {
-        return Err(VabError::Config("Invalid agent name".to_string()));
+        return Err(VibeError::Config("Invalid agent name".to_string()));
     }
 
     if config.agents.iter().any(|a| a.id == id) {
-        return Err(VabError::Config(format!(
+        return Err(VibeError::Config(format!(
             "Agent with id '{}' already exists",
             id
         )));
@@ -64,14 +64,14 @@ pub fn update_agent(
     agent_id: String,
     name: Option<String>,
     skills_dir: Option<String>,
-) -> Result<Agent, VabError> {
+) -> Result<Agent, VibeError> {
     let mut config = load_config()?;
 
     let agent_config = config
         .agents
         .iter_mut()
         .find(|a| a.id == agent_id)
-        .ok_or_else(|| VabError::AgentNotFound {
+        .ok_or_else(|| VibeError::AgentNotFound {
             agent_id: agent_id.clone(),
         })?;
 
@@ -89,18 +89,18 @@ pub fn update_agent(
     agents
         .into_iter()
         .find(|a| a.id == agent_id)
-        .ok_or_else(|| VabError::AgentNotFound { agent_id })
+        .ok_or_else(|| VibeError::AgentNotFound { agent_id })
 }
 
 #[tauri::command]
-pub fn remove_custom_agent(agent_id: String) -> Result<(), VabError> {
+pub fn remove_custom_agent(agent_id: String) -> Result<(), VibeError> {
     let mut config = load_config()?;
 
     let idx = config
         .agents
         .iter()
         .position(|a| a.id == agent_id && !a.auto_detected)
-        .ok_or_else(|| VabError::AgentNotFound {
+        .ok_or_else(|| VibeError::AgentNotFound {
             agent_id: agent_id.clone(),
         })?;
 
@@ -111,13 +111,13 @@ pub fn remove_custom_agent(agent_id: String) -> Result<(), VabError> {
 }
 
 #[tauri::command]
-pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VabError> {
+pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VibeError> {
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
     let agent = agents
         .iter()
         .find(|a| a.id == agent_id)
-        .ok_or_else(|| VabError::AgentNotFound {
+        .ok_or_else(|| VibeError::AgentNotFound {
             agent_id: agent_id.clone(),
         })?;
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "QS-Vab",
+  "productName": "QS-Vibe",
   "version": "0.1.0",
   "identifier": "com.qs.vibe-manager",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "QS-Vab 管理",
+        "title": "QS-Vibe 管理",
         "width": 1100,
         "height": 720,
         "resizable": true,

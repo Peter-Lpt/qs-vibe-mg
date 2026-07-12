@@ -1,4 +1,4 @@
-# VAB Skills Manager - 实施计划
+# VIBE Skills Manager - 实施计划
 
 > 版本: v0.1 | 更新: 2026-06-27
 > 基于 Agent Skills 开放标准（agentskills.io）构建的跨 Agent Skill 统一管理工具
@@ -405,7 +405,7 @@ enum SymlinkCapability {
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum VabError {
+pub enum VibeError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -505,7 +505,7 @@ pub enum FrontendError {
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  🛠 VAB Skills Manager        [🌐 中文▾] [🌙] [⚙ 设置]     │
+│  🛠 VIBE Skills Manager        [🌐 中文▾] [🌙] [⚙ 设置]     │
 ├────────────────────────────────┬─────────────────────────────┤
 │ Skills 统一库                   │ Agent 关联面板              │
 │                                  │                             │
@@ -600,7 +600,7 @@ pub enum FrontendError {
 
 ```rust
 use serde::{Deserialize, Serialize};
-use crate::errors::VabError;
+use crate::errors::VibeError;
 
 #[derive(Debug, Deserialize, Serialize)]
 struct SkillFrontmatter {
@@ -615,11 +615,11 @@ struct SkillFrontmatter {
 }
 
 /// 解析 SKILL.md，返回 frontmatter 和 body
-fn parse_skill_md(content: &str) -> Result<(SkillFrontmatter, String), VabError> {
+fn parse_skill_md(content: &str) -> Result<(SkillFrontmatter, String), VibeError> {
     // 找到第一个 --- 和第二个 ---
     let trimmed = content.trim_start();
     if !trimmed.starts_with("---") {
-        return Err(VabError::InvalidSkillMd {
+        return Err(VibeError::InvalidSkillMd {
             reason: "Missing frontmatter opening delimiter".into(),
         });
     }
@@ -631,7 +631,7 @@ fn parse_skill_md(content: &str) -> Result<(SkillFrontmatter, String), VabError>
     let second_delim = after_first
         .find("\n---")
         .or_else(|| after_first.find("\r\n---"))
-        .ok_or_else(|| VabError::InvalidSkillMd {
+        .ok_or_else(|| VibeError::InvalidSkillMd {
             reason: "Missing frontmatter closing delimiter".into(),
         })?;
 
@@ -642,7 +642,7 @@ fn parse_skill_md(content: &str) -> Result<(SkillFrontmatter, String), VabError>
     let body = content[content.len() - (trimmed.len() - 3 - second_delim - 4)..].trim();
 
     let frontmatter: SkillFrontmatter = serde_yaml::from_str(yaml_part)
-        .map_err(|e| VabError::InvalidSkillMd {
+        .map_err(|e| VibeError::InvalidSkillMd {
             reason: format!("YAML parse error: {}", e),
         })?;
 
@@ -653,24 +653,24 @@ fn parse_skill_md(content: &str) -> Result<(SkillFrontmatter, String), VabError>
 }
 
 /// 验证 skill name 符合 Agent Skills 标准
-fn validate_skill_name(name: &str) -> Result<(), VabError> {
+fn validate_skill_name(name: &str) -> Result<(), VibeError> {
     if name.is_empty() || name.len() > 64 {
-        return Err(VabError::InvalidSkillMd {
+        return Err(VibeError::InvalidSkillMd {
             reason: format!("Name must be 1-64 characters, got {}", name.len()),
         });
     }
     if name.starts_with('-') || name.ends_with('-') {
-        return Err(VabError::InvalidSkillMd {
+        return Err(VibeError::InvalidSkillMd {
             reason: "Name cannot start or end with hyphen".into(),
         });
     }
     if name.contains("--") {
-        return Err(VabError::InvalidSkillMd {
+        return Err(VibeError::InvalidSkillMd {
             reason: "Name cannot contain consecutive hyphens".into(),
         });
     }
     if !name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
-        return Err(VabError::InvalidSkillMd {
+        return Err(VibeError::InvalidSkillMd {
             reason: "Name must contain only lowercase letters, digits, and hyphens".into(),
         });
     }
@@ -857,7 +857,7 @@ tracing_subscriber::fmt()
 ```json
 {
   "app": {
-    "title": "VAB Skills 管理器",
+    "title": "VIBE Skills 管理器",
     "settings": "设置",
     "loading": "加载中...",
     "error": "错误"
@@ -999,11 +999,11 @@ impl OperationLock {
         Self { inner: Mutex::new(()) }
     }
 
-    pub fn with_lock<F, R>(&self, f: F) -> Result<R, VabError>
+    pub fn with_lock<F, R>(&self, f: F) -> Result<R, VibeError>
     where
-        F: FnOnce() -> Result<R, VabError>,
+        F: FnOnce() -> Result<R, VibeError>,
     {
-        let _guard = self.inner.lock().map_err(|_| VabError::LockPoisoned)?;
+        let _guard = self.inner.lock().map_err(|_| VibeError::LockPoisoned)?;
         f()
     }
 }

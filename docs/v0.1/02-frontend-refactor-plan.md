@@ -1,4 +1,4 @@
-# QS-Vab 前端重构计划
+# QS-Vibe 前端重构计划
 
 > 版本: v0.1 | 更新: 2026-06-27
 > 状态: 执行中
@@ -24,7 +24,7 @@
 按功能模块划分为 4 个独立子页面，统一放在「Skill 管理」大页签下：
 
 ```
-QS-Vab 管理
+QS-Vibe 管理
 └── Skill 管理（Tab 页签）
     ├── CLI 管理      — 发现、添加、配置 CLI 工具
     ├── Skill 列表     — 搜索、预览、管理所有 skill
@@ -104,7 +104,7 @@ struct AgentConfig {
 **搜索增强**：
 ```rust
 #[tauri::command]
-pub fn search_skills(query: String) -> Result<Vec<Skill>, VabError> {
+pub fn search_skills(query: String) -> Result<Vec<Skill>, VibeError> {
     // 1. 扫描所有 skill
     // 2. 匹配条件：name contains query OR SKILL.md body contains query
     // 3. 返回匹配的 skill 列表
@@ -187,7 +187,7 @@ interface SharedSkillInfo {
 **Rust 新增命令**：
 ```rust
 #[tauri::command]
-pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
+pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
     // 1. 获取所有 agent 及其 skills
     // 2. 计算共享 skill（出现在多个 agent 中）
     // 3. 返回统计数据
@@ -265,24 +265,24 @@ struct SkillsTreeNode {
 }
 
 #[tauri::command]
-pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VabError> {
+pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VibeError> {
     // 扫描 agent 的 skills 目录，构建层级结构
     // 检查每个节点是否已同步到 vibe-skills
 }
 
 #[tauri::command]
-pub fn sync_agent_to_vibe(agent_id: String) -> Result<SyncResult, VabError> {
+pub fn sync_agent_to_vibe(agent_id: String) -> Result<SyncResult, VibeError> {
     // 将 agent 所有 skills 创建软连接到 ~/.vibe-skills/{agent_id}/
     // 保持原始目录结构
 }
 
 #[tauri::command]
-pub fn sync_category_to_vibe(agent_id: String, category_path: String) -> Result<SyncResult, VabError> {
+pub fn sync_category_to_vibe(agent_id: String, category_path: String) -> Result<SyncResult, VibeError> {
     // 将 agent 的特定分类 skills 创建软连接到 ~/.vibe-skills/{agent_id}/{category}/
 }
 
 #[tauri::command]
-pub fn remove_sync(agent_id: String, path: Option<String>) -> Result<(), VabError> {
+pub fn remove_sync(agent_id: String, path: Option<String>) -> Result<(), VibeError> {
     // 移除软连接
     // path=None → 移除整个 agent 的同步
     // path=Some("github") → 移除特定分类的同步
@@ -468,8 +468,8 @@ interface AgentsState {
   // ...existing
   updateAgent(agentId: string, updates: Partial<Agent>): Promise<void>;
   getSkillsTree(agentId: string): Promise<void>;
-  syncAgentToVab(agentId: string): Promise<void>;
-  syncCategoryToVab(agentId: string, category: string): Promise<void>;
+  syncAgentToVibe(agentId: string): Promise<void>;
+  syncCategoryToVibe(agentId: string, category: string): Promise<void>;
   removeSync(agentId: string, path?: string): Promise<void>;
 }
 ```
@@ -559,7 +559,7 @@ interface SyncResult {
 ```json
 {
   "app": {
-    "title": "QS-Vab 管理"
+    "title": "QS-Vibe 管理"
   },
   "tabs": {
     "cli": "CLI 管理",

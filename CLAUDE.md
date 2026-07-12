@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-VAB Skills Manager — a cross-platform desktop app for managing AI coding agent skills (Claude Code, Hermes, Pi Agent, OpenCode, Codex CLI, MiMo Code, shared agents) via a unified library at `~/.vibe-skills/`. Skills are linked to agent directories through symlinks. Follows the [Agent Skills open standard](https://agentskills.io).
+VIBE Skills Manager — a cross-platform desktop app for managing AI coding agent skills (Claude Code, Hermes, Pi Agent, OpenCode, Codex CLI, MiMo Code, shared agents) via a unified library at `~/.vibe-skills/`. Skills are linked to agent directories through symlinks. Follows the [Agent Skills open standard](https://agentskills.io).
 
 ## Tech Stack
 
@@ -35,7 +35,7 @@ pnpm tauri build      # Production build
 commands/     Tauri command handlers (skills, sync, agents, history, config)
 models/       Data types (skill, agent, history)
 parsers/      SKILL.md frontmatter parsing (serde_yaml)
-errors.rs     VabError enum — serialized to string for frontend
+errors.rs     VibeError enum — serialized to string for frontend
 utils/        fs, config, path, history helpers
 ```
 

@@ -1,4 +1,4 @@
-# QS-Vab 管理
+# QS-Vibe 管理
 
 跨平台 AI Agent Skill 统一管理工具，基于 [Agent Skills](https://agentskills.io) 开放标准构建。
 

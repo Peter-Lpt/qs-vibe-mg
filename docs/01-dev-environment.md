@@ -1,4 +1,4 @@
-# VAB Skills Manager - 开发环境搭建指南
+# VIBE Skills Manager - 开发环境搭建指南
 
 ## 环境要求
 

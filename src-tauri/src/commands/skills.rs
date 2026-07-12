@@ -2,10 +2,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use sha2::{Digest, Sha256};
 use tracing::warn;
 
-use crate::errors::VabError;
+use crate::errors::VibeError;
 use crate::models::dashboard::{
     DashboardAgent, DashboardData, DashboardSkill, DashboardStats, SharedSkillInfo,
 };
@@ -19,51 +18,9 @@ use crate::utils::history::record_action;
 use crate::utils::path::vibe_skills_dir;
 use crate::models::history::HistoryAction;
 
-/// 计算目录内容的 SHA-256 hex hash（递归哈希所有文件）
-fn content_hash(dir: &Path) -> String {
-    if !dir.exists() {
-        return String::new();
-    }
-
-    let mut hasher = Sha256::new();
-    hash_directory_recursive(dir, &mut hasher);
-    format!("{:x}", hasher.finalize())
-}
-
-/// 递归哈希目录中的所有文件
-fn hash_directory_recursive(dir: &Path, hasher: &mut Sha256) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-
-    let mut sorted_entries: Vec<_> = entries.filter_map(|e| e.ok()).collect();
-    sorted_entries.sort_by_key(|e| e.file_name());
-
-    for entry in sorted_entries {
-        let path = entry.path();
-        let name = entry.file_name();
-
-        if path.is_dir() {
-            // 哈希目录名 + 递归
-            hasher.update(b"dir:");
-            let name_str = name.to_string_lossy();
-            hasher.update(name_str.as_bytes());
-            hasher.update(b"\n");
-            hash_directory_recursive(&path, hasher);
-        } else if let Ok(content) = fs::read(&path) {
-            // 哈希文件名 + 内容
-            hasher.update(b"file:");
-            let name_str = name.to_string_lossy();
-            hasher.update(name_str.as_bytes());
-            hasher.update(b":");
-            hasher.update(&content);
-            hasher.update(b"\n");
-        }
-    }
-}
 
 #[tauri::command]
-pub fn list_skills() -> Result<Vec<Skill>, VabError> {
+pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
     let mut map: HashMap<String, SkillEntry> = HashMap::new();
 
     let vibe_dir = vibe_skills_dir()?;
@@ -153,7 +110,7 @@ pub fn list_skills() -> Result<Vec<Skill>, VabError> {
 }
 
 #[tauri::command]
-pub fn search_skills(query: String) -> Result<Vec<Skill>, VabError> {
+pub fn search_skills(query: String) -> Result<Vec<Skill>, VibeError> {
     let all_skills = list_skills()?;
     if query.trim().is_empty() {
         return Ok(all_skills);
@@ -173,7 +130,7 @@ pub fn search_skills(query: String) -> Result<Vec<Skill>, VabError> {
 }
 
 #[tauri::command]
-pub fn detect_issues() -> Result<Vec<SkillIssue>, VabError> {
+pub fn detect_issues() -> Result<Vec<SkillIssue>, VibeError> {
     let skills = list_skills()?;
     let mut issues = Vec::new();
 
@@ -224,7 +181,7 @@ pub fn detect_issues() -> Result<Vec<SkillIssue>, VabError> {
 }
 
 #[tauri::command]
-pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
+pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
     let vibe_dir = vibe_skills_dir()?;
@@ -242,7 +199,7 @@ pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
         }
 
         let mut skills = Vec::new();
-        collect_skills_recursive(skills_dir, skills_dir, &mut skills, &mut all_skill_agents, &agent.id, &vibe_dir);
+        collect_skills_recursive(skills_dir, &mut skills, &mut all_skill_agents, &agent.id, &vibe_dir);
 
         agent_skills.insert(agent.id.clone(), skills);
     }
@@ -324,7 +281,7 @@ pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
             0,
             DashboardAgent {
                 agent_id: "vibe-lib".to_string(),
-                agent_name: "VAB Library".to_string(),
+                agent_name: "VIBE Library".to_string(),
                 skill_count: vibe_skills.len(),
                 skills: vibe_skills,
             },
@@ -345,7 +302,6 @@ pub fn get_dashboard_data() -> Result<DashboardData, VabError> {
 }
 
 fn collect_skills_recursive(
-    base_dir: &Path,
     dir: &Path,
     skills: &mut Vec<(String, String)>,
     all_skill_agents: &mut HashMap<String, Vec<String>>,
@@ -388,7 +344,7 @@ fn collect_skills_recursive(
                     .push(agent_id.to_string());
                 skills.push((id, skill_name));
             } else {
-                collect_skills_recursive(base_dir, &path, skills, all_skill_agents, agent_id, vibe_dir);
+                collect_skills_recursive(&path, skills, all_skill_agents, agent_id, vibe_dir);
             }
         }
     }
@@ -440,11 +396,11 @@ fn collect_vibe_skills(
 }
 
 #[tauri::command]
-pub fn preview_skill(skill_id: String) -> Result<String, VabError> {
+pub fn preview_skill(skill_id: String) -> Result<String, VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let vibe_path = vibe_dir.join(&skill_id).join("SKILL.md");
     if vibe_path.exists() {
-        return fs::read_to_string(&vibe_path).map_err(VabError::Io);
+        return fs::read_to_string(&vibe_path).map_err(VibeError::Io);
     }
 
     let config = load_config()?;
@@ -455,22 +411,22 @@ pub fn preview_skill(skill_id: String) -> Result<String, VabError> {
         }
         let agent_path = Path::new(&agent.skills_dir).join(&skill_id).join("SKILL.md");
         if agent_path.exists() {
-            return fs::read_to_string(&agent_path).map_err(VabError::Io);
+            return fs::read_to_string(&agent_path).map_err(VibeError::Io);
         }
         if let Ok(content) = find_skill_md_recursive(&Path::new(&agent.skills_dir), &skill_id) {
             return Ok(content);
         }
     }
 
-    Err(VabError::SkillNotFound { skill_id })
+    Err(VibeError::SkillNotFound { skill_id })
 }
 
 /// 按路径预览 SKILL.md 内容
 #[tauri::command]
-pub fn preview_skill_at_path(path: String) -> Result<String, VabError> {
+pub fn preview_skill_at_path(path: String) -> Result<String, VibeError> {
     let skill_path = Path::new(&path);
     if !skill_path.exists() {
-        return Err(VabError::SkillNotFound { skill_id: path });
+        return Err(VibeError::SkillNotFound { skill_id: path });
     }
 
     let skill_md_path = if skill_path.join("SKILL.md").exists() {
@@ -479,10 +435,10 @@ pub fn preview_skill_at_path(path: String) -> Result<String, VabError> {
         skill_path.to_path_buf()
     };
 
-    fs::read_to_string(&skill_md_path).map_err(VabError::Io)
+    fs::read_to_string(&skill_md_path).map_err(VibeError::Io)
 }
 
-fn find_skill_md_recursive(dir: &Path, skill_id: &str) -> Result<String, VabError> {
+fn find_skill_md_recursive(dir: &Path, skill_id: &str) -> Result<String, VibeError> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -496,7 +452,7 @@ fn find_skill_md_recursive(dir: &Path, skill_id: &str) -> Result<String, VabErro
         if name == skill_id {
             let skill_md = path.join("SKILL.md");
             if skill_md.exists() {
-                return fs::read_to_string(&skill_md).map_err(VabError::Io);
+                return fs::read_to_string(&skill_md).map_err(VibeError::Io);
             }
         }
         if name.starts_with('.') {
@@ -506,23 +462,23 @@ fn find_skill_md_recursive(dir: &Path, skill_id: &str) -> Result<String, VabErro
             return Ok(content);
         }
     }
-    Err(VabError::SkillNotFound {
+    Err(VibeError::SkillNotFound {
         skill_id: skill_id.to_string(),
     })
 }
 
 #[tauri::command]
-pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
+pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
     let source = Path::new(&source_path);
     if !source.exists() {
-        return Err(VabError::InvalidSkillMd {
+        return Err(VibeError::InvalidSkillMd {
             reason: format!("Source path does not exist: {}", source_path),
         });
     }
 
     let skill_md = source.join("SKILL.md");
     if !skill_md.exists() {
-        return Err(VabError::InvalidSkillMd {
+        return Err(VibeError::InvalidSkillMd {
             reason: "Source directory does not contain SKILL.md".to_string(),
         });
     }
@@ -534,7 +490,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
     let dest = vibe_dir.join(&name);
 
     if dest.exists() {
-        return Err(VabError::SkillAlreadyExists { skill_id: name });
+        return Err(VibeError::SkillAlreadyExists { skill_id: name });
     }
 
     copy_dir_all(source, &dest)?;
@@ -544,7 +500,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
     }
 
     let modified_at = get_modified_at(&dest);
-    let hash = content_hash(&dest);
+    let hash = crate::utils::hash::dir_hash(&dest);
 
     Ok(Skill {
         id: name.clone(),
@@ -576,12 +532,12 @@ pub fn install_skill(source_path: String) -> Result<Skill, VabError> {
 }
 
 #[tauri::command]
-pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
+pub fn delete_skill(skill_id: String) -> Result<(), VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let skill_path = vibe_dir.join(&skill_id);
 
     if !skill_path.exists() {
-        return Err(VabError::SkillNotFound { skill_id });
+        return Err(VibeError::SkillNotFound { skill_id });
     }
 
     let trash_dir = vibe_dir.join(".trash").join(&skill_id);
@@ -609,13 +565,13 @@ pub fn delete_skill(skill_id: String) -> Result<(), VabError> {
 }
 
 /// Restore a deleted skill from trash snapshot
-pub fn restore_from_trash(skill_id: &str) -> Result<(), VabError> {
+pub fn restore_from_trash(skill_id: &str) -> Result<(), VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let trash_dir = vibe_dir.join(".trash").join(skill_id);
     let restore_to = vibe_dir.join(skill_id);
 
     if !trash_dir.exists() {
-        return Err(VabError::History(format!(
+        return Err(VibeError::History(format!(
             "No snapshot found for skill '{}'",
             skill_id
         )));
@@ -628,7 +584,7 @@ pub fn restore_from_trash(skill_id: &str) -> Result<(), VabError> {
 }
 
 /// Move a skill to trash (for redo of undo-delete)
-pub fn move_to_trash(skill_id: &str) -> Result<(), VabError> {
+pub fn move_to_trash(skill_id: &str) -> Result<(), VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let skill_path = vibe_dir.join(skill_id);
     let trash_dir = vibe_dir.join(".trash").join(skill_id);
@@ -667,7 +623,7 @@ fn scan_directory(
     source_id: &str,
     map: &mut HashMap<String, SkillEntry>,
     symlink_only: bool,
-) -> Result<(), VabError> {
+) -> Result<(), VibeError> {
     if !dir.exists() {
         return Ok(());
     }
@@ -710,7 +666,7 @@ fn scan_directory(
                 None
             };
 
-            let hash = content_hash(&path);
+            let hash = crate::utils::hash::dir_hash(&path);
 
             let source = SkillSource {
                 from: source_id.to_string(),

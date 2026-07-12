@@ -2,7 +2,7 @@ use std::io;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum VabError {
+pub enum VibeError {
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
 
@@ -61,7 +61,7 @@ pub enum VabError {
     },
 }
 
-impl serde::Serialize for VabError {
+impl serde::Serialize for VibeError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,

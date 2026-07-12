@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { invoke } from "@tauri-apps/api/core";
 import { useAppStore, type Locale, type ThemeMode } from "../../stores/app";
 import { useAgentsStore } from "../../stores/agents";
 import { open, save } from "@tauri-apps/plugin-dialog";
@@ -45,7 +44,7 @@ function handleLocaleChange(loc: Locale) {
   appStore.setLocale(loc);
 }
 
-async function pickVabPath() {
+async function pickVibePath() {
   try {
     const selected = await open({
       directory: true,
@@ -65,7 +64,7 @@ async function handleMigrate(migrate: boolean) {
   savingPath.value = true;
   pathError.value = null;
   try {
-    await agentsStore.setVabSkillsPath(pendingPath.value, migrate);
+    await agentsStore.setVibeSkillsPath(pendingPath.value, migrate);
     showMigrateConfirm.value = false;
     pendingPath.value = "";
   } catch (e: unknown) {
@@ -77,14 +76,13 @@ async function handleMigrate(migrate: boolean) {
 
 async function handleExport() {
   try {
-    const json = await invoke<string>("export_data");
+    const json = await appStore.exportData();
     const filePath = await save({
       defaultPath: "vibe-config-backup.json",
       filters: [{ name: "JSON", extensions: ["json"] }],
     });
     if (filePath) {
-      // Write file via Tauri fs - use invoke to write from backend
-      await invoke("write_file_to_path", { path: filePath, content: json });
+      await appStore.writeFileToPath(filePath, json);
       toast.show(t("settings.export_success"), "success");
     }
   } catch (e: unknown) {
@@ -99,8 +97,8 @@ async function handleImport() {
       filters: [{ name: "JSON", extensions: ["json"] }],
     });
     if (selected) {
-      const content = await invoke<string>("read_file_from_path", { path: selected });
-      await invoke("import_data", { json: content });
+      const content = await appStore.readFileFromPath(selected);
+      await appStore.importData(content);
       toast.show(t("settings.import_success"), "success");
     }
   } catch (e: unknown) {
@@ -185,7 +183,7 @@ async function handleImport() {
           <button
             class="w-full px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80 text-left"
             style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
-            @click="pickVabPath"
+            @click="pickVibePath"
           >
             {{ t('settings.pick_vibe_path') }}
           </button>

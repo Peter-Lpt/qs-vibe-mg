@@ -4,7 +4,7 @@ use std::path::Path;
 
 use serde_yaml::Value;
 
-use crate::errors::VabError;
+use crate::errors::VibeError;
 
 /// 解析 SKILL.md 文件，返回全部字段
 pub fn parse_skill_md_full(
@@ -18,9 +18,9 @@ pub fn parse_skill_md_full(
         Option<HashMap<String, String>>,
         String,
     ),
-    VabError,
+    VibeError,
 > {
-    let content = fs::read_to_string(path).map_err(|e| VabError::InvalidSkillMd {
+    let content = fs::read_to_string(path).map_err(|e| VibeError::InvalidSkillMd {
         reason: format!("Failed to read {}: {}", path.display(), e),
     })?;
 
@@ -39,13 +39,13 @@ fn parse_frontmatter_full(
         Option<HashMap<String, String>>,
         String,
     ),
-    VabError,
+    VibeError,
 > {
     let content = content.trim();
 
     // frontmatter 必须以 --- 开头
     if !content.starts_with("---") {
-        return Err(VabError::InvalidSkillMd {
+        return Err(VibeError::InvalidSkillMd {
             reason: "Missing frontmatter (must start with ---)".to_string(),
         });
     }
@@ -54,7 +54,7 @@ fn parse_frontmatter_full(
     let after_first = &content[3..];
     let end = after_first
         .find("---")
-        .ok_or_else(|| VabError::InvalidSkillMd {
+        .ok_or_else(|| VibeError::InvalidSkillMd {
             reason: "Missing closing --- in frontmatter".to_string(),
         })?;
 
@@ -69,14 +69,14 @@ fn parse_frontmatter_full(
     };
 
     // 解析 YAML
-    let value: Value = serde_yaml::from_str(yaml_str).map_err(|e| VabError::InvalidSkillMd {
+    let value: Value = serde_yaml::from_str(yaml_str).map_err(|e| VibeError::InvalidSkillMd {
         reason: format!("YAML parse error: {}", e),
     })?;
 
     let map = match value {
         Value::Mapping(m) => m,
         _ => {
-            return Err(VabError::InvalidSkillMd {
+            return Err(VibeError::InvalidSkillMd {
                 reason: "Frontmatter must be a YAML mapping".to_string(),
             });
         }

@@ -1,4 +1,4 @@
-# VAB Skills Manager - 文档索引
+# VIBE Skills Manager - 文档索引
 
 ## 通用文档
 
