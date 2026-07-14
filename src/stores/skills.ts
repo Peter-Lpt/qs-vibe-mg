@@ -10,7 +10,6 @@ export const useSkillsStore = defineStore("skills", () => {
   const error = ref<string | null>(null);
   const searchQuery = ref("");
   const searchResults = ref<Skill[]>([]);
-  const searching = ref(false);
   const dashboardData = ref<DashboardData | null>(null);
   const dashboardLoading = ref(false);
   const issues = ref<SkillIssue[]>([]);
@@ -29,29 +28,34 @@ export const useSkillsStore = defineStore("skills", () => {
     }
   }
 
-  /** 后台静默刷新，不显示 loading */
+  /** 后台静默刷新，不显示 loading（P3：防抖，避免快速连续操作触发多次全量重取） */
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null;
   async function refreshSkills() {
-    try {
-      skills.value = await invoke<Skill[]>("list_skills");
-    } catch (e: unknown) {
-      error.value = String(e);
-    }
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(async () => {
+      refreshTimer = null;
+      try {
+        skills.value = await invoke<Skill[]>("list_skills");
+      } catch (e: unknown) {
+        error.value = String(e);
+      }
+    }, 120);
   }
 
-  async function searchSkills(query: string) {
+  /** 本地搜索：直接过滤已加载的 skills，去掉后端 search_skills 往返（P3） */
+  function searchSkills(query: string) {
     searchQuery.value = query;
-    if (!query.trim()) {
+    const q = query.trim().toLowerCase();
+    if (!q) {
       searchResults.value = [];
       return;
     }
-    searching.value = true;
-    try {
-      searchResults.value = await invoke<Skill[]>("search_skills", { query });
-    } catch (e: unknown) {
-      error.value = String(e);
-    } finally {
-      searching.value = false;
-    }
+    searchResults.value = skills.value.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.description.toLowerCase().includes(q) ||
+        s.id.toLowerCase().includes(q)
+    );
   }
 
   async function getDashboardData() {
@@ -90,7 +94,10 @@ export const useSkillsStore = defineStore("skills", () => {
 
   async function installSkill(sourcePath: string): Promise<Skill> {
     const skill = await invoke<Skill>("install_skill", { sourcePath });
-    refreshSkills();
+    // P3：install_skill 已返回最新 Skill，本地原地更新而非整表重取
+    const i = skills.value.findIndex((s) => s.id === skill.id);
+    if (i >= 0) skills.value[i] = skill;
+    else skills.value.push(skill);
     return skill;
   }
 
@@ -143,7 +150,6 @@ export const useSkillsStore = defineStore("skills", () => {
     error,
     searchQuery,
     searchResults,
-    searching,
     dashboardData,
     dashboardLoading,
     issues,
