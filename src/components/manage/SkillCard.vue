@@ -5,7 +5,8 @@ import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
 import { useSkillAgentStatus, actionLabel, actionStyle } from "../../composables/useSkillAgentStatus";
 import type { Skill, Agent } from "../../types";
-import SkillRow from "./SkillRow.vue";
+import ConfirmDialog from "../common/ConfirmDialog.vue";
+import SkillDetail from "./SkillDetail.vue";
 
 const props = defineProps<{
   skill: Skill;
@@ -37,6 +38,8 @@ const isExpanded = computed({
   },
 });
 
+const showDeleteConfirm = ref(false);
+
 const cardBorderColor = computed(() => {
   if (props.skill.has_conflict) return "var(--c-warning)";
   if (props.skill.has_dangling) return "var(--c-danger)";
@@ -59,23 +62,39 @@ async function handlePrimaryAction() {
     switch (status.action) {
       case "link":
         await skillsStore.createLink(props.skill.id, status.agent.id);
+        toast.show(t("skills.linked", { agent: status.agent.name }), "success");
         break;
       case "unlink":
         await skillsStore.removeLink(props.skill.id, status.agent.id);
+        toast.show(t("skills.unlinked", { agent: status.agent.name }), "success");
         break;
       case "sync_to_vibe":
         await skillsStore.syncToVibe(props.skill.id, status.agent.id);
+        toast.show(t("manage.synced_to_vibe", { agent: status.agent.name }), "success");
         break;
       case "replace_with_link":
         await skillsStore.syncToVibe(props.skill.id, status.agent.id);
+        toast.show(t("manage.replaced_with_link", { agent: status.agent.name }), "success");
         break;
       case "relink":
         await skillsStore.relink(props.skill.id, status.agent.id);
+        toast.show(t("manage.relinked", { agent: status.agent.name }), "success");
         break;
       case "remove_dangling":
         await skillsStore.removeLink(props.skill.id, status.agent.id);
+        toast.show(t("manage.dangling_removed", { agent: status.agent.name }), "success");
         break;
     }
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
+
+async function handleDelete() {
+  try {
+    await skillsStore.deleteSkill(props.skill.id);
+    showDeleteConfirm.value = false;
+    toast.show(t("skills.delete"), "success");
   } catch (e: unknown) {
     toast.show(String(e), "error");
   }
@@ -167,12 +186,30 @@ async function handlePrimaryAction() {
         >
           {{ primaryActionLabel }}
         </button>
+        <button
+          class="text-[11px] px-2.5 py-1.5 rounded-md cursor-pointer transition-colors shrink-0 hover:bg-[var(--c-danger-light)]"
+          style="color: var(--c-danger); border: 1px solid var(--c-border);"
+          :title="t('skills.delete')"
+          @click="showDeleteConfirm = true"
+        >
+          {{ t("skills.delete") }}
+        </button>
       </div>
     </div>
 
-    <!-- Expanded detail (reuse SkillRow) -->
+    <!-- Expanded detail: 共用 SkillDetail -->
     <div v-if="isExpanded" class="border-t" style="border-color: var(--c-border);">
-      <SkillRow :skill="skill" :agents="agents" :expanded="true" />
+      <SkillDetail :skill="skill" :agents="agents" />
     </div>
+
+    <ConfirmDialog
+      v-if="showDeleteConfirm"
+      :title="t('skills.delete')"
+      :message="t('skills.delete_confirm', { name: skill.name })"
+      :confirm-text="t('skills.delete')"
+      :danger="true"
+      @confirm="handleDelete"
+      @cancel="showDeleteConfirm = false"
+    />
   </div>
 </template>

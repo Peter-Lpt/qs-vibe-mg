@@ -318,3 +318,11 @@ export function actionStyle(action: AgentAction): string {
       return "";
   }
 }
+
+/** Per-agent action button label — sync_to_vibe 改为 "从 {agent} 同步" */
+export function cellBtnLabel(t: TFunc, action: AgentAction, agentName: string): string {
+  if (action === "sync_to_vibe") {
+    return t("manage.btn_sync_from", { agent: agentName });
+  }
+  return actionLabel(t, action);
+}
