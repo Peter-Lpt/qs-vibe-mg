@@ -1,7 +1,7 @@
 use crate::errors::VibeError;
 use crate::models::agent::Agent;
 use crate::models::sync::SkillsTreeNode;
-use crate::utils::config::{build_agents_from_config, load_config, save_config, AgentConfig};
+use crate::utils::config::{build_agents_from_config, invalidate_agents_cache, load_agents, load_config, save_config, AgentConfig};
 use crate::utils::fs as vibe_fs;
 use crate::utils::path::vibe_skills_dir;
 use std::fs;
@@ -9,8 +9,7 @@ use std::path::Path;
 
 #[tauri::command]
 pub fn list_agents() -> Result<Vec<Agent>, VibeError> {
-    let config = load_config()?;
-    build_agents_from_config(&config)
+    load_agents()
 }
 
 #[tauri::command]
@@ -44,6 +43,7 @@ pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VibeE
 
     config.agents.push(agent_config);
     save_config(&config)?;
+    invalidate_agents_cache();
 
     let skills_dir_expanded = crate::utils::path::expand_tilde(&skills_dir)?;
     let detected = skills_dir_expanded.exists();
@@ -83,6 +83,7 @@ pub fn update_agent(
     }
 
     save_config(&config)?;
+    invalidate_agents_cache();
 
     let updated_config = load_config()?;
     let agents = build_agents_from_config(&updated_config)?;
@@ -106,14 +107,14 @@ pub fn remove_custom_agent(agent_id: String) -> Result<(), VibeError> {
 
     config.agents.remove(idx);
     save_config(&config)?;
+    invalidate_agents_cache();
 
     Ok(())
 }
 
 #[tauri::command]
 pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VibeError> {
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     let agent = agents
         .iter()
         .find(|a| a.id == agent_id)
@@ -133,25 +134,53 @@ pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VibeError> {
             children: Vec::new(),
             link_target: None,
             is_source_link: false,
+            truncated: false,
         });
     }
 
     let vibe_dir = vibe_skills_dir()?;
     let target_dir = vibe_dir.join(&agent_id);
 
-    let root = build_tree_node(skills_dir, skills_dir, &target_dir);
+    let root = build_tree_node(skills_dir, skills_dir, &target_dir, 0, &mut std::collections::HashSet::new());
     Ok(root)
 }
 
-fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTreeNode {
+/// 递归扫描最大深度，超出后返回 `truncated=true` 的节点（P4）
+const MAX_SCAN_DEPTH: usize = 12;
+
+/// 递归构建树节点，带深度上限与链接环保护
+fn build_tree_node(
+    dir: &Path,
+    base_dir: &Path,
+    target_dir: &Path,
+    depth: usize,
+    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+) -> SkillsTreeNode {
     let name = dir
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
 
+    // 深度超限或遇到已访问目录（链接环）→ 返回截断节点，避免栈溢出/无限递归
+    if depth > MAX_SCAN_DEPTH || !visited.insert(vibe_fs::normalize_path(dir)) {
+        return SkillsTreeNode {
+            name,
+            path: dir.to_string_lossy().to_string(),
+            is_dir: true,
+            skill_count: 0,
+            synced: false,
+            synced_count: 0,
+            children: Vec::new(),
+            link_target: None,
+            is_source_link: false,
+            truncated: true,
+        };
+    }
+
     let mut children = Vec::new();
     let mut skill_count = 0;
     let mut synced_count = 0;
+    let mut truncated = false;
 
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -198,9 +227,13 @@ fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTree
                     children: Vec::new(),
                     link_target,
                     is_source_link,
+                    truncated: false,
                 });
             } else {
-                let child = build_tree_node(&path, base_dir, target_dir);
+                let child = build_tree_node(&path, base_dir, target_dir, depth + 1, visited);
+                if child.truncated {
+                    truncated = true;
+                }
                 skill_count += child.skill_count;
                 synced_count += child.synced_count;
                 children.push(child);
@@ -231,5 +264,6 @@ fn build_tree_node(dir: &Path, base_dir: &Path, target_dir: &Path) -> SkillsTree
         children,
         link_target,
         is_source_link,
+        truncated,
     }
 }

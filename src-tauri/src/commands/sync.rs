@@ -7,7 +7,7 @@ use crate::errors::VibeError;
 use crate::models::agent::Agent;
 use crate::models::history::HistoryAction;
 use crate::models::sync::SyncResult;
-use crate::utils::config::{build_agents_from_config, load_config};
+use crate::utils::config::{invalidate_agents_cache, load_agents};
 use crate::utils::fs as vibe_fs;
 use crate::utils::hash::dir_hash;
 use crate::utils::history::{record_action, record_action_with_skills};
@@ -24,6 +24,7 @@ fn link_skill(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
     }
     let link_path = Path::new(&agent.skills_dir).join(skill_id);
     vibe_fs::create_symlink(&skill_path, &link_path)?;
+    invalidate_agents_cache();
     Ok(())
 }
 
@@ -37,6 +38,7 @@ fn unlink_skill(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
         });
     }
     vibe_fs::remove_symlink(&link_path)?;
+    invalidate_agents_cache();
     Ok(())
 }
 
@@ -81,6 +83,7 @@ fn sync_to_vibe_impl(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
         }
 
         vibe_fs::create_symlink(&vibe_path, &source_path)?;
+        invalidate_agents_cache();
         return Ok(());
     }
 
@@ -96,6 +99,7 @@ fn sync_to_vibe_impl(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
 
     // 创建新 symlink 指向技能库
     vibe_fs::create_symlink(&vibe_path, &source_path)?;
+    invalidate_agents_cache();
     Ok(())
 }
 
@@ -131,6 +135,7 @@ fn relink_impl(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
 
     // 创建新 symlink 指向技能库
     vibe_fs::create_symlink(&vibe_path, &link_path)?;
+    invalidate_agents_cache();
     Ok(())
 }
 
@@ -138,8 +143,7 @@ fn relink_impl(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
 pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VibeError> {
     tracing::info!("create_link: skill={}, agent={}", skill_id, agent_id);
 
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
         tracing::error!("create_link: agent not found: {}", agent_id);
         VibeError::AgentNotFound {
@@ -166,8 +170,7 @@ pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VibeError> 
 pub fn remove_link(skill_id: String, agent_id: String) -> Result<(), VibeError> {
     tracing::info!("remove_link: skill={}, agent={}", skill_id, agent_id);
 
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
         tracing::error!("remove_link: agent not found: {}", agent_id);
         VibeError::AgentNotFound {
@@ -192,8 +195,7 @@ pub fn remove_link(skill_id: String, agent_id: String) -> Result<(), VibeError> 
 
 #[tauri::command]
 pub fn batch_link(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String>, VibeError> {
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
         VibeError::AgentNotFound {
             agent_id: agent_id.clone(),
@@ -228,8 +230,7 @@ pub fn batch_link(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String
 
 #[tauri::command]
 pub fn batch_unlink(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String>, VibeError> {
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
         VibeError::AgentNotFound {
             agent_id: agent_id.clone(),
@@ -264,8 +265,7 @@ pub fn batch_unlink(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<Stri
 /// 将 agent 的所有 skills 层级同步到 ~/.vibe-skills/{agent_id}/
 #[tauri::command]
 pub fn sync_agent_to_vibe(agent_id: String) -> Result<SyncResult, VibeError> {
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     let agent = agents
         .iter()
         .find(|a| a.id == agent_id)
@@ -309,8 +309,7 @@ pub fn sync_category_to_vibe(
     agent_id: String,
     category_path: String,
 ) -> Result<SyncResult, VibeError> {
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     let agent = agents
         .iter()
         .find(|a| a.id == agent_id)
@@ -517,8 +516,7 @@ fn remove_symlinks_recursive(dir: &Path) -> Result<usize, VibeError> {
 pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VibeError> {
     tracing::info!("sync_to_vibe: skill={}, agent={}", skill_id, agent_id);
 
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
         tracing::error!("sync_to_vibe: agent not found: {}", agent_id);
         VibeError::AgentNotFound {
@@ -547,8 +545,7 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VibeError>
 pub fn relink(skill_id: String, agent_id: String) -> Result<(), VibeError> {
     tracing::info!("relink: skill={}, agent={}", skill_id, agent_id);
 
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
         tracing::error!("relink: agent not found: {}", agent_id);
         VibeError::AgentNotFound {
@@ -612,8 +609,7 @@ pub fn batch_skill_action(
         action
     );
 
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
 
     let mut result = SyncResult {
         synced_count: 0,

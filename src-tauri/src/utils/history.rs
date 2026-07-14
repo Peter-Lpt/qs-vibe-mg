@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::errors::VibeError;
 use crate::models::agent::Agent;
 use crate::models::history::{HistoryAction, HistoryEntry, HistoryStore};
-use crate::utils::config::{build_agents_from_config, load_config};
+use crate::utils::config::{load_agents, load_config};
 use crate::utils::datetime;
 use crate::utils::fs as vibe_fs;
 use crate::utils::path::vibe_skills_dir;
@@ -30,7 +30,7 @@ pub fn load_history() -> Result<HistoryStore, VibeError> {
     Ok(store)
 }
 
-/// 保存历史记录
+/// 保存历史记录（P5：临时文件 + 原子 rename，避免中途写入损坏）
 pub fn save_history(store: &HistoryStore) -> Result<(), VibeError> {
     let path = history_path()?;
     let dir = vibe_skills_dir()?;
@@ -40,7 +40,10 @@ pub fn save_history(store: &HistoryStore) -> Result<(), VibeError> {
 
     let content =
         serde_json::to_string_pretty(store).map_err(|e| VibeError::History(e.to_string()))?;
-    fs::write(&path, content)?;
+
+    let tmp = dir.join(format!("{}.tmp", HISTORY_FILE));
+    fs::write(&tmp, &content)?;
+    fs::rename(&tmp, &path)?;
     Ok(())
 }
 
@@ -118,8 +121,7 @@ pub fn clear_history() -> Result<(), VibeError> {
 
 /// 根据 agent_id 解析 Agent 对象
 pub fn resolve_agent(agent_id: &str) -> Result<Agent, VibeError> {
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     agents
         .into_iter()
         .find(|a| a.id == agent_id)

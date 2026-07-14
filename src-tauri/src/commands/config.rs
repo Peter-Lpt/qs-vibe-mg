@@ -3,7 +3,7 @@ use std::fs;
 use serde::{Deserialize, Serialize};
 
 use crate::errors::VibeError;
-use crate::utils::config::{load_config, save_config, Config};
+use crate::utils::config::{invalidate_agents_cache, load_config, save_config, Config};
 use crate::utils::fs::copy_dir_all;
 use crate::utils::history::load_history;
 use crate::utils::path::{expand_tilde, vibe_skills_dir};
@@ -97,6 +97,7 @@ pub fn set_vibe_skills_path(new_path: String, migrate: bool) -> Result<Config, V
     // 更新配置
     config.vibe_skills_path = Some(new_path);
     save_config(&config)?;
+    invalidate_agents_cache(); // vibe 目录可能变更，agent 缓存失效（P5）
 
     Ok(config)
 }
@@ -123,17 +124,28 @@ pub fn import_data(json: String) -> Result<(), VibeError> {
         serde_json::from_str(&json).map_err(|e| VibeError::History(e.to_string()))?;
     save_config(&data.config)?;
     crate::utils::history::save_history(&data.history)?;
+    invalidate_agents_cache();
     Ok(())
 }
 
-/// Write content to a file path (used by export)
+/// Write content to a file path (used by export)（P6：拒绝 `..` 字符串逃逸）
 #[tauri::command]
 pub fn write_file_to_path(path: String, content: String) -> Result<(), VibeError> {
+    if path.contains("..") {
+        return Err(VibeError::Path(
+            "write_file_to_path 不允许路径包含 '..'".to_string(),
+        ));
+    }
     fs::write(&path, content).map_err(VibeError::Io)
 }
 
-/// Read content from a file path (used by import)
+/// Read content from a file path (used by import)（P6：拒绝 `..` 字符串逃逸）
 #[tauri::command]
 pub fn read_file_from_path(path: String) -> Result<String, VibeError> {
+    if path.contains("..") {
+        return Err(VibeError::Path(
+            "read_file_from_path 不允许路径包含 '..'".to_string(),
+        ));
+    }
     fs::read_to_string(&path).map_err(VibeError::Io)
 }
