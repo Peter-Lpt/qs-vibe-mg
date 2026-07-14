@@ -12,6 +12,9 @@ pub struct SkillsTreeNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub link_target: Option<String>,
     pub is_source_link: bool,
+    /// 子树因超出最大深度或遇到链接环而被截断（P4 环路/深度保护）
+    #[serde(default)]
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
