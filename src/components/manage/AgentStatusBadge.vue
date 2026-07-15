@@ -36,9 +36,9 @@ const statusColor = computed(() => {
 
 const statusIcon = computed(() => {
   if (props.source.is_symlink) {
-    return "🔗";
+    return "Link2";
   }
-  return "●";
+  return "Circle";
 });
 </script>
 
@@ -50,7 +50,7 @@ const statusIcon = computed(() => {
     />
     <span class="font-medium" style="color: var(--c-text);">{{ agentName }}</span>
     <span class="flex items-center gap-1" :style="{ color: statusColor }">
-      <span>{{ statusIcon }}</span>
+      <component :is="statusIcon" :size="14" />
       <span>{{ statusLabel }}</span>
     </span>
   </div>

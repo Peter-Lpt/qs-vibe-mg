@@ -393,7 +393,7 @@ function closePanel() {
           style="color: var(--c-text-secondary);"
           @click="closePanel"
         >
-          ✕
+          <X :size="14" />
         </button>
       </div>
 

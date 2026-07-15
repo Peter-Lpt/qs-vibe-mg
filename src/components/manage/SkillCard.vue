@@ -128,9 +128,9 @@ async function handleDelete() {
           style="accent-color: var(--c-primary);"
           @click.stop="emit('toggle:select', props.skill.id)"
         />
-        <span v-if="skill.has_conflict" class="shrink-0 mt-0.5" style="color: var(--c-warning);">⚠</span>
-        <span v-else-if="skill.has_dangling" class="shrink-0 mt-0.5" style="color: var(--c-danger);">❌</span>
-        <span v-else-if="skill.is_duplicate" class="shrink-0 mt-0.5" style="color: var(--c-info);">📋</span>
+        <TriangleAlert v-if="skill.has_conflict" class="shrink-0 mt-0.5" :size="14" style="color: var(--c-warning);" />
+        <CircleX v-else-if="skill.has_dangling" class="shrink-0 mt-0.5" :size="14" style="color: var(--c-danger);" />
+        <Copy v-else-if="skill.is_duplicate" class="shrink-0 mt-0.5" :size="14" style="color: var(--c-info);" />
 
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
@@ -157,10 +157,7 @@ async function handleDelete() {
           @click.stop="showDeleteConfirm = true"
           :title="t('skills.delete')"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </svg>
+          <Trash2 :size="14" />
         </button>
 
         <span class="text-[11px] shrink-0" style="color: var(--c-text-secondary);">

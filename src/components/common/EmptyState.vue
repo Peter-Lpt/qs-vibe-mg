@@ -1,6 +1,6 @@
 <script setup lang="ts">
 defineProps<{
-  icon?: string;
+  icon?: string; // lucide 全局组件名
   title: string;
   description?: string;
   actionLabel?: string;
@@ -13,7 +13,7 @@ defineEmits<{
 
 <template>
   <div class="flex flex-col items-center py-16">
-    <div v-if="icon" class="text-4xl mb-4">{{ icon }}</div>
+    <component v-if="icon" :is="icon" :size="40" class="mb-4" style="color: var(--c-text-secondary);" />
     <p class="text-sm font-medium mb-1" style="color: var(--c-text);">
       {{ title }}
     </p>

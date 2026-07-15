@@ -107,14 +107,15 @@ async function handleDelete() {
         style="accent-color: var(--c-primary);"
         @click.stop="emit('toggle:select', props.skill.id)"
       />
-      <span
-        class="w-4 text-center text-xs shrink-0 transition-transform"
+      <ChevronRight
+        class="w-4 text-center shrink-0 transition-transform"
+        :size="14"
         :style="{ color: 'var(--c-text-secondary)', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }"
-      >▶</span>
+      />
 
-      <span v-if="skill.has_conflict" class="shrink-0" style="color: var(--c-warning);">⚠</span>
-      <span v-else-if="skill.has_dangling" class="shrink-0" style="color: var(--c-danger);">❌</span>
-      <span v-else-if="skill.is_duplicate" class="shrink-0" style="color: var(--c-info);">📋</span>
+      <TriangleAlert v-if="skill.has_conflict" class="shrink-0" :size="14" style="color: var(--c-warning);" />
+      <CircleX v-else-if="skill.has_dangling" class="shrink-0" :size="14" style="color: var(--c-danger);" />
+      <Copy v-else-if="skill.is_duplicate" class="shrink-0" :size="14" style="color: var(--c-info);" />
 
       <span class="text-sm font-medium truncate" style="color: var(--c-text);">
         {{ skill.name || skill.id }}
@@ -168,10 +169,7 @@ async function handleDelete() {
           @click.stop="togglePreview"
           :title="t('skills.preview')"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
+          <Eye :size="14" />
         </button>
         <button
           class="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--c-danger-light)]"
@@ -179,10 +177,7 @@ async function handleDelete() {
           @click.stop="showDeleteConfirm = true"
           :title="t('skills.delete')"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </svg>
+          <Trash2 :size="14" />
         </button>
       </div>
     </div>

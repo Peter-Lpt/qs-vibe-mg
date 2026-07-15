@@ -19,7 +19,7 @@ const emit = defineEmits<{
     style="background: var(--c-warning-light); border: 1px solid var(--c-warning);"
   >
     <div class="flex items-center gap-1.5 mb-2" style="color: var(--c-warning);">
-      <span>⚠</span>
+      <TriangleAlert :size="14" />
       <span class="font-medium">{{ t("manage.conflict_warning") }}</span>
     </div>
 

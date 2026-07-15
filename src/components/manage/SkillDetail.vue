@@ -227,7 +227,7 @@ async function useThisVersion(source: SkillSource) {
         >
           <div class="flex items-center justify-between gap-2 mb-1.5">
             <div class="flex items-center gap-2 min-w-0">
-              <span class="text-[10px]" :style="{ color: it.source.is_symlink ? 'var(--c-primary)' : 'var(--c-text-secondary)' }">{{ it.source.is_symlink ? '🔗' : '📁' }}</span>
+              <component :is="it.source.is_symlink ? 'Link2' : 'Folder'" class="shrink-0" :size="12" :style="{ color: it.source.is_symlink ? 'var(--c-primary)' : 'var(--c-text-secondary)' }" />
               <span class="text-[10px] truncate" style="color: var(--c-text-secondary);">
                 {{ it.source.from }}: {{ it.source.path.split(/[/\\]/).slice(-2, -1)[0] || it.source.path.split(/[/\\]/).pop() }}
               </span>

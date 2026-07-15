@@ -122,14 +122,14 @@ interface StatusChipDef {
 }
 
 const statusChipDefs: StatusChipDef[] = [
-  { id: "conflict", labelKey: "manage.status_conflict", color: "var(--c-warning)", group: "issue", icon: "⚠" },
-  { id: "dangling", labelKey: "manage.status_dangling", color: "var(--c-danger)", group: "issue", icon: "❌" },
-  { id: "independent", labelKey: "manage.status_independent", color: "var(--c-primary)", group: "status", icon: "●" },
-  { id: "unlinked", labelKey: "manage.status_unlinked", color: "var(--c-text-secondary)", group: "status", icon: "○" },
-  { id: "linked", labelKey: "manage.status_linked", color: "var(--c-primary)", group: "status", icon: "●" },
-  { id: "missing_lib", labelKey: "manage.quick_filter_missing_lib", color: "var(--c-text-secondary)", group: "other", icon: "◇" },
-  { id: "only_lib", labelKey: "manage.quick_filter_only_lib", color: "var(--c-text-secondary)", group: "other", icon: "◇" },
-  { id: "duplicate", labelKey: "manage.status_duplicate", color: "var(--c-info)", group: "other", icon: "📋" },
+  { id: "conflict", labelKey: "manage.status_conflict", color: "var(--c-warning)", group: "issue", icon: "TriangleAlert" },
+  { id: "dangling", labelKey: "manage.status_dangling", color: "var(--c-danger)", group: "issue", icon: "XCircle" },
+  { id: "independent", labelKey: "manage.status_independent", color: "var(--c-primary)", group: "status", icon: "Circle" },
+  { id: "unlinked", labelKey: "manage.status_unlinked", color: "var(--c-text-secondary)", group: "status", icon: "CircleDashed" },
+  { id: "linked", labelKey: "manage.status_linked", color: "var(--c-primary)", group: "status", icon: "Circle" },
+  { id: "missing_lib", labelKey: "manage.quick_filter_missing_lib", color: "var(--c-text-secondary)", group: "other", icon: "CircleDashed" },
+  { id: "only_lib", labelKey: "manage.quick_filter_only_lib", color: "var(--c-text-secondary)", group: "other", icon: "CircleDashed" },
+  { id: "duplicate", labelKey: "manage.status_duplicate", color: "var(--c-info)", group: "other", icon: "Copy" },
 ];
 
 function toggleStatusFilter(id: StatusFilter) {
@@ -345,15 +345,21 @@ const chipGroups = computed(() => {
         </button>
         <div class="flex items-center rounded border" style="border-color: var(--c-border);">
           <button
-            class="px-2 py-1 text-[10px] cursor-pointer transition-colors"
+            class="px-2 py-1 flex items-center justify-center cursor-pointer transition-colors"
             :style="{ background: viewMode === 'list' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'var(--c-text-secondary)' }"
+            :title="t('manage.view_list') || '列表视图'"
             @click="setViewMode('list')"
-          >≡</button>
+          >
+            <List :size="14" />
+          </button>
           <button
-            class="px-2 py-1 text-[10px] cursor-pointer transition-colors"
+            class="px-2 py-1 flex items-center justify-center cursor-pointer transition-colors"
             :style="{ background: viewMode === 'tree' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'tree' ? 'white' : 'var(--c-text-secondary)' }"
+            :title="t('manage.view_tree') || '树视图'"
             @click="setViewMode('tree')"
-          >🌳</button>
+          >
+            <ListTree :size="14" />
+          </button>
         </div>
       </div>
     </div>
@@ -364,7 +370,7 @@ const chipGroups = computed(() => {
         class="flex items-center gap-2 cursor-pointer mb-2 select-none"
         @click="agentOverviewExpanded = !agentOverviewExpanded"
       >
-        <span class="text-xs transition-transform" :style="{ transform: agentOverviewExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }">▶</span>
+        <ChevronRight class="text-xs transition-transform" :size="14" :style="{ transform: agentOverviewExpanded ? 'rotate(90deg)' : 'rotate(0deg)', color: 'var(--c-text-secondary)' }" />
         <span class="text-xs font-semibold" style="color: var(--c-text);">
           {{ t("manage.agent_overview") || "Agent 概览" }}
         </span>
@@ -393,8 +399,8 @@ const chipGroups = computed(() => {
           </div>
           <div class="flex items-center gap-2 text-[10px]">
             <span style="color: var(--c-text-secondary);">{{ overview.skillCount }}</span>
-            <span style="color: var(--c-primary);">{{ overview.linkedCount }} ✓</span>
-            <span v-if="overview.conflictCount > 0" style="color: var(--c-warning);">{{ overview.conflictCount }} ⚠</span>
+            <span class="inline-flex items-center gap-0.5" style="color: var(--c-primary);"><Check :size="12" /> {{ overview.linkedCount }}</span>
+            <span v-if="overview.conflictCount > 0" class="inline-flex items-center gap-0.5" style="color: var(--c-warning);"><TriangleAlert :size="12" /> {{ overview.conflictCount }}</span>
           </div>
         </div>
       </div>
@@ -434,7 +440,7 @@ const chipGroups = computed(() => {
           "
           @click="toggleStatusFilter(chip.id)"
         >
-          <span class="text-[9px]">{{ chip.icon }}</span>
+          <component :is="chip.icon" :size="12" />
           {{ t(chip.labelKey) }}
           <span class="text-[9px] opacity-70">({{ chipCounts[chip.id] }})</span>
         </button>
@@ -483,7 +489,7 @@ const chipGroups = computed(() => {
     <!-- Empty -->
     <EmptyState
       v-else-if="displaySkills.length === 0"
-      icon="📦"
+      icon="Package"
       :title="t('skills.no_skills')"
       :description="t('skills.no_skills_hint')"
       :action-label="t('skills.install')"
@@ -569,7 +575,7 @@ const chipGroups = computed(() => {
     <!-- 关系矩阵 -->
     <div class="mt-4" v-if="detectedAgents.length > 0">
       <div class="flex items-center gap-2 cursor-pointer mb-2 select-none" @click="matrixExpanded = !matrixExpanded">
-        <span class="text-xs transition-transform" :style="{ transform: matrixExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }">▶</span>
+        <ChevronRight class="text-xs transition-transform" :size="14" :style="{ transform: matrixExpanded ? 'rotate(90deg)' : 'rotate(0deg)', color: 'var(--c-text-secondary)' }" />
         <span class="text-xs font-semibold" style="color: var(--c-text);">{{ t("manage.agent_matrix") }}</span>
       </div>
       <AgentMatrix

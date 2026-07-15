@@ -140,7 +140,11 @@ function handleCellClick(skill: Skill, agent: Agent, cell: CellInfo) {
     </div>
 
     <div class="px-3 py-1.5 text-[10px] flex items-center gap-3" style="color: var(--c-text-secondary);">
-      <span>● {{ t("manage.status_synced") }} ● {{ t("manage.real_file") }} ⚠ {{ t("manage.status_linked_elsewhere") }} ○ {{ t("manage.status_unlinked") }} ❌ {{ t("manage.status_dangling") }}</span>
+      <span class="inline-flex items-center gap-1"><Link2 :size="12" /> {{ t("manage.status_synced") }}</span>
+      <span class="inline-flex items-center gap-1"><Circle :size="12" /> {{ t("manage.real_file") }}</span>
+      <span class="inline-flex items-center gap-1"><TriangleAlert :size="12" /> {{ t("manage.status_linked_elsewhere") }}</span>
+      <span class="inline-flex items-center gap-1"><CircleDashed :size="12" /> {{ t("manage.status_unlinked") }}</span>
+      <span class="inline-flex items-center gap-1"><CircleX :size="12" /> {{ t("manage.status_dangling") }}</span>
     </div>
   </div>
 </template>
