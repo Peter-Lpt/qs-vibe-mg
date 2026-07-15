@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useAgentsStore } from "../../stores/agents";
 import SkillRow from "./SkillRow.vue";
-import SkillCard from "./SkillCard.vue";
+import SkillTree from "./SkillTree.vue";
 import AgentMatrix from "./AgentMatrix.vue";
 import BatchSyncPanel from "./BatchSyncPanel.vue";
 import InstallDialog from "../skills/InstallDialog.vue";
@@ -23,7 +23,7 @@ onMounted(async () => {
 });
 
 // ── 视图模式 ──────────────────────────────────────
-type ViewMode = "list" | "card";
+type ViewMode = "list" | "tree";
 const viewMode = ref<ViewMode>(
   (localStorage.getItem("vibe-manage-view") as ViewMode) || "list"
 );
@@ -351,9 +351,9 @@ const chipGroups = computed(() => {
           >≡</button>
           <button
             class="px-2 py-1 text-[10px] cursor-pointer transition-colors"
-            :style="{ background: viewMode === 'card' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'card' ? 'white' : 'var(--c-text-secondary)' }"
-            @click="setViewMode('card')"
-          >⊞</button>
+            :style="{ background: viewMode === 'tree' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'tree' ? 'white' : 'var(--c-text-secondary)' }"
+            @click="setViewMode('tree')"
+          >🌳</button>
         </div>
       </div>
     </div>
@@ -510,22 +510,18 @@ const chipGroups = computed(() => {
     </div>
 
     <!-- Skill grid (card mode) -->
+    <!-- Skill tree (tree mode) -->
     <div
       v-else
-      class="grid gap-3"
-      style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));"
       :style="{ paddingBottom: selectedSkills.size > 0 ? '56px' : '0' }"
     >
-      <SkillCard
-        v-for="skill in displaySkills"
-        :key="skill.id"
-        :id="`skill-${skill.id}`"
-        :skill="skill"
+      <SkillTree
+        :skills="displaySkills"
         :agents="agentsStore.agents"
-        :expanded="expandedSkillId === skill.id"
-        :selected="selectedSkills.has(skill.id)"
-        @update:expanded="(v) => expandedSkillId = v ? skill.id : null"
+        :selected-ids="selectedSkills"
+        :expanded-skill-id="expandedSkillId"
         @toggle:select="toggleSkillSelect"
+        @open:detail="(id) => expandedSkillId = id"
       />
     </div>
 

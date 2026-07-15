@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
 import { useFileLogger } from "../../composables/useFileLogger";
 import { marked } from "marked";
-import { useSkillAgentStatus, actionStyle, cellBtnLabel } from "../../composables/useSkillAgentStatus";
+import { useSkillAgentStatus, actionLabel, actionStyle } from "../../composables/useSkillAgentStatus";
 import type { Skill, Agent, SkillSource } from "../../types";
 
 const props = defineProps<{
@@ -23,10 +23,49 @@ const skillRef = computed(() => props.skill);
 const { allAgentStatuses, groupedStatuses, vibeSource } =
   useSkillAgentStatus(skillRef, agentsRef, (k, p) => t(k, p as Record<string, unknown>));
 
-// ── per-agent 批量选择 ──
+// per-skill 批量选择
 const selectedAgents = ref<Set<string>>(new Set());
 const showBatchMenu = ref(false);
 const batchOperating = ref(false);
+const resolvingConflict = ref<string | null>(null);
+
+interface ConflictItem {
+  source: SkillSource;
+  content: string;
+  loading: boolean;
+}
+const conflictItems = ref<ConflictItem[]>([]);
+
+async function loadConflictSources() {
+  if (!props.skill.has_conflict) {
+    conflictItems.value = [];
+    return;
+  }
+  conflictItems.value = props.skill.sources.map((s) => ({
+    source: s,
+    content: "",
+    loading: true,
+  }));
+  await Promise.all(
+    conflictItems.value.map(async (it) => {
+      try {
+        it.content = (marked.parse(
+          await skillsStore.previewSkillAtPath(it.source.path)
+        ) as string);
+      } catch {
+        it.content = "";
+      } finally {
+        it.loading = false;
+      }
+    })
+  );
+}
+
+onMounted(loadConflictSources);
+watch(
+  () => props.skill.has_conflict,
+  () => loadConflictSources()
+);
 
 const batchAvailableActions = computed(() => {
   const selected = allAgentStatuses.value.filter((s) =>
@@ -43,7 +82,7 @@ const batchAvailableActions = computed(() => {
   const hasClean = selected.some((s) => s.action === "remove_dangling");
 
   if (hasLink) actions.push({ action: "link", label: t("manage.btn_link"), color: "var(--c-primary)" });
-  if (hasSync) actions.push({ action: "sync_to_vibe", label: t("manage.btn_sync"), color: "var(--c-primary)" });
+  if (hasSync) actions.push({ action: "sync_to_vibe", label: t("manage.btn_sync_from", { agent: "" }), color: "var(--c-primary)" });
   if (hasReplace) actions.push({ action: "replace_with_link", label: t("manage.btn_replace"), color: "var(--c-text)" });
   if (hasRelink) actions.push({ action: "relink", label: t("manage.btn_relink"), color: "var(--c-warning)" });
   if (hasUnlink) actions.push({ action: "unlink", label: t("manage.btn_unlink"), color: "var(--c-text-secondary)" });
@@ -51,6 +90,12 @@ const batchAvailableActions = computed(() => {
 
   return actions;
 });
+
+// 逐 agent 按钮文案：sync 显示「从 {agent} 同步」，其余复用 actionLabel
+function cellBtnLabel(action: string, agentName: string): string {
+  if (action === "sync_to_vibe") return t("manage.btn_sync_from", { agent: agentName });
+  return actionLabel(t, action as never);
+}
 
 function toggleAgentSelect(agentId: string) {
   if (selectedAgents.value.has(agentId)) {
@@ -68,9 +113,6 @@ function toggleSelectAllAgents() {
     allIds.forEach((id) => selectedAgents.value.add(id));
   }
 }
-
-// ── per-agent 操作 ──
-const resolvingConflict = ref<string | null>(null);
 
 async function handleAction(status: ReturnType<typeof useSkillAgentStatus>["allAgentStatuses"]["value"][number]) {
   if (status.action === "none") return;
@@ -136,30 +178,6 @@ async function handleBatchAction(action: string) {
   }
 }
 
-// ── 冲突预览 ──
-const conflictPreviewPath = ref<string | null>(null);
-const conflictPreviewContent = ref("");
-const conflictPreviewLoading = ref(false);
-
-async function previewConflictPath(path: string) {
-  if (conflictPreviewPath.value === path) {
-    conflictPreviewPath.value = null;
-    conflictPreviewContent.value = "";
-    return;
-  }
-
-  conflictPreviewPath.value = path;
-  conflictPreviewLoading.value = true;
-  try {
-    const md = await skillsStore.previewSkillAtPath(path);
-    conflictPreviewContent.value = marked.parse(md) as string;
-  } catch {
-    conflictPreviewContent.value = "";
-  } finally {
-    conflictPreviewLoading.value = false;
-  }
-}
-
 function getAgentNameFromPath(path: string): string {
   logger.debug(`[getAgentNameFromPath] input: ${path}`);
   const lowerPath = path.toLowerCase();
@@ -194,218 +212,179 @@ async function useThisVersion(source: SkillSource) {
 </script>
 
 <template>
-  <div>
-    <!-- 冲突路径 -->
-    <div v-if="skill.has_conflict" class="px-3 pb-3">
+  <div class="px-3 pb-3">
+    <!-- 冲突路径预览（默认并排展示各 source 的 SKILL.md 内容，便于直接对比） -->
+    <div v-if="skill.has_conflict" class="mb-3">
       <div class="mb-2 text-[10px] font-medium uppercase tracking-wide" style="color: var(--c-warning);">
         {{ t("manage.conflict_paths") }}
       </div>
-      <div class="space-y-2">
+      <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
         <div
-          v-for="source in skill.sources"
-          :key="source.path"
+          v-for="it in conflictItems"
+          :key="it.source.path"
           class="rounded-md border p-2"
           style="background: var(--c-bg); border-color: var(--c-border);"
         >
-          <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center justify-between gap-2 mb-1.5">
             <div class="flex items-center gap-2 min-w-0">
-              <span class="text-[10px]" :style="{ color: source.is_symlink ? 'var(--c-primary)' : 'var(--c-text-secondary)' }">
-                {{ source.is_symlink ? '🔗' : '📁' }}
+              <span class="text-[10px]" :style="{ color: it.source.is_symlink ? 'var(--c-primary)' : 'var(--c-text-secondary)' }">{{ it.source.is_symlink ? '🔗' : '📁' }}</span>
+              <span class="text-[10px] truncate" style="color: var(--c-text-secondary);">
+                {{ it.source.from }}: {{ it.source.path.split(/[/\\]/).slice(-2, -1)[0] || it.source.path.split(/[/\\]/).pop() }}
               </span>
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] truncate" style="color: var(--c-text-secondary);">
-                    {{ source.from }}: {{ source.path.split(/[/\\]/).slice(-2, -1)[0] || source.path.split(/[/\\]/).pop() }}
-                  </span>
-                  <span class="text-[10px] shrink-0" :style="{ color: source.is_symlink ? 'var(--c-primary)' : 'var(--c-text-secondary)' }">
-                    {{ source.is_symlink ? t("manage.symlink_to", { target: source.symlink_target?.split(/[/\\]/).pop() || '' }) : t("manage.real_file") }}
-                  </span>
-                </div>
-                <div class="text-[10px] truncate mt-0.5" :title="source.path" style="color: var(--c-text-secondary); opacity: 0.7;">
-                  {{ source.path }}
-                </div>
-              </div>
             </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <button
-                class="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors"
-                :style="{
-                  background: conflictPreviewPath === source.path ? 'var(--c-primary-light)' : 'transparent',
-                  color: conflictPreviewPath === source.path ? 'var(--c-primary)' : 'var(--c-text-secondary)',
-                  border: '1px solid var(--c-border)',
-                }"
-                @click.stop="previewConflictPath(source.path)"
-              >
-                {{ t("manage.preview_path") }}
-              </button>
-              <button
-                v-if="source.from !== 'vibe-lib'"
-                class="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors"
-                style="background: var(--c-primary); color: white;"
-                @click.stop="useThisVersion(source)"
-              >
-                {{ t("manage.use_this_version") }}
-              </button>
-            </div>
+            <button
+              v-if="it.source.from !== 'vibe-lib'"
+              class="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors shrink-0"
+              style="background: var(--c-primary); color: white;"
+              @click.stop="useThisVersion(it.source)"
+            >
+              {{ t("manage.use_this_version") }}
+            </button>
           </div>
-          <div v-if="conflictPreviewPath === source.path" class="mt-2">
-            <div
-              v-if="conflictPreviewContent"
-              class="markdown-body rounded border p-2 max-h-[200px] overflow-y-auto text-[11px]"
-              style="background: var(--c-surface); border-color: var(--c-border);"
-              v-html="conflictPreviewContent"
-            />
-            <div v-else-if="conflictPreviewLoading" class="text-[10px]" style="color: var(--c-text-secondary);">
-              {{ t("app.loading") }}
-            </div>
+          <div v-if="it.loading" class="text-[10px]" style="color: var(--c-text-secondary);">
+            {{ t("app.loading") }}
+          </div>
+          <div
+            v-else-if="it.content"
+            class="markdown-body rounded border p-2 max-h-[200px] overflow-y-auto text-[11px]"
+            style="background: var(--c-surface); border-color: var(--c-border);"
+            v-html="it.content"
+          />
+          <div v-else class="text-[10px]" style="color: var(--c-text-secondary);">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 批量选择栏 -->
+    <div
+      v-if="allAgentStatuses.length > 0"
+      class="flex items-center gap-2 mt-2 mb-3 pb-2 border-b"
+      style="border-color: var(--c-border);"
+    >
+      <input
+        type="checkbox"
+        :checked="selectedAgents.size === allAgentStatuses.length && allAgentStatuses.length > 0"
+        class="w-3.5 h-3.5 rounded cursor-pointer"
+        style="accent-color: var(--c-primary);"
+        @change="toggleSelectAllAgents"
+      />
+      <span class="text-[10px]" style="color: var(--c-text-secondary);">
+        {{ t("manage.select_agents") }}
+      </span>
+
+      <div v-if="selectedAgents.size > 0" class="relative ml-auto">
+        <button
+          class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+          style="background: var(--c-primary); color: white;"
+          :disabled="batchOperating || batchAvailableActions.length === 0"
+          @click.stop="showBatchMenu = !showBatchMenu"
+        >
+          {{ t("manage.batch_apply") }} ({{ selectedAgents.size }})
+        </button>
+        <div
+          v-if="showBatchMenu"
+          class="absolute top-full right-0 mt-1 rounded-md border shadow-lg z-10 py-1 min-w-[140px]"
+          style="background: var(--c-surface); border-color: var(--c-border);"
+        >
+          <button
+            v-for="act in batchAvailableActions"
+            :key="act.action"
+            class="block w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--c-surface-hover)] cursor-pointer"
+            :style="{ color: act.color }"
+            @click.stop="handleBatchAction(act.action)"
+          >
+            {{ act.label }}
+          </button>
+          <div v-if="batchAvailableActions.length === 0" class="px-3 py-1.5 text-xs" style="color: var(--c-text-secondary);">
+            {{ t("manage.no_batch_actions") }}
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Per-agent 详情 -->
-    <div class="px-3 pb-3">
+    <!-- 逐 agent 分组 -->
+    <div
+      v-for="group in groupedStatuses"
+      :key="group.label"
+      class="mb-3 last:mb-0"
+    >
       <div
-        v-if="allAgentStatuses.length > 0"
-        class="flex items-center gap-2 mb-2 pb-2 border-b"
-        style="border-color: var(--c-border);"
+        class="flex items-center gap-2 mb-1.5 text-[10px] font-medium uppercase tracking-wide"
+        :style="{ color: group.color }"
       >
-        <input
-          type="checkbox"
-          :checked="selectedAgents.size === allAgentStatuses.length && allAgentStatuses.length > 0"
-          class="w-3.5 h-3.5 rounded cursor-pointer"
-          style="accent-color: var(--c-primary);"
-          @change="toggleSelectAllAgents"
-        />
-        <span class="text-[10px]" style="color: var(--c-text-secondary);">
-          {{ t("manage.select_agents") }}
-        </span>
-
-        <div v-if="selectedAgents.size > 0" class="relative ml-auto">
-          <button
-            class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
-            style="background: var(--c-primary); color: white;"
-            :disabled="batchOperating || batchAvailableActions.length === 0"
-            @click.stop="showBatchMenu = !showBatchMenu"
-          >
-            {{ t("manage.batch_apply") }} ({{ selectedAgents.size }}) ▾
-          </button>
-          <div
-            v-if="showBatchMenu"
-            class="absolute top-full right-0 mt-1 rounded-md border shadow-lg z-10 py-1 min-w-[140px]"
-            style="background: var(--c-surface); border-color: var(--c-border);"
-          >
-            <button
-              v-for="act in batchAvailableActions"
-              :key="act.action"
-              class="block w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--c-surface-hover)] cursor-pointer"
-              :style="{ color: act.color }"
-              @click.stop="handleBatchAction(act.action)"
-            >
-              {{ act.label }}
-            </button>
-            <div v-if="batchAvailableActions.length === 0" class="px-3 py-1.5 text-xs" style="color: var(--c-text-secondary);">
-              {{ t("manage.no_batch_actions") }}
-            </div>
-          </div>
-        </div>
+        <span class="w-1.5 h-1.5 rounded-full" :style="{ background: group.color }" />
+        {{ group.label }} ({{ group.items.length }})
       </div>
 
-      <div
-        v-for="group in groupedStatuses"
-        :key="group.label"
-        class="mb-3 last:mb-0"
-      >
+      <div class="space-y-1">
         <div
-          class="flex items-center gap-2 mb-1.5 text-[10px] font-medium uppercase tracking-wide"
-          :style="{ color: group.color }"
+          v-for="item in group.items"
+          :key="item.agent.id"
+          class="flex items-center gap-2 px-2 py-1.5 rounded"
+          :style="{
+            background: selectedAgents.has(item.agent.id) ? 'var(--c-primary-light)' : 'var(--c-bg)',
+          }"
         >
-          <span class="w-1.5 h-1.5 rounded-full" :style="{ background: group.color }" />
-          {{ group.label }} ({{ group.items.length }})
-        </div>
-
-        <div class="space-y-1">
-          <div
-            v-for="item in group.items"
-            :key="item.agent.id"
-            class="flex items-center gap-2 px-2 py-1.5 rounded"
-            :style="{
-              background: selectedAgents.has(item.agent.id) ? 'var(--c-primary-light)' : 'var(--c-bg)',
-            }"
-          >
-            <!-- 左侧：flex-1 min-w-0，内联所有信息 -->
-            <div class="flex items-center gap-2 min-w-0 flex-1">
-              <input
-                type="checkbox"
-                :checked="selectedAgents.has(item.agent.id)"
-                class="w-3.5 h-3.5 rounded cursor-pointer shrink-0"
-                style="accent-color: var(--c-primary);"
-                @click.stop="toggleAgentSelect(item.agent.id)"
-              />
-              <span class="text-[10px] shrink-0" :style="{ color: item.statusColor }">
-                {{ item.statusIcon }}
-              </span>
-              <span class="text-xs font-medium truncate min-w-0" style="color: var(--c-text);">
-                {{ item.agent.name }}
-              </span>
-              <span class="text-[10px] shrink-0" :style="{ color: item.statusColor }">
-                {{ item.statusLabel }}
-              </span>
-              <!-- independent/conflict: 显示真实文件路径 -->
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <input
+              type="checkbox"
+              :checked="selectedAgents.has(item.agent.id)"
+              class="w-3.5 h-3.5 rounded cursor-pointer shrink-0"
+              style="accent-color: var(--c-primary);"
+              @click.stop="toggleAgentSelect(item.agent.id)"
+            />
+            <span class="text-[10px]" :style="{ color: item.statusColor }">
+              {{ item.statusIcon }}
+            </span>
+            <span class="text-xs font-medium truncate" style="color: var(--c-text);">
+              {{ item.agent.name }}
+            </span>
+            <span class="text-[10px] shrink-0" :style="{ color: item.statusColor }">
+              {{ item.statusLabel }}
+            </span>
+            <template v-if="item.status === 'linked_elsewhere' && item.source?.symlink_target">
               <span
-                v-if="item.status === 'independent' && item.source"
-                class="text-[10px] truncate max-w-[150px] shrink-0 cursor-help"
-                style="color: var(--c-text-secondary); opacity: 0.7;"
-                :title="item.source.path"
+                class="text-[10px] truncate flex-1 min-w-0 cursor-help"
+                style="color: var(--c-warning);"
+                :title="item.source.symlink_target"
               >
-                {{ item.source.path }}
+                → {{ getAgentNameFromPath(item.source.symlink_target) || item.source.symlink_target.split(/[/\\]/).slice(-2, -1)[0] || '未知' }}
               </span>
-              <!-- linked_elsewhere: 显示当前链接和期望链接 -->
-              <template v-if="item.status === 'linked_elsewhere' && item.source?.symlink_target">
-                <span
-                  class="text-[10px] truncate flex-1 min-w-0 cursor-help"
-                  style="color: var(--c-warning);"
-                  :title="item.source.symlink_target"
-                >
-                  → {{ getAgentNameFromPath(item.source.symlink_target) || item.source.symlink_target.split(/[/\\]/).slice(-2, -1)[0] || '未知' }}
-                </span>
-                <span class="text-[10px] shrink-0" style="color: var(--c-text-secondary);">|</span>
-                <span
-                  class="text-[10px] shrink-0 cursor-help"
-                  style="color: var(--c-success);"
-                  :title="vibeSource?.path || ''"
-                >
-                  → 库
-                </span>
-              </template>
+              <span class="text-[10px] shrink-0" style="color: var(--c-text-secondary);">|</span>
               <span
-                v-else-if="item.source?.symlink_target && item.status !== 'unlinked'"
-                class="text-[10px] truncate max-w-[150px] shrink-0"
-                style="color: var(--c-text-secondary);"
+                class="text-[10px] shrink-0 cursor-help"
+                style="color: var(--c-success);"
+                :title="vibeSource?.path || ''"
               >
-                → {{ item.source.symlink_target.split(/[/\\]/).pop() }}
+                → 库
               </span>
-            </div>
-
-            <!-- 右侧：操作按钮 -->
-            <button
-              v-if="item.action !== 'none'"
-              class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors shrink-0 whitespace-nowrap"
-              :style="actionStyle(item.action)"
-              :disabled="resolvingConflict === item.agent.id"
-              :title="item.action === 'sync_to_vibe' ? t('manage.sync_scope_tip', { skill: skill.name || skill.id, agent: item.agent.name }) : undefined"
-              @click.stop="handleAction(item)"
-            >
-              {{ resolvingConflict === item.agent.id ? "..." : cellBtnLabel(t, item.action, item.agent.name) }}
-            </button>
+            </template>
             <span
-              v-else
-              class="text-[10px] shrink-0"
+              v-else-if="item.source?.symlink_target && item.status !== 'unlinked'"
+              class="text-[10px] truncate flex-1 min-w-0"
               style="color: var(--c-text-secondary);"
             >
-              —
+              → {{ item.source.symlink_target.split(/[/\\]/).pop() }}
             </span>
           </div>
+
+          <button
+            v-if="item.action !== 'none'"
+            class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors shrink-0 whitespace-nowrap"
+            :style="actionStyle(item.action)"
+            :disabled="resolvingConflict === item.agent.id"
+            :title="item.action === 'sync_to_vibe' ? t('manage.sync_scope_tip', { skill: skill.name || skill.id, agent: item.agent.name }) : undefined"
+            @click.stop="handleAction(item)"
+          >
+            {{ resolvingConflict === item.agent.id ? '...' : cellBtnLabel(item.action, item.agent.name) }}
+          </button>
+          <span
+            v-else
+            class="text-[10px] shrink-0"
+            style="color: var(--c-text-secondary);"
+          >
+            —
+          </span>
         </div>
       </div>
     </div>

@@ -51,14 +51,16 @@
 
 ## 四、实施顺序与优先级
 
-| 优先级 | 项 | 改动面 | 风险 |
-|--------|----|--------|------|
-| 1 | P4 环路/深度保护 | 中 | 低（先防崩溃） |
-| 2 | P5 原子写 + 损坏回退 | 小 | 中（必做） |
-| 3 | P1 哈希缓存 | 中 | 中（真哈希不变） |
-| 4 | P6 路径沙箱 | 小 | 中（安全） |
-| 5 | P2 扫描合并 + 链接统一 | 中 | 中（Windows 归一化） |
-| 6 | P3 前端增量 + 本地搜索 | 中 | 中（需改命令签名） |
+| 优先级 | 项 | 改动面 | 风险 | 状态（2026-07-14 实现） |
+|--------|----|--------|------|------|
+| 1 | P4 环路/深度保护 | 中 | 低（先防崩溃） | ✅ 已落地（`agents.rs`/`skills.rs` 递归加 `MAX_SCAN_DEPTH`+`visited`，`SkillsTreeNode`/`DashboardData` 增 `truncated`） |
+| 2 | P5 原子写 + 损坏回退 | 小 | 中（必做） | ✅ 已落地（`save_config`/`save_history` 改临时文件+`rename`；`load_config` 损坏回退默认；`load_agents()`+`invalidate_agents_cache()` 缓存，所有增删/链接/迁移命令失效） |
+| 3 | P1 哈希缓存 | 中 | 中（真哈希不变） | ✅ 已落地（`hash.rs` 新增 `HashCache`+`dir_hash_into`，缓存键为 mtime/size/count 三元组，对外仍返回真 SHA-256；新增单元测试） |
+| 4 | P6 路径沙箱 | 小 | 中（安全） | ✅ 已落地（`preview_skill_at_path` 限制为 vibe 目录/agent 目录；`read_file_from_path`/`write_file_to_path` 拒绝 `..` 逃逸；导出/导入保持对话框路径） |
+| 5 | P2 扫描合并 + 链接统一 | 中 | 中（Windows 归一化） | ✅ 已落地（`find_linked_agents` 统一复用 `scan_linked_skills`，消除 Windows junction 归一化分歧） |
+| 6 | P3 前端增量 + 本地搜索 | 中 | 中（需改命令签名） | ⚠️ 安全子集已落地：本地搜索（去掉 `search_skills` 后端往返）、`refreshSkills` 防抖、`installSkill` 本地 patch 最新 `Skill`。**未改命令签名为返回 `Skill`**（文档标注的高风险项，需在真机验证后再做） |
+
+> 实施说明：后端 `cargo check` 通过、前端 `pnpm build` 通过、Rust 单元测试通过。P3 的「命令返回 `Skill` 增量 patch」因涉及 5 个 Tauri 命令签名变更且无法在此环境做真机 IPC 回归，暂以低风险前端子集替代，保留后续升级空间。
 
 ## 五、验收 / 回归
 

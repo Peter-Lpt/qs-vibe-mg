@@ -10,7 +10,7 @@ use crate::models::dashboard::{
 };
 use crate::models::skill::{ConflictType, Skill, SkillIssue, SkillSource};
 use crate::parsers::skill_md::parse_skill_md_full;
-use crate::utils::config::{build_agents_from_config, load_config};
+use crate::utils::config::{build_agents_from_config, load_agents, load_config};
 use crate::utils::datetime;
 use crate::utils::fs as vibe_fs;
 use crate::utils::fs::copy_dir_all;
@@ -18,13 +18,17 @@ use crate::utils::history::record_action;
 use crate::utils::path::vibe_skills_dir;
 use crate::models::history::HistoryAction;
 
+/// 递归扫描最大深度，超出后截断（P4 环路/深度保护）
+const MAX_SCAN_DEPTH: usize = 12;
+
 
 #[tauri::command]
 pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
     let mut map: HashMap<String, SkillEntry> = HashMap::new();
 
     let vibe_dir = vibe_skills_dir()?;
-    scan_directory(&vibe_dir, "vibe-lib", &mut map, false)?;
+    let mut hash_cache = crate::utils::hash::load_hash_cache(&vibe_dir);
+    scan_directory(&vibe_dir, "vibe-lib", &mut map, false, 0, &mut std::collections::HashSet::new(), &mut hash_cache)?;
 
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
@@ -34,8 +38,10 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
             continue;
         }
         let agent_dir = Path::new(&agent.skills_dir);
-        scan_directory(agent_dir, &agent.id, &mut map, false)?;
+        scan_directory(agent_dir, &agent.id, &mut map, false, 0, &mut std::collections::HashSet::new(), &mut hash_cache)?;
     }
+
+    crate::utils::hash::save_hash_cache(&vibe_dir, &hash_cache);
 
     let mut skills: Vec<Skill> = map
         .into_iter()
@@ -185,6 +191,7 @@ pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
     let vibe_dir = vibe_skills_dir()?;
+    let mut truncated = false;
 
     let mut agent_skills: HashMap<String, Vec<(String, String)>> = HashMap::new();
     let mut all_skill_agents: HashMap<String, Vec<String>> = HashMap::new();
@@ -199,7 +206,7 @@ pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
         }
 
         let mut skills = Vec::new();
-        collect_skills_recursive(skills_dir, &mut skills, &mut all_skill_agents, &agent.id, &vibe_dir);
+        collect_skills_recursive(skills_dir, &mut skills, &mut all_skill_agents, &agent.id, &vibe_dir, 0, &mut std::collections::HashSet::new(), &mut truncated);
 
         agent_skills.insert(agent.id.clone(), skills);
     }
@@ -271,8 +278,9 @@ pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
         .collect();
 
     let mut vibe_skills = Vec::new();
+    let mut vibe_truncated = false;
     if vibe_dir.exists() {
-        collect_vibe_skills(&vibe_dir, &mut vibe_skills, &all_skill_agents, &mut total_skills);
+        collect_vibe_skills(&vibe_dir, &mut vibe_skills, &all_skill_agents, &mut total_skills, 0, &mut std::collections::HashSet::new(), &mut vibe_truncated);
     }
 
     let mut all_agents = dashboard_agents;
@@ -298,6 +306,7 @@ pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
         agents: all_agents,
         shared_skills,
         stats,
+        truncated: truncated || vibe_truncated,
     })
 }
 
@@ -307,7 +316,14 @@ fn collect_skills_recursive(
     all_skill_agents: &mut HashMap<String, Vec<String>>,
     agent_id: &str,
     vibe_dir: &Path,
+    depth: usize,
+    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    truncated: &mut bool,
 ) {
+    if depth > MAX_SCAN_DEPTH || !visited.insert(vibe_fs::normalize_path(dir)) {
+        *truncated = true;
+        return;
+    }
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -344,7 +360,7 @@ fn collect_skills_recursive(
                     .push(agent_id.to_string());
                 skills.push((id, skill_name));
             } else {
-                collect_skills_recursive(&path, skills, all_skill_agents, agent_id, vibe_dir);
+                collect_skills_recursive(&path, skills, all_skill_agents, agent_id, vibe_dir, depth + 1, visited, truncated);
             }
         }
     }
@@ -355,7 +371,14 @@ fn collect_vibe_skills(
     vibe_skills: &mut Vec<DashboardSkill>,
     all_skill_agents: &HashMap<String, Vec<String>>,
     total_skills: &mut std::collections::HashSet<String>,
+    depth: usize,
+    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    truncated: &mut bool,
 ) {
+    if depth > MAX_SCAN_DEPTH || !visited.insert(vibe_fs::normalize_path(dir)) {
+        *truncated = true;
+        return;
+    }
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -389,7 +412,7 @@ fn collect_vibe_skills(
                     shared_with,
                 });
             } else {
-                collect_vibe_skills(&path, vibe_skills, all_skill_agents, total_skills);
+                collect_vibe_skills(&path, vibe_skills, all_skill_agents, total_skills, depth + 1, visited, truncated);
             }
         }
     }
@@ -403,8 +426,7 @@ pub fn preview_skill(skill_id: String) -> Result<String, VibeError> {
         return fs::read_to_string(&vibe_path).map_err(VibeError::Io);
     }
 
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     for agent in &agents {
         if !agent.detected {
             continue;
@@ -413,7 +435,7 @@ pub fn preview_skill(skill_id: String) -> Result<String, VibeError> {
         if agent_path.exists() {
             return fs::read_to_string(&agent_path).map_err(VibeError::Io);
         }
-        if let Ok(content) = find_skill_md_recursive(&Path::new(&agent.skills_dir), &skill_id) {
+        if let Ok(content) = find_skill_md_recursive(&Path::new(&agent.skills_dir), &skill_id, 0, &mut std::collections::HashSet::new()) {
             return Ok(content);
         }
     }
@@ -421,12 +443,26 @@ pub fn preview_skill(skill_id: String) -> Result<String, VibeError> {
     Err(VibeError::SkillNotFound { skill_id })
 }
 
-/// 按路径预览 SKILL.md 内容
+/// 按路径预览 SKILL.md 内容（P6：沙箱到 vibe 目录与已配置 agent 目录）
 #[tauri::command]
 pub fn preview_skill_at_path(path: String) -> Result<String, VibeError> {
     let skill_path = Path::new(&path);
     if !skill_path.exists() {
         return Err(VibeError::SkillNotFound { skill_id: path });
+    }
+
+    // 仅允许读取 vibe 库或某个 agent skills 目录内的文件（调用方传入的是已扫描的 source.path）
+    let vibe_dir = vibe_skills_dir()?;
+    let agents = load_agents()?;
+    let target = vibe_fs::normalize_path(skill_path);
+    let allowed = target.starts_with(vibe_fs::normalize_path(&vibe_dir))
+        || agents.iter().any(|a| {
+            target.starts_with(vibe_fs::normalize_path(Path::new(&a.skills_dir)))
+        });
+    if !allowed {
+        return Err(VibeError::Path(
+            "preview_skill_at_path 仅允许读取 vibe 目录或 agent 目录内的文件".to_string(),
+        ));
     }
 
     let skill_md_path = if skill_path.join("SKILL.md").exists() {
@@ -438,7 +474,17 @@ pub fn preview_skill_at_path(path: String) -> Result<String, VibeError> {
     fs::read_to_string(&skill_md_path).map_err(VibeError::Io)
 }
 
-fn find_skill_md_recursive(dir: &Path, skill_id: &str) -> Result<String, VibeError> {
+fn find_skill_md_recursive(
+    dir: &Path,
+    skill_id: &str,
+    depth: usize,
+    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+) -> Result<String, VibeError> {
+    if depth > MAX_SCAN_DEPTH || !visited.insert(vibe_fs::normalize_path(dir)) {
+        return Err(VibeError::SkillNotFound {
+            skill_id: skill_id.to_string(),
+        });
+    }
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -458,7 +504,7 @@ fn find_skill_md_recursive(dir: &Path, skill_id: &str) -> Result<String, VibeErr
         if name.starts_with('.') {
             continue;
         }
-        if let Ok(content) = find_skill_md_recursive(&path, skill_id) {
+        if let Ok(content) = find_skill_md_recursive(&path, skill_id, depth + 1, visited) {
             return Ok(content);
         }
     }
@@ -500,7 +546,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
     }
 
     let modified_at = get_modified_at(&dest);
-    let hash = crate::utils::hash::dir_hash(&dest);
+    let hash = crate::utils::hash::dir_hash_into(&mut crate::utils::hash::load_hash_cache(&vibe_dir), &dest);
 
     Ok(Skill {
         id: name.clone(),
@@ -546,8 +592,7 @@ pub fn delete_skill(skill_id: String) -> Result<(), VibeError> {
     }
     copy_dir_all(&skill_path, &trash_dir)?;
 
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
+    let agents = load_agents()?;
     for agent in &agents {
         let link_path = Path::new(&agent.skills_dir).join(&skill_id);
         if vibe_fs::is_link(&link_path) {
@@ -623,8 +668,15 @@ fn scan_directory(
     source_id: &str,
     map: &mut HashMap<String, SkillEntry>,
     symlink_only: bool,
+    depth: usize,
+    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    hash_cache: &mut crate::utils::hash::HashCache,
 ) -> Result<(), VibeError> {
     if !dir.exists() {
+        return Ok(());
+    }
+
+    if depth > MAX_SCAN_DEPTH || !visited.insert(vibe_fs::normalize_path(dir)) {
         return Ok(());
     }
 
@@ -666,7 +718,8 @@ fn scan_directory(
                 None
             };
 
-            let hash = crate::utils::hash::dir_hash(&path);
+            // P1：哈希缓存——三元组未变时复用真哈希，避免重复读文件
+            let hash = crate::utils::hash::dir_hash_into(hash_cache, &path);
 
             let source = SkillSource {
                 from: source_id.to_string(),
@@ -698,7 +751,7 @@ fn scan_directory(
                     modified_at,
                 });
         } else {
-            scan_directory(&path, source_id, map, symlink_only)?;
+            scan_directory(&path, source_id, map, symlink_only, depth + 1, visited, hash_cache)?;
         }
     }
 
@@ -712,16 +765,10 @@ fn find_linked_agents(skill_id: &str, agents: &[crate::models::agent::Agent]) ->
         if !agent.detected {
             continue;
         }
-        let link_path = Path::new(&agent.skills_dir).join(skill_id);
-        if vibe_fs::is_link(&link_path) {
-            if let Ok(target) = vibe_fs::read_link_target(&link_path) {
-                if let Ok(vibe_dir) = vibe_skills_dir() {
-                    let expected = vibe_dir.join(skill_id);
-                    if vibe_fs::normalize_path(&target) == vibe_fs::normalize_path(&expected) {
-                        linked.push(agent.id.clone());
-                    }
-                }
-            }
+        // P2：统一复用 scan_linked_skills，避免 Windows junction 归一化分歧
+        let linked_for_agent = crate::utils::config::scan_linked_skills(Path::new(&agent.skills_dir));
+        if linked_for_agent.iter().any(|id| id == skill_id) {
+            linked.push(agent.id.clone());
         }
     }
 

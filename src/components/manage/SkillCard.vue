@@ -3,7 +3,7 @@ import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
-import { useSkillAgentStatus, actionLabel, actionStyle } from "../../composables/useSkillAgentStatus";
+import { useSkillAgentStatus } from "../../composables/useSkillAgentStatus";
 import type { Skill, Agent } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 import SkillDetail from "./SkillDetail.vue";
@@ -49,9 +49,16 @@ const cardBorderColor = computed(() => {
 
 const primaryActionLabel = computed(() =>
   summary.value.primaryAction !== "none"
-    ? actionLabel(t, summary.value.primaryAction)
+    ? t(`manage.btn_${summary.value.primaryAction === "sync_to_vibe" ? "sync_from" : summary.value.primaryAction === "replace_with_link" ? "replace" : summary.value.primaryAction === "remove_dangling" ? "clean" : summary.value.primaryAction}`, { agent: primaryAgentName.value })
     : ""
 );
+
+const primaryAgentName = computed(() => {
+  const status = allAgentStatuses.value.find(
+    (s) => s.action === summary.value.primaryAction
+  );
+  return status?.agent.name ?? "";
+});
 
 async function handlePrimaryAction() {
   const status = allAgentStatuses.value.find(
@@ -102,11 +109,13 @@ async function handleDelete() {
 </script>
 
 <template>
+  <!-- 展开时占满整行（grid-column:1/-1），消除同排卡片下方空白 -->
   <div
     class="rounded-lg border transition-all"
     :style="{
       background: selected ? 'var(--c-primary-light)' : 'var(--c-surface)',
       borderColor: selected ? 'var(--c-primary)' : isExpanded ? 'var(--c-primary)' : cardBorderColor,
+      gridColumn: isExpanded ? '1 / -1' : undefined,
     }"
   >
     <!-- Summary header -->
@@ -140,6 +149,19 @@ async function handleDelete() {
             {{ skill.description || t("skills.no_skills_hint") }}
           </p>
         </div>
+
+        <!-- 小删除图标（与列表行一致，不占用按钮） -->
+        <button
+          class="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--c-danger-light)] shrink-0"
+          style="color: var(--c-danger);"
+          @click.stop="showDeleteConfirm = true"
+          :title="t('skills.delete')"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </button>
 
         <span class="text-[11px] shrink-0" style="color: var(--c-text-secondary);">
           {{ syncedCount }}/{{ totalCount }}
@@ -176,12 +198,14 @@ async function handleDelete() {
           }"
           @click="isExpanded = !isExpanded"
         >
-          {{ isExpanded ? t("skills.hide_preview") || "收起" : t("manage.expand_detail") }}
+          {{ isExpanded ? (t("skills.hide_preview") || "收起") : t("manage.expand_detail") }}
         </button>
         <button
           v-if="summary.primaryAction !== 'none'"
           class="text-[11px] px-2.5 py-1.5 rounded-md cursor-pointer transition-colors shrink-0"
-          :style="actionStyle(summary.primaryAction)"
+          :style="summary.primaryAction === 'unlink' || summary.primaryAction === 'remove_dangling'
+            ? 'background: var(--c-surface-hover); color: var(--c-text-secondary); border: 1px solid var(--c-border);'
+            : 'background: var(--c-primary); color: white;'"
           @click="handlePrimaryAction"
         >
           {{ primaryActionLabel }}
@@ -197,7 +221,7 @@ async function handleDelete() {
       </div>
     </div>
 
-    <!-- Expanded detail: 共用 SkillDetail -->
+<!-- Expanded detail (shared SkillDetail, no longer nested SkillRow) -->
     <div v-if="isExpanded" class="border-t" style="border-color: var(--c-border);">
       <SkillDetail :skill="skill" :agents="agents" />
     </div>

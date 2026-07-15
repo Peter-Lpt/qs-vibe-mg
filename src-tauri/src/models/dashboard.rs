@@ -6,6 +6,9 @@ pub struct DashboardData {
     pub agents: Vec<DashboardAgent>,
     pub shared_skills: Vec<SharedSkillInfo>,
     pub stats: DashboardStats,
+    /// 扫描时因深度上限/链接环被截断（P4）
+    #[serde(default)]
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

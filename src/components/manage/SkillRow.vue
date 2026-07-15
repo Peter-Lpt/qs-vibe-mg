@@ -132,7 +132,7 @@ async function handleDelete() {
         {{ syncedCount }}/{{ totalCount }}
       </span>
 
-      <!-- Agent 迷你状态徽章 -->
+      <!-- Agent 状态点 -->
       <span class="flex items-center gap-0.5 shrink-0 overflow-hidden">
         <span
           v-for="item in allAgentStatuses"
@@ -199,7 +199,7 @@ async function handleDelete() {
       </div>
     </div>
 
-    <!-- Expanded detail: 共用 SkillDetail -->
+<!-- Expanded per-agent detail (shared with card via SkillDetail) -->
     <div v-if="isExpanded" class="border-t" style="border-color: var(--c-border);">
       <SkillDetail :skill="skill" :agents="agents" />
     </div>

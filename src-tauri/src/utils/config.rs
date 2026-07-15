@@ -166,30 +166,46 @@ fn hermes_skills_dir() -> String {
     }
 }
 
-/// 读取配置文件，不存在则返回默认配置
+/// 读取配置文件，不存在则返回默认配置；损坏时回退默认而非中断（P5）
 pub fn load_config() -> Result<Config, VibeError> {
     let config_path = vibe_skills_dir()?.join(CONFIG_FILE);
 
     if !config_path.exists() {
-        let config = Config {
-            version: 1,
-            sync_mode_default: default_sync_mode(),
-            agents: default_agents(),
-            ui: UiConfig::default(),
-            history: HistoryConfig::default(),
-            vibe_skills_path: None,
-        };
+        let config = default_config();
         save_config(&config)?;
         return Ok(config);
     }
 
-    let content = fs::read_to_string(&config_path)?;
-    let config: Config =
-        serde_json::from_str(&content).map_err(|e| VibeError::Config(e.to_string()))?;
-    Ok(config)
+    let content = match fs::read_to_string(&config_path) {
+        Ok(c) => c,
+        Err(e) => return Err(VibeError::Config(e.to_string())),
+    };
+
+    match serde_json::from_str::<Config>(&content) {
+        Ok(config) => Ok(config),
+        Err(e) => {
+            // 配置损坏：回退默认并写回，避免应用无法启动
+            tracing::warn!("Config corrupt, falling back to default: {}", e);
+            let config = default_config();
+            let _ = save_config(&config);
+            Ok(config)
+        }
+    }
 }
 
-/// 保存配置文件
+/// 默认配置（集中构造，供 load/save 共用）
+pub fn default_config() -> Config {
+    Config {
+        version: 1,
+        sync_mode_default: default_sync_mode(),
+        agents: default_agents(),
+        ui: UiConfig::default(),
+        history: HistoryConfig::default(),
+        vibe_skills_path: None,
+    }
+}
+
+/// 保存配置文件（P5：临时文件 + 原子 rename，避免中途写入损坏）
 pub fn save_config(config: &Config) -> Result<(), VibeError> {
     let dir = vibe_skills_dir()?;
     if !dir.exists() {
@@ -199,7 +215,10 @@ pub fn save_config(config: &Config) -> Result<(), VibeError> {
     let config_path = dir.join(CONFIG_FILE);
     let content =
         serde_json::to_string_pretty(config).map_err(|e| VibeError::Config(e.to_string()))?;
-    fs::write(&config_path, content)?;
+
+    let tmp = dir.join(format!("{}.tmp", CONFIG_FILE));
+    fs::write(&tmp, &content)?;
+    fs::rename(&tmp, &config_path)?;
     Ok(())
 }
 
@@ -235,8 +254,8 @@ pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VibeError
     Ok(agents)
 }
 
-/// 扫描 agent skills 目录中的 symlink，返回关联的 skill id 列表
-fn scan_linked_skills(skills_dir: &std::path::Path) -> Vec<String> {
+/// 扫描 agent skills 目录中的 symlink，返回关联的 skill id 列表（P2 亦供 skills 命令统一调用）
+pub fn scan_linked_skills(skills_dir: &std::path::Path) -> Vec<String> {
     use crate::utils::fs as vibe_fs;
     use crate::utils::path::vibe_skills_dir;
 
@@ -266,4 +285,41 @@ fn scan_linked_skills(skills_dir: &std::path::Path) -> Vec<String> {
     }
 
     linked
+}
+
+// ── P5：agent 列表缓存 ───────────────────────────────────────────────────
+// 避免每次命令重复解析配置并 `exists()` 探测各 agent 目录。仅在 agent 配置变更或
+// 链接状态变更后失效（invalidate_agents_cache）。
+struct AgentsCache {
+    dir: std::path::PathBuf,
+    agents: Vec<crate::models::agent::Agent>,
+}
+
+static AGENTS_CACHE: std::sync::OnceLock<std::sync::Mutex<Option<AgentsCache>>> =
+    std::sync::OnceLock::new();
+
+fn cache_cell() -> &'static std::sync::Mutex<Option<AgentsCache>> {
+    AGENTS_CACHE.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// 使 agent 缓存失效（add/update/remove agent、set_vibe_skills_path、所有链接变更后调用）
+pub fn invalidate_agents_cache() {
+    *cache_cell().lock().unwrap() = None;
+}
+
+/// 读取 agent 列表；命中缓存且 vibe 目录未变时直接返回（P5）
+pub fn load_agents() -> Result<Vec<crate::models::agent::Agent>, VibeError> {
+    let dir = vibe_skills_dir()?;
+    {
+        let guard = cache_cell().lock().unwrap();
+        if let Some(c) = guard.as_ref() {
+            if c.dir == dir {
+                return Ok(c.agents.clone());
+            }
+        }
+    }
+    let config = load_config()?;
+    let agents = build_agents_from_config(&config)?;
+    *cache_cell().lock().unwrap() = Some(AgentsCache { dir, agents: agents.clone() });
+    Ok(agents)
 }
