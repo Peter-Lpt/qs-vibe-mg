@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, nextTick, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { useSkillsStore } from "../../stores/skills";
@@ -144,15 +144,32 @@ function onDropOnRoot(root: TreeRoot, ev: DragEvent) {
   doLink({ ...({ id: skillId, rootId: root.id } as TreeSkillNode) });
 }
 
-// —— 详情抽屉（复用 SkillDetail，统一体验，修复第一行留白 bug）——
-const detailNode = ref<TreeSkillNode | null>(null);
-function openDetail(node: TreeSkillNode) {
-  detailNode.value = node;
-  emit("open:detail", node.id);
+// —— 详情：行内展开（与列表模式 SkillRow 一致，避免抽屉遮挡与竞态；单列列表下仅下推兄弟节点，无网格留白问题）——
+const expandedKey = ref<string | null>(null);
+function toggleDetail(node: TreeSkillNode) {
+  const next = expandedKey.value === node.nodeKey ? null : node.nodeKey;
+  expandedKey.value = next;
+  emit("open:detail", next ? node.id : "");
 }
-function closeDetail() {
-  detailNode.value = null;
-}
+// AgentMatrix 联动：外部传入 expandedSkillId 时自动展开并滚动到该节点
+watch(
+  () => props.expandedSkillId,
+  (id) => {
+    if (!id) return;
+    for (const root of roots.value) {
+      const n = root.children.find((c) => c.id === id);
+      if (n) {
+        expandedKey.value = n.nodeKey;
+        nextTick(() => {
+          document
+            .getElementById(`skill-${root.id}-${id}`)
+            ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        });
+        return;
+      }
+    }
+  }
+);
 
 // AgentMatrix 联动高亮
 const highlighted = computed(() => {
@@ -208,7 +225,7 @@ const highlighted = computed(() => {
           }"
           draggable="true"
           @dragstart="onDragStart(node)"
-          @click="openDetail(node)"
+          @click="toggleDetail(node)"
         >
           <input
             type="checkbox"
@@ -236,33 +253,14 @@ const highlighted = computed(() => {
             <button class="text-[10px] px-1 rounded cursor-pointer" style="color: var(--c-text-secondary);" :title="t('manage.copy_path')" @click.stop="copyPath(node)">📋</button>
             <button class="text-[10px] px-1 rounded cursor-pointer" style="color: var(--c-danger);" :title="t('skills.delete')" @click.stop="showDelete = { node }">🗑</button>
           </div>
+          <!-- 行内展开详情（复用 SkillDetail） -->
+          <div v-if="expandedKey === node.nodeKey" class="ml-6 border-l pl-3 py-2" style="border-color: var(--c-border);">
+            <SkillDetail :skill="node.skill" :agents="agents" />
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 详情抽屉 -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        leave-active-class="transition duration-200 ease-in"
-        enter-from-class="translate-x-full"
-        enter-to-class="translate-x-0"
-        leave-from-class="translate-x-0"
-        leave-to-class="translate-x-full"
-      >
-        <div
-          v-if="detailNode"
-          class="fixed top-0 right-0 h-full w-[420px] max-w-[90vw] z-50 shadow-2xl overflow-y-auto"
-          style="background: var(--c-surface); border-left: 1px solid var(--c-border);"
-        >
-          <div class="flex items-center justify-between px-3 py-2 border-b" style="border-color: var(--c-border);">
-            <span class="text-sm font-semibold" style="color: var(--c-text);">{{ detailNode.name }}</span>
-            <button class="text-sm px-2 cursor-pointer" style="color: var(--c-text-secondary);" @click="closeDetail">✕</button>
-          </div>
-          <SkillDetail :skill="detailNode.skill" :agents="agents" />
-        </div>
-      </Transition>
-    </Teleport>
 
     <!-- 删除确认 -->
     <ConfirmDialog
