@@ -54,7 +54,7 @@ pub fn record_action(
     agent_id: Option<&str>,
     mode: Option<&str>,
 ) -> Result<HistoryEntry, VibeError> {
-    record_action_with_skills(action, skill_id, None, agent_id, mode)
+    record_action_with_source(action, skill_id, None, agent_id, mode, None)
 }
 
 /// 记录一条操作历史（批量/同步操作可携带受影响的 skill 列表）
@@ -64,6 +64,17 @@ pub fn record_action_with_skills(
     skill_ids: Option<Vec<String>>,
     agent_id: Option<&str>,
     mode: Option<&str>,
+) -> Result<HistoryEntry, VibeError> {
+    record_action_with_source(action, skill_id, skill_ids, agent_id, mode, None)
+}
+
+pub fn record_action_with_source(
+    action: HistoryAction,
+    skill_id: &str,
+    skill_ids: Option<Vec<String>>,
+    agent_id: Option<&str>,
+    mode: Option<&str>,
+    source_path: Option<&str>,
 ) -> Result<HistoryEntry, VibeError> {
     let mut store = load_history()?;
 
@@ -81,6 +92,7 @@ pub fn record_action_with_skills(
         skill_id: skill_id.to_string(),
         skill_ids: skill_ids.unwrap_or_default(),
         agent_id: agent_id.map(|s| s.to_string()),
+        source_path: source_path.map(|s| s.to_string()),
         mode: mode.map(|s| s.to_string()),
         undone: false,
     };
@@ -132,18 +144,24 @@ pub fn resolve_agent(agent_id: &str) -> Result<Agent, VibeError> {
 
 // ===== 原子文件操作 =====
 
-fn do_link(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
+fn do_link(skill_id: &str, agent: &Agent, source_path: Option<&str>) -> Result<(), VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let skill_path = vibe_dir.join(skill_id);
-    let link_path = Path::new(&agent.skills_dir).join(skill_id);
+    let link_path = source_path
+        .filter(|p| !p.trim().is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| Path::new(&agent.skills_dir).join(skill_id));
     if skill_path.exists() {
         vibe_fs::create_symlink(&skill_path, &link_path)?;
     }
     Ok(())
 }
 
-fn do_unlink(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
-    let link_path = Path::new(&agent.skills_dir).join(skill_id);
+fn do_unlink(skill_id: &str, agent: &Agent, source_path: Option<&str>) -> Result<(), VibeError> {
+    let link_path = source_path
+        .filter(|p| !p.trim().is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| Path::new(&agent.skills_dir).join(skill_id));
     let _ = vibe_fs::remove_symlink(&link_path);
     Ok(())
 }
@@ -175,7 +193,7 @@ pub fn perform_undo(entry: &HistoryEntry) -> Result<(), VibeError> {
                 VibeError::History("Link entry missing agent_id".to_string())
             })?;
             let agent = resolve_agent(agent)?;
-            do_unlink(&entry.skill_id, &agent)
+            do_unlink(&entry.skill_id, &agent, entry.source_path.as_deref())
         }
         HistoryAction::Unlink => {
             let agent = entry.agent_id.as_ref().ok_or_else(|| {
@@ -185,7 +203,7 @@ pub fn perform_undo(entry: &HistoryEntry) -> Result<(), VibeError> {
             let vibe_dir = vibe_skills_dir()?;
             let skill_path = vibe_dir.join(&entry.skill_id);
             if skill_path.exists() {
-                do_link(&entry.skill_id, &agent)
+                do_link(&entry.skill_id, &agent, entry.source_path.as_deref())
             } else {
                 Ok(())
             }
@@ -201,7 +219,7 @@ pub fn perform_undo(entry: &HistoryEntry) -> Result<(), VibeError> {
             })?;
             let agent = resolve_agent(agent)?;
             for skill_id in affected_skills(entry) {
-                do_unlink(&skill_id, &agent)?;
+                do_unlink(&skill_id, &agent, None)?;
             }
             Ok(())
         }
@@ -214,7 +232,7 @@ pub fn perform_undo(entry: &HistoryEntry) -> Result<(), VibeError> {
             for skill_id in affected_skills(entry) {
                 let skill_path = vibe_dir.join(&skill_id);
                 if skill_path.exists() {
-                    do_link(&skill_id, &agent)?;
+                    do_link(&skill_id, &agent, None)?;
                 }
             }
             Ok(())
@@ -233,7 +251,7 @@ pub fn perform_redo(entry: &HistoryEntry) -> Result<(), VibeError> {
             let vibe_dir = vibe_skills_dir()?;
             let skill_path = vibe_dir.join(&entry.skill_id);
             if skill_path.exists() {
-                do_link(&entry.skill_id, &agent)
+                do_link(&entry.skill_id, &agent, entry.source_path.as_deref())
             } else {
                 Ok(())
             }
@@ -243,7 +261,7 @@ pub fn perform_redo(entry: &HistoryEntry) -> Result<(), VibeError> {
                 VibeError::History("Unlink entry missing agent_id".to_string())
             })?;
             let agent = resolve_agent(agent)?;
-            do_unlink(&entry.skill_id, &agent)
+            do_unlink(&entry.skill_id, &agent, entry.source_path.as_deref())
         }
         HistoryAction::Install => Err(VibeError::History(
             "Cannot redo install operation".to_string(),
@@ -261,7 +279,7 @@ pub fn perform_redo(entry: &HistoryEntry) -> Result<(), VibeError> {
             for skill_id in affected_skills(entry) {
                 let skill_path = vibe_dir.join(&skill_id);
                 if skill_path.exists() {
-                    do_link(&skill_id, &agent)?;
+                    do_link(&skill_id, &agent, None)?;
                 }
             }
             Ok(())
@@ -272,7 +290,7 @@ pub fn perform_redo(entry: &HistoryEntry) -> Result<(), VibeError> {
             })?;
             let agent = resolve_agent(agent)?;
             for skill_id in affected_skills(entry) {
-                do_unlink(&skill_id, &agent)?;
+                do_unlink(&skill_id, &agent, None)?;
             }
             Ok(())
         }

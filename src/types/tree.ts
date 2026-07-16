@@ -1,4 +1,5 @@
 import type { Skill, Agent, SkillSource } from "./index";
+import { samePath } from "../composables/useSkillAgentStatus";
 
 /**
  * 树节点链接状态（逐 source 派生，口径对齐 useSkillAgentStatus.ts）。
@@ -71,8 +72,8 @@ function deriveLinkState(
     }
     return "independent";
   }
-  if (!source.symlink_target) return "dangling";
-  if (vibeSource?.path && source.symlink_target.includes(vibeSource.path)) {
+  if (!source.symlink_target || source.content_hash === "") return "dangling";
+  if (vibeSource?.path && samePath(source.symlink_target, vibeSource.path)) {
     return "synced";
   }
   return "linked_elsewhere";

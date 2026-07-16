@@ -86,8 +86,8 @@ export const useSkillsStore = defineStore("skills", () => {
     useAgentsStore().fetchAgents();
   }
 
-  async function removeLink(skillId: string, agentId: string) {
-    await invoke("remove_link", { skillId, agentId });
+  async function removeLink(skillId: string, agentId: string, sourcePath?: string) {
+    await invoke("remove_link", { skillId, agentId, sourcePath: sourcePath ?? null });
     refreshSkills();
     useAgentsStore().fetchAgents();
   }
@@ -115,14 +115,19 @@ export const useSkillsStore = defineStore("skills", () => {
     return await invoke<string>("preview_skill_at_path", { path });
   }
 
-  async function syncToVibe(skillId: string, agentId: string, force = false) {
-    await invoke("sync_to_vibe", { skillId, agentId, force });
+  async function syncToVibe(
+    skillId: string,
+    agentId: string,
+    force = false,
+    sourcePath?: string
+  ) {
+    await invoke("sync_to_vibe", { skillId, agentId, force, sourcePath: sourcePath ?? null });
     refreshSkills();
     useAgentsStore().fetchAgents();
   }
 
-  async function relink(skillId: string, agentId: string) {
-    await invoke("relink", { skillId, agentId });
+  async function relink(skillId: string, agentId: string, sourcePath?: string) {
+    await invoke("relink", { skillId, agentId, sourcePath: sourcePath ?? null });
     refreshSkills();
     useAgentsStore().fetchAgents();
   }

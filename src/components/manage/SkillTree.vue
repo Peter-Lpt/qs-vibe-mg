@@ -62,7 +62,7 @@ async function doLink(node: TreeSkillNode) {
 }
 async function doUnlink(node: TreeSkillNode) {
   try {
-    await skillsStore.removeLink(node.id, node.rootId);
+    await skillsStore.removeLink(node.id, node.rootId, node.path);
     toast.show(t("skills.unlinked", { agent: rootName(node.rootId) }), "success");
   } catch (e: unknown) {
     toast.show(String(e), "error");
@@ -70,7 +70,7 @@ async function doUnlink(node: TreeSkillNode) {
 }
 async function doSync(node: TreeSkillNode) {
   try {
-    await skillsStore.syncToVibe(node.id, node.rootId, true);
+    await skillsStore.syncToVibe(node.id, node.rootId, true, node.path);
     toast.show(t("manage.synced_to_vibe", { agent: rootName(node.rootId) }), "success");
   } catch (e: unknown) {
     toast.show(String(e), "error");
@@ -78,7 +78,7 @@ async function doSync(node: TreeSkillNode) {
 }
 async function doRelink(node: TreeSkillNode) {
   try {
-    await skillsStore.relink(node.id, node.rootId);
+    await skillsStore.relink(node.id, node.rootId, node.path);
     toast.show(t("manage.relinked", { agent: rootName(node.rootId) }), "success");
   } catch (e: unknown) {
     toast.show(String(e), "error");

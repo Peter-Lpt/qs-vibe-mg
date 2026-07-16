@@ -18,6 +18,9 @@ const agentName = computed(() => {
 
 const statusLabel = computed(() => {
   if (props.source.is_symlink) {
+    if (props.source.content_hash === "") {
+      return t("manage.broken_symlink");
+    }
     if (props.source.symlink_target) {
       const targetName = props.source.symlink_target.split(/[/\\]/).pop() || props.source.symlink_target;
       return t("manage.symlink_to", { target: targetName });

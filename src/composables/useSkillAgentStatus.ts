@@ -148,7 +148,7 @@ export function useSkillAgentStatus(
         }
         continue;
       }
-      if (!source.symlink_target) {
+      if (!source.symlink_target || source.content_hash === "") {
         result.push({
           agent,
           source,
@@ -160,7 +160,7 @@ export function useSkillAgentStatus(
       }
       if (
         vibeSource.value?.path &&
-        source.symlink_target.includes(vibeSource.value.path)
+        samePath(source.symlink_target, vibeSource.value.path)
       ) {
         result.push({
           agent,
@@ -279,6 +279,14 @@ function meta(type: AgentStatusType, t: TFunc) {
     statusColor: m.color,
     statusIcon: m.icon,
   };
+}
+
+export function samePath(a: string, b: string): boolean {
+  return normalizePath(a) === normalizePath(b);
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
 export function actionLabel(t: TFunc, action: AgentAction): string {

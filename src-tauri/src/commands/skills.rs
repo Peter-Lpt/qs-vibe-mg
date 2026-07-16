@@ -28,17 +28,37 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
 
     let vibe_dir = vibe_skills_dir()?;
     let mut hash_cache = crate::utils::hash::load_hash_cache(&vibe_dir);
-    scan_directory(&vibe_dir, "vibe-lib", &mut map, false, 0, &mut std::collections::HashSet::new(), &mut hash_cache)?;
-
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
+    let agent_ids: std::collections::HashSet<String> =
+        agents.iter().map(|agent| agent.id.clone()).collect();
+
+    scan_directory(
+        &vibe_dir,
+        "vibe-lib",
+        &mut map,
+        false,
+        0,
+        &mut std::collections::HashSet::new(),
+        &mut hash_cache,
+        Some(&agent_ids),
+    )?;
 
     for agent in &agents {
         if !agent.detected {
             continue;
         }
         let agent_dir = Path::new(&agent.skills_dir);
-        scan_directory(agent_dir, &agent.id, &mut map, false, 0, &mut std::collections::HashSet::new(), &mut hash_cache)?;
+        scan_directory(
+            agent_dir,
+            &agent.id,
+            &mut map,
+            false,
+            0,
+            &mut std::collections::HashSet::new(),
+            &mut hash_cache,
+            None,
+        )?;
     }
 
     crate::utils::hash::save_hash_cache(&vibe_dir, &hash_cache);
@@ -671,6 +691,7 @@ fn scan_directory(
     depth: usize,
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
     hash_cache: &mut crate::utils::hash::HashCache,
+    ignored_root_dirs: Option<&std::collections::HashSet<String>>,
 ) -> Result<(), VibeError> {
     if !dir.exists() {
         return Ok(());
@@ -684,7 +705,7 @@ fn scan_directory(
         let entry = entry?;
         let path = entry.path();
 
-        if !path.is_dir() {
+        if !path.is_dir() && !vibe_fs::is_link(&path) {
             continue;
         }
 
@@ -697,26 +718,75 @@ fn scan_directory(
             continue;
         }
 
+        // Legacy agent mirror directories (`~/.vibe-skills/{agent_id}/...`) are
+        // not center-library skill entities. Keeping them out of vibe-lib scan
+        // avoids merging mirrored agent links into the canonical skill list.
+        if depth == 0
+            && source_id == "vibe-lib"
+            && ignored_root_dirs
+                .map(|ignored| ignored.contains(&id))
+                .unwrap_or(false)
+        {
+            continue;
+        }
+
+        let is_link = vibe_fs::is_link(&path);
+        let symlink_target = if is_link {
+            vibe_fs::read_link_target(&path)
+                .ok()
+                .map(|p| p.to_string_lossy().to_string())
+        } else {
+            None
+        };
+
+        let is_broken_link = is_link
+            && symlink_target
+                .as_ref()
+                .map(|target| !vibe_fs::normalize_path(Path::new(target)).exists())
+                .unwrap_or(true);
+
+        if is_broken_link {
+            let source = SkillSource {
+                from: source_id.to_string(),
+                path: path.to_string_lossy().to_string(),
+                name: id.clone(),
+                description: String::new(),
+                is_symlink: true,
+                symlink_target,
+                content_hash: String::new(),
+            };
+            let modified_at = get_modified_at(&path);
+
+            map.entry(id.clone())
+                .and_modify(|e| {
+                    e.sources.push(source.clone());
+                })
+                .or_insert_with(|| SkillEntry {
+                    name: id.clone(),
+                    description: String::new(),
+                    path: path.to_string_lossy().to_string(),
+                    sources: vec![source],
+                    license: None,
+                    compatibility: None,
+                    metadata: None,
+                    has_scripts: false,
+                    has_references: false,
+                    has_assets: false,
+                    modified_at,
+                });
+            continue;
+        }
+
         let skill_md_path = path.join("SKILL.md");
         if skill_md_path.exists() {
-            let is_symlink = vibe_fs::is_link(&path);
-
             // agent 目录：只保留 symlink，跳过真实文件
-            if symlink_only && !is_symlink {
+            if symlink_only && !is_link {
                 continue;
             }
 
             let (name, description, license, compatibility, metadata, _body) =
                 parse_skill_md_full(&skill_md_path)
                     .unwrap_or_else(|_| (id.clone(), String::new(), None, None, None, String::new()));
-
-            let symlink_target = if is_symlink {
-                vibe_fs::read_link_target(&path)
-                    .ok()
-                    .map(|p| p.to_string_lossy().to_string())
-            } else {
-                None
-            };
 
             // P1：哈希缓存——三元组未变时复用真哈希，避免重复读文件
             let hash = crate::utils::hash::dir_hash_into(hash_cache, &path);
@@ -726,7 +796,7 @@ fn scan_directory(
                 path: path.to_string_lossy().to_string(),
                 name: name.clone(),
                 description: description.clone(),
-                is_symlink,
+                is_symlink: is_link,
                 symlink_target,
                 content_hash: hash,
             };
@@ -751,7 +821,16 @@ fn scan_directory(
                     modified_at,
                 });
         } else {
-            scan_directory(&path, source_id, map, symlink_only, depth + 1, visited, hash_cache)?;
+            scan_directory(
+                &path,
+                source_id,
+                map,
+                symlink_only,
+                depth + 1,
+                visited,
+                hash_cache,
+                ignored_root_dirs,
+            )?;
         }
     }
 

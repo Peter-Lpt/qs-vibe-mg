@@ -11,6 +11,9 @@ pub struct HistoryEntry {
     #[serde(default)]
     pub skill_ids: Vec<String>,
     pub agent_id: Option<String>,
+    /// 精确操作路径。嵌套 skill 或断链清理时用于撤销/重做定位原链接位置。
+    #[serde(default)]
+    pub source_path: Option<String>,
     /// "symlink" | "junction" | "copy"
     pub mode: Option<String>,
     pub undone: bool,

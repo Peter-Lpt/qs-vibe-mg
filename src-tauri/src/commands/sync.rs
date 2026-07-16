@@ -10,7 +10,7 @@ use crate::models::sync::SyncResult;
 use crate::utils::config::{invalidate_agents_cache, load_agents};
 use crate::utils::fs as vibe_fs;
 use crate::utils::hash::dir_hash;
-use crate::utils::history::{record_action, record_action_with_skills};
+use crate::utils::history::{record_action, record_action_with_skills, record_action_with_source};
 use crate::utils::path::vibe_skills_dir;
 
 /// 仅创建符号链接（链接方向：vibe-lib → agent 目录），不记录历史
@@ -29,8 +29,8 @@ fn link_skill(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
 }
 
 /// 仅移除符号链接（链接方向：vibe-lib → agent 目录），不记录历史
-fn unlink_skill(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
-    let link_path = Path::new(&agent.skills_dir).join(skill_id);
+fn unlink_skill(skill_id: &str, agent: &Agent, source_path: Option<&str>) -> Result<(), VibeError> {
+    let link_path = resolve_agent_skill_path(agent, skill_id, source_path, false)?;
     if !vibe_fs::is_link(&link_path) {
         return Err(VibeError::LinkNotFound {
             skill_id: skill_id.to_string(),
@@ -42,17 +42,53 @@ fn unlink_skill(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
     Ok(())
 }
 
+fn resolve_agent_skill_path(
+    agent: &Agent,
+    skill_id: &str,
+    source_path: Option<&str>,
+    require_skill_md: bool,
+) -> Result<PathBuf, VibeError> {
+    let agent_skills_dir = Path::new(&agent.skills_dir);
+
+    if let Some(path) = source_path.filter(|p| !p.trim().is_empty()) {
+        let candidate = PathBuf::from(path);
+        let normalized_candidate = vibe_fs::normalize_path(&candidate);
+        let normalized_agent_dir = vibe_fs::normalize_path(agent_skills_dir);
+        if !normalized_candidate.starts_with(&normalized_agent_dir) {
+            return Err(VibeError::Path(format!(
+                "Source path is outside agent skills directory: {}",
+                path
+            )));
+        }
+        if !require_skill_md
+            || candidate.join("SKILL.md").exists()
+            || vibe_fs::is_link(&candidate)
+        {
+            return Ok(candidate);
+        }
+    }
+
+    let direct = agent_skills_dir.join(skill_id);
+    if direct.exists() || vibe_fs::is_link(&direct) {
+        if !require_skill_md || direct.join("SKILL.md").exists() || vibe_fs::is_link(&direct) {
+            return Ok(direct);
+        }
+    }
+
+    find_skill_path_recursive(agent_skills_dir, skill_id).ok_or_else(|| VibeError::SkillNotFound {
+        skill_id: skill_id.to_string(),
+    })
+}
+
 /// 将 agent 的 skill 同步到技能库（复制 + 创建 symlink），不记录历史
 /// 当 force=true 时，如果技能库已有同名 skill 且内容不同，会用 agent 的版本覆盖技能库的版本
-fn sync_to_vibe_impl(skill_id: &str, agent: &Agent, force: bool) -> Result<(), VibeError> {
-    let agent_skills_dir = Path::new(&agent.skills_dir);
-    let source_path = agent_skills_dir.join(skill_id);
-
-    if !source_path.exists() {
-        return Err(VibeError::SkillNotFound {
-            skill_id: skill_id.to_string(),
-        });
-    }
+fn sync_to_vibe_impl(
+    skill_id: &str,
+    agent: &Agent,
+    force: bool,
+    source_path: Option<&str>,
+) -> Result<(), VibeError> {
+    let source_path = resolve_agent_skill_path(agent, skill_id, source_path, true)?;
 
     // 如果是 symlink，读取真实路径
     let real_source = if vibe_fs::is_link(&source_path) {
@@ -114,26 +150,25 @@ fn sync_to_vibe_impl(skill_id: &str, agent: &Agent, force: bool) -> Result<(), V
 }
 
 /// 重新链接：如果技能库没有则先同步，然后创建 symlink 指向技能库，不记录历史
-fn relink_impl(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
+fn relink_impl(skill_id: &str, agent: &Agent, source_path: Option<&str>) -> Result<(), VibeError> {
     let agent_skills_dir = Path::new(&agent.skills_dir);
-    let link_path = agent_skills_dir.join(skill_id);
+    let link_path = resolve_agent_skill_path(agent, skill_id, source_path, false)?;
     let vibe_dir = vibe_skills_dir()?;
     let vibe_path = vibe_dir.join(skill_id);
 
     // 技能库没有此 skill，先从 agent 复制过去
     if !vibe_path.exists() {
-        let real_source = find_skill_path_recursive(&link_path, skill_id)
-            .or_else(|| {
-                let direct = agent_skills_dir.join(skill_id);
-                if direct.exists() {
-                    Some(direct)
-                } else {
-                    None
+        let real_source = if vibe_fs::is_link(&link_path) {
+            vibe_fs::read_link_target(&link_path)?
+        } else if link_path.exists() && link_path.join("SKILL.md").exists() {
+            link_path.clone()
+        } else {
+            find_skill_path_recursive(agent_skills_dir, skill_id).ok_or_else(|| {
+                VibeError::SkillNotFound {
+                    skill_id: skill_id.to_string(),
                 }
-            })
-            .ok_or_else(|| VibeError::SkillNotFound {
-                skill_id: skill_id.to_string(),
-            })?;
+            })?
+        };
 
         vibe_fs::copy_dir_all(&real_source, &vibe_path)?;
     }
@@ -177,7 +212,11 @@ pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VibeError> 
 }
 
 #[tauri::command]
-pub fn remove_link(skill_id: String, agent_id: String) -> Result<(), VibeError> {
+pub fn remove_link(
+    skill_id: String,
+    agent_id: String,
+    source_path: Option<String>,
+) -> Result<(), VibeError> {
     tracing::info!("remove_link: skill={}, agent={}", skill_id, agent_id);
 
     let agents = load_agents()?;
@@ -188,14 +227,16 @@ pub fn remove_link(skill_id: String, agent_id: String) -> Result<(), VibeError> 
         }
     })?;
 
-    unlink_skill(&skill_id, agent)?;
+    unlink_skill(&skill_id, agent, source_path.as_deref())?;
     tracing::info!("remove_link: success");
 
-    if let Err(e) = record_action(
+    if let Err(e) = record_action_with_source(
         HistoryAction::Unlink,
         &skill_id,
+        None,
         Some(&agent_id),
         Some("symlink"),
+        source_path.as_deref(),
     ) {
         warn!("Failed to record Unlink action: {}", e);
     }
@@ -251,7 +292,7 @@ pub fn batch_unlink(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<Stri
     let mut unlinked = Vec::new();
 
     for skill_id in &skill_ids {
-        match unlink_skill(skill_id, agent) {
+        match unlink_skill(skill_id, agent, None) {
             Ok(()) => unlinked.push(skill_id.clone()),
             Err(e) => errors.push(format!("{}: {}", skill_id, e)),
         }
@@ -523,7 +564,12 @@ fn remove_symlinks_recursive(dir: &Path) -> Result<usize, VibeError> {
 
 /// 将 agent 的 skill 同步到技能库（命令入口，记录单条 Link 历史）
 #[tauri::command]
-pub fn sync_to_vibe(skill_id: String, agent_id: String, force: bool) -> Result<(), VibeError> {
+pub fn sync_to_vibe(
+    skill_id: String,
+    agent_id: String,
+    force: bool,
+    source_path: Option<String>,
+) -> Result<(), VibeError> {
     tracing::info!("sync_to_vibe: skill={}, agent={}, force={}", skill_id, agent_id, force);
 
     let agents = load_agents()?;
@@ -534,15 +580,16 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String, force: bool) -> Result<(
         }
     })?;
 
-    sync_to_vibe_impl(&skill_id, agent, force)?;
+    sync_to_vibe_impl(&skill_id, agent, force, source_path.as_deref())?;
     tracing::info!("sync_to_vibe: sync completed successfully");
 
-    if let Err(e) = record_action_with_skills(
+    if let Err(e) = record_action_with_source(
         HistoryAction::Link,
         &skill_id,
         Some(vec![skill_id.clone()]),
         Some(&agent_id),
         Some("sync_to_vibe"),
+        source_path.as_deref(),
     ) {
         warn!("Failed to record Link action: {}", e);
     }
@@ -552,7 +599,11 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String, force: bool) -> Result<(
 
 /// 重新链接（命令入口，记录单条 Link 历史）
 #[tauri::command]
-pub fn relink(skill_id: String, agent_id: String) -> Result<(), VibeError> {
+pub fn relink(
+    skill_id: String,
+    agent_id: String,
+    source_path: Option<String>,
+) -> Result<(), VibeError> {
     tracing::info!("relink: skill={}, agent={}", skill_id, agent_id);
 
     let agents = load_agents()?;
@@ -563,15 +614,16 @@ pub fn relink(skill_id: String, agent_id: String) -> Result<(), VibeError> {
         }
     })?;
 
-    relink_impl(&skill_id, agent)?;
+    relink_impl(&skill_id, agent, source_path.as_deref())?;
     tracing::info!("relink: relink completed successfully");
 
-    if let Err(e) = record_action_with_skills(
+    if let Err(e) = record_action_with_source(
         HistoryAction::Link,
         &skill_id,
         Some(vec![skill_id.clone()]),
         Some(&agent_id),
         Some("relink"),
+        source_path.as_deref(),
     ) {
         warn!("Failed to record Link action: {}", e);
     }
@@ -587,7 +639,7 @@ fn find_skill_path_recursive(dir: &Path, skill_id: &str) -> Option<PathBuf> {
 
     // 直接检查当前目录
     let direct = dir.join(skill_id);
-    if direct.exists() && direct.join("SKILL.md").exists() {
+    if (direct.exists() && direct.join("SKILL.md").exists()) || vibe_fs::is_link(&direct) {
         return Some(direct);
     }
 
@@ -595,6 +647,12 @@ fn find_skill_path_recursive(dir: &Path, skill_id: &str) -> Option<PathBuf> {
     for entry in fs::read_dir(dir).ok()? {
         let entry = entry.ok()?;
         let path = entry.path();
+        let name = path.file_name().map(|n| n.to_string_lossy().to_string());
+        if name.as_deref() == Some(skill_id)
+            && ((path.exists() && path.join("SKILL.md").exists()) || vibe_fs::is_link(&path))
+        {
+            return Some(path);
+        }
         if path.is_dir() {
             if let Some(found) = find_skill_path_recursive(&path, skill_id) {
                 return Some(found);
@@ -637,11 +695,11 @@ pub fn batch_skill_action(
 
         let op_result = match action.as_str() {
             "link" => link_skill(&skill_id, agent),
-            "unlink" => unlink_skill(&skill_id, agent),
-            "sync_to_vibe" => sync_to_vibe_impl(&skill_id, agent, true),
-            "replace_with_link" => sync_to_vibe_impl(&skill_id, agent, false),
-            "relink" => relink_impl(&skill_id, agent),
-            "remove_dangling" => unlink_skill(&skill_id, agent),
+            "unlink" => unlink_skill(&skill_id, agent, None),
+            "sync_to_vibe" => sync_to_vibe_impl(&skill_id, agent, true, None),
+            "replace_with_link" => sync_to_vibe_impl(&skill_id, agent, false, None),
+            "relink" => relink_impl(&skill_id, agent, None),
+            "remove_dangling" => unlink_skill(&skill_id, agent, None),
             _ => {
                 result.errors.push(format!("Unknown action: {}", action));
                 continue;

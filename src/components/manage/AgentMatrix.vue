@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { Skill, Agent, SkillSource } from "../../types";
+import { samePath } from "../../composables/useSkillAgentStatus";
 
 const props = defineProps<{
   skills: Skill[];
@@ -30,9 +31,9 @@ function getCell(skill: Skill, agent: Agent): CellInfo {
   if (!source) return { status: "unlinked", icon: "○", color: "var(--c-text-secondary)", source: null };
   if (source.from === "vibe-lib") return { status: "origin", icon: "📦", color: "var(--c-success)", source };
   if (!source.is_symlink) return { status: "independent", icon: "●", color: "var(--c-text)", source };
-  if (!source.symlink_target) return { status: "dangling", icon: "❌", color: "var(--c-danger)", source };
+  if (!source.symlink_target || source.content_hash === "") return { status: "dangling", icon: "❌", color: "var(--c-danger)", source };
   const vibeLib = skill.sources.find((s) => s.from === "vibe-lib");
-  if (vibeLib?.path && source.symlink_target.includes(vibeLib.path))
+  if (vibeLib?.path && samePath(source.symlink_target, vibeLib.path))
     return { status: "synced", icon: "●", color: "var(--c-primary)", source };
   return { status: "linked_elsewhere", icon: "⚠", color: "var(--c-warning)", source };
 }

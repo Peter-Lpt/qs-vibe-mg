@@ -5,8 +5,14 @@ import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
 import { useFileLogger } from "../../composables/useFileLogger";
 import { marked } from "marked";
-import { useSkillAgentStatus, actionLabel, actionStyle } from "../../composables/useSkillAgentStatus";
+import {
+  useSkillAgentStatus,
+  actionLabel,
+  actionStyle,
+  type AgentStatus,
+} from "../../composables/useSkillAgentStatus";
 import type { Skill, Agent, SkillSource } from "../../types";
+import ConfirmDialog from "../common/ConfirmDialog.vue";
 
 const props = defineProps<{
   skill: Skill;
@@ -28,6 +34,7 @@ const selectedAgents = ref<Set<string>>(new Set());
 const showBatchMenu = ref(false);
 const batchOperating = ref(false);
 const resolvingConflict = ref<string | null>(null);
+const pendingOverwrite = ref<AgentStatus | null>(null);
 
 interface ConflictItem {
   source: SkillSource;
@@ -117,6 +124,21 @@ function toggleSelectAllAgents() {
 async function handleAction(status: ReturnType<typeof useSkillAgentStatus>["allAgentStatuses"]["value"][number]) {
   if (status.action === "none") return;
 
+  if (
+    status.action === "sync_to_vibe" &&
+    !!vibeSource.value &&
+    !!status.source &&
+    status.source.content_hash !== vibeSource.value.content_hash
+  ) {
+    pendingOverwrite.value = status;
+    return;
+  }
+
+  await runAction(status);
+}
+
+async function runAction(status: AgentStatus) {
+
   try {
     switch (status.action) {
       case "link":
@@ -124,24 +146,24 @@ async function handleAction(status: ReturnType<typeof useSkillAgentStatus>["allA
         toast.show(t("skills.linked", { agent: status.agent.name }), "success");
         break;
       case "unlink":
-        await skillsStore.removeLink(props.skill.id, status.agent.id);
+        await skillsStore.removeLink(props.skill.id, status.agent.id, status.source?.path);
         toast.show(t("skills.unlinked", { agent: status.agent.name }), "success");
         break;
       case "sync_to_vibe":
         resolvingConflict.value = status.agent.id;
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id, true);
+        await skillsStore.syncToVibe(props.skill.id, status.agent.id, true, status.source?.path);
         toast.show(t("manage.synced_to_vibe", { agent: status.agent.name }), "success");
         break;
       case "replace_with_link":
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id, false);
+        await skillsStore.syncToVibe(props.skill.id, status.agent.id, false, status.source?.path);
         toast.show(t("manage.replaced_with_link", { agent: status.agent.name }), "success");
         break;
       case "relink":
-        await skillsStore.relink(props.skill.id, status.agent.id);
+        await skillsStore.relink(props.skill.id, status.agent.id, status.source?.path);
         toast.show(t("manage.relinked", { agent: status.agent.name }), "success");
         break;
       case "remove_dangling":
-        await skillsStore.removeLink(props.skill.id, status.agent.id);
+        await skillsStore.removeLink(props.skill.id, status.agent.id, status.source?.path);
         toast.show(t("manage.dangling_removed", { agent: status.agent.name }), "success");
         break;
     }
@@ -150,6 +172,12 @@ async function handleAction(status: ReturnType<typeof useSkillAgentStatus>["allA
   } finally {
     resolvingConflict.value = null;
   }
+}
+
+async function confirmOverwrite() {
+  const status = pendingOverwrite.value;
+  pendingOverwrite.value = null;
+  if (status) await runAction(status);
 }
 
 async function handleBatchAction(action: string) {
@@ -388,5 +416,18 @@ async function useThisVersion(source: SkillSource) {
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-if="pendingOverwrite"
+      :title="t('manage.overwrite_confirm_title')"
+      :message="t('manage.overwrite_confirm_message', {
+        skill: skill.name || skill.id,
+        agent: pendingOverwrite.agent.name,
+      })"
+      :confirm-text="t('manage.overwrite_confirm_action')"
+      :danger="true"
+      @confirm="confirmOverwrite"
+      @cancel="pendingOverwrite = null"
+    />
   </div>
 </template>
