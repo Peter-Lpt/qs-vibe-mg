@@ -1,0 +1,51 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Skill icon">
+  <defs>
+    <linearGradient id="bg" x1="44" y1="24" x2="212" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4F7BFF"/>
+      <stop offset="0.55" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+    <linearGradient id="card" x1="74" y1="58" x2="188" y2="194" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EAF2FF"/>
+    </linearGradient>
+    <filter id="shadow" x="34" y="28" width="188" height="196" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="10"/>
+      <feGaussianBlur stdDeviation="10"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.035 0 0 0 0 0.078 0 0 0 0 0.18 0 0 0 0.22 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect x="20" y="20" width="216" height="216" rx="48" fill="url(#bg)"/>
+  <path d="M54 190C73.3 165.9 96 153.8 122 153.8C158.1 153.8 171.9 126.8 202 66" stroke="white" stroke-opacity="0.18" stroke-width="14" stroke-linecap="round"/>
+  <path d="M47 78C70.8 95.2 93.7 99 116 89.4C139.6 79.2 160.7 81.4 197 103" stroke="white" stroke-opacity="0.14" stroke-width="10" stroke-linecap="round"/>
+
+  <g filter="url(#shadow)">
+    <path d="M78 50H158L194 86V190C194 201 185 210 174 210H78C67 210 58 201 58 190V70C58 59 67 50 78 50Z" fill="url(#card)"/>
+    <path d="M157 51V79C157 85.1 161.9 90 168 90H194" stroke="#93B4FF" stroke-width="8" stroke-linejoin="round"/>
+  </g>
+
+  <path d="M88 104H128" stroke="#2563EB" stroke-width="10" stroke-linecap="round"/>
+  <path d="M88 132H164" stroke="#2563EB" stroke-opacity="0.75" stroke-width="10" stroke-linecap="round"/>
+  <path d="M88 160H141" stroke="#14B8A6" stroke-width="10" stroke-linecap="round"/>
+
+  <circle cx="74" cy="205" r="19" fill="#0F172A" fill-opacity="0.18"/>
+  <circle cx="74" cy="199" r="18" fill="#FFFFFF"/>
+  <circle cx="74" cy="199" r="8" fill="#14B8A6"/>
+
+  <circle cx="186" cy="205" r="19" fill="#0F172A" fill-opacity="0.18"/>
+  <circle cx="186" cy="199" r="18" fill="#FFFFFF"/>
+  <circle cx="186" cy="199" r="8" fill="#2563EB"/>
+
+  <circle cx="130" cy="226" r="19" fill="#0F172A" fill-opacity="0.18"/>
+  <circle cx="130" cy="220" r="18" fill="#FFFFFF"/>
+  <circle cx="130" cy="220" r="8" fill="#7C3AED"/>
+
+  <path d="M90 199H112M148 199H170M82 211L112 218M178 211L148 218" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+  <path d="M90 199H112M148 199H170M82 211L112 218M178 211L148 218" stroke="#93B4FF" stroke-width="4" stroke-linecap="round"/>
+</svg>
