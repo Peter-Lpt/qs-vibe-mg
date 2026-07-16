@@ -114,11 +114,17 @@ const differentContentSources = computed(() => {
   );
 });
 
+const differentAgentSources = computed(() =>
+  differentContentSources.value.filter((s) => s.from !== "vibe-lib")
+);
+
 const planWillOverwriteLibrary = computed(() => {
   const selected = selectedConflictSource.value;
   const library = vibeSource.value;
   return !!selected && selected.from !== "vibe-lib" && !!library && selected.content_hash !== library.content_hash;
 });
+
+const planWillReplaceDifferentCopies = computed(() => differentAgentSources.value.length > 0);
 
 const batchAvailableActions = computed(() => {
   const selected = allAgentStatuses.value.filter((s) =>
@@ -240,7 +246,7 @@ async function executeConflictResolution() {
   const selected = selectedConflictSource.value;
   if (!selected || resolvingPlan.value) return;
 
-  if (planWillOverwriteLibrary.value && selected.from !== "vibe-lib") {
+  if ((planWillOverwriteLibrary.value || planWillReplaceDifferentCopies.value) && selected.from !== "vibe-lib") {
     const agent = selectedConflictAgent.value;
     if (agent) {
       pendingOverwrite.value = {
@@ -257,6 +263,28 @@ async function executeConflictResolution() {
     }
   }
 
+  if (planWillReplaceDifferentCopies.value && selected.from === "vibe-lib") {
+    pendingOverwrite.value = {
+      agent: {
+        id: "vibe-lib",
+        name: t("manage.library"),
+        skills_dir: selected.path,
+        detected: true,
+        enabled: true,
+        auto_detected: false,
+        linked_skills: [],
+      },
+      source: selected,
+      status: "origin",
+      action: "sync_to_vibe",
+      statusLabel: t("manage.status_origin"),
+      statusColor: "var(--c-warning)",
+      statusIcon: "⚠",
+    };
+    pendingPlanOverwrite.value = true;
+    return;
+  }
+
   await runConflictResolution(selected);
 }
 
@@ -269,10 +297,17 @@ async function runConflictResolution(selected: SkillSource) {
       await skillsStore.syncToVibe(props.skill.id, agent.id, true, selected.path);
     }
 
-    for (const source of sameContentSources.value) {
+    const sourcesToAlign = props.skill.sources.filter(
+      (source) =>
+        source.from !== "vibe-lib" &&
+        source.path !== selected.path &&
+        (!source.is_symlink || source.content_hash !== selected.content_hash)
+    );
+
+    for (const source of sourcesToAlign) {
       const agent = props.agents.find((a) => a.id === source.from);
-      if (!agent || source.is_symlink) continue;
-      await skillsStore.syncToVibe(props.skill.id, agent.id, false, source.path);
+      if (!agent) continue;
+      await skillsStore.replaceWithLibrary(props.skill.id, agent.id, source.path);
     }
 
     toast.show(t("manage.conflict_resolve_success", { skill: props.skill.name || props.skill.id }), "success");
@@ -440,7 +475,7 @@ function getAgentNameFromPath(path: string): string {
             {{ t("manage.conflict_plan_align_same", { count: sameContentSources.length }) }}
           </div>
           <div>
-            {{ t("manage.conflict_plan_keep_different", { count: differentContentSources.length }) }}
+            {{ t("manage.conflict_plan_replace_different", { count: differentAgentSources.length }) }}
           </div>
         </div>
       </div>

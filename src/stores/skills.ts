@@ -132,6 +132,12 @@ export const useSkillsStore = defineStore("skills", () => {
     useAgentsStore().fetchAgents();
   }
 
+  async function replaceWithLibrary(skillId: string, agentId: string, sourcePath?: string) {
+    await invoke("replace_with_library", { skillId, agentId, sourcePath: sourcePath ?? null });
+    refreshSkills();
+    useAgentsStore().fetchAgents();
+  }
+
   async function batchSkillAction(
     skillId: string,
     agentIds: string[],
@@ -172,6 +178,7 @@ export const useSkillsStore = defineStore("skills", () => {
     previewSkillAtPath,
     syncToVibe,
     relink,
+    replaceWithLibrary,
     batchSkillAction,
   };
 });

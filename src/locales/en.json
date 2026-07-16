@@ -78,7 +78,7 @@
     "conflict_plan_keep_library": "Keep the current library version.",
     "conflict_plan_link_selected": "Replace the original copy in {source} with a link to the library.",
     "conflict_plan_align_same": "Replace {count} same-content agent copies with links.",
-    "conflict_plan_keep_different": "Keep {count} different-content versions as conflicts for later review.",
+    "conflict_plan_replace_different": "Replace {count} different-content agent copies with links to the library.",
     "conflict_resolve_success": "Applied conflict resolution for {skill}",
     "conflict_use_resolution": "Expand details and choose the canonical version in the conflict resolution panel",
     "preview_path": "Preview",

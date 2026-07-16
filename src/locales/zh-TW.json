@@ -78,7 +78,7 @@
     "conflict_plan_keep_library": "保留目前技能庫版本。",
     "conflict_plan_link_selected": "將把 {source} 下的原目錄替換為指向技能庫的連結。",
     "conflict_plan_align_same": "內容相同的 {count} 個 Agent 副本會替換為連結。",
-    "conflict_plan_keep_different": "內容不同的 {count} 個版本會保留為衝突，等待後續處理。",
+    "conflict_plan_replace_different": "內容不同的 {count} 個 Agent 副本會替換為指向技能庫的連結。",
     "conflict_resolve_success": "已套用 {skill} 的衝突解決方案",
     "conflict_use_resolution": "請展開詳情，在衝突解決面板中選擇主版本",
     "preview_path": "預覽",

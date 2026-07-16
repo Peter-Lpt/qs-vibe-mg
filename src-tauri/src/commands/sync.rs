@@ -184,6 +184,32 @@ fn relink_impl(skill_id: &str, agent: &Agent, source_path: Option<&str>) -> Resu
     Ok(())
 }
 
+fn replace_with_library_impl(
+    skill_id: &str,
+    agent: &Agent,
+    source_path: Option<&str>,
+) -> Result<(), VibeError> {
+    let vibe_dir = vibe_skills_dir()?;
+    let vibe_path = vibe_dir.join(skill_id);
+    if !vibe_path.exists() {
+        return Err(VibeError::SkillNotFound {
+            skill_id: skill_id.to_string(),
+        });
+    }
+
+    let link_path = resolve_agent_skill_path(agent, skill_id, source_path, false)?;
+    if vibe_fs::is_link(&link_path) {
+        vibe_fs::remove_symlink(&link_path)?;
+    } else if link_path.is_dir() {
+        fs::remove_dir_all(&link_path)?;
+    } else if link_path.exists() {
+        fs::remove_file(&link_path)?;
+    }
+    vibe_fs::create_symlink(&vibe_path, &link_path)?;
+    invalidate_agents_cache();
+    Ok(())
+}
+
 #[tauri::command]
 pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VibeError> {
     tracing::info!("create_link: skill={}, agent={}", skill_id, agent_id);
@@ -631,6 +657,38 @@ pub fn relink(
     Ok(())
 }
 
+#[tauri::command]
+pub fn replace_with_library(
+    skill_id: String,
+    agent_id: String,
+    source_path: Option<String>,
+) -> Result<(), VibeError> {
+    tracing::info!("replace_with_library: skill={}, agent={}", skill_id, agent_id);
+
+    let agents = load_agents()?;
+    let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
+        tracing::error!("replace_with_library: agent not found: {}", agent_id);
+        VibeError::AgentNotFound {
+            agent_id: agent_id.clone(),
+        }
+    })?;
+
+    replace_with_library_impl(&skill_id, agent, source_path.as_deref())?;
+
+    if let Err(e) = record_action_with_source(
+        HistoryAction::Link,
+        &skill_id,
+        Some(vec![skill_id.clone()]),
+        Some(&agent_id),
+        Some("replace_with_library"),
+        source_path.as_deref(),
+    ) {
+        warn!("Failed to record Link action: {}", e);
+    }
+
+    Ok(())
+}
+
 /// 递归查找 skill 路径
 fn find_skill_path_recursive(dir: &Path, skill_id: &str) -> Option<PathBuf> {
     if !dir.exists() {
@@ -698,6 +756,7 @@ pub fn batch_skill_action(
             "unlink" => unlink_skill(&skill_id, agent, None),
             "sync_to_vibe" => sync_to_vibe_impl(&skill_id, agent, false, None),
             "replace_with_link" => sync_to_vibe_impl(&skill_id, agent, false, None),
+            "replace_with_library" => replace_with_library_impl(&skill_id, agent, None),
             "relink" => relink_impl(&skill_id, agent, None),
             "remove_dangling" => unlink_skill(&skill_id, agent, None),
             _ => {
