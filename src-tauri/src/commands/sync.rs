@@ -52,9 +52,7 @@ fn resolve_agent_skill_path(
 
     if let Some(path) = source_path.filter(|p| !p.trim().is_empty()) {
         let candidate = PathBuf::from(path);
-        let normalized_candidate = vibe_fs::normalize_path(&candidate);
-        let normalized_agent_dir = vibe_fs::normalize_path(agent_skills_dir);
-        if !normalized_candidate.starts_with(&normalized_agent_dir) {
+        if !vibe_fs::is_path_within(&candidate, agent_skills_dir) {
             return Err(VibeError::Path(format!(
                 "Source path is outside agent skills directory: {}",
                 path

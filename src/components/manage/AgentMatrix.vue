@@ -12,7 +12,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "expand-skill", skillId: string): void;
-  (e: "action", skillId: string, agentId: string): void;
 }>();
 
 const { t } = useI18n();
@@ -23,24 +22,86 @@ interface CellInfo {
   status: "origin" | "synced" | "independent" | "linked_elsewhere" | "dangling" | "unlinked";
   icon: string;
   color: string;
+  label: string;
   source: SkillSource | null;
 }
 
 function getCell(skill: Skill, agent: Agent): CellInfo {
   const source = skill.sources.find((s) => s.from === agent.id);
-  if (!source) return { status: "unlinked", icon: "○", color: "var(--c-text-secondary)", source: null };
-  if (source.from === "vibe-lib") return { status: "origin", icon: "📦", color: "var(--c-success)", source };
-  if (!source.is_symlink) return { status: "independent", icon: "●", color: "var(--c-text)", source };
-  if (!source.symlink_target || source.content_hash === "") return { status: "dangling", icon: "❌", color: "var(--c-danger)", source };
+  if (!source) {
+    return {
+      status: "unlinked",
+      icon: "CircleDashed",
+      color: "var(--c-text-secondary)",
+      label: t("manage.status_unlinked"),
+      source: null,
+    };
+  }
+  if (source.from === "vibe-lib") {
+    return {
+      status: "origin",
+      icon: "Package",
+      color: "var(--c-success)",
+      label: t("manage.status_origin"),
+      source,
+    };
+  }
+  if (!source.is_symlink) {
+    return {
+      status: "independent",
+      icon: "Folder",
+      color: skill.sources.some((s) => s.from === "vibe-lib") && source.content_hash !== skill.sources.find((s) => s.from === "vibe-lib")?.content_hash
+        ? "var(--c-warning)"
+        : "var(--c-text)",
+      label: skill.sources.some((s) => s.from === "vibe-lib") && source.content_hash !== skill.sources.find((s) => s.from === "vibe-lib")?.content_hash
+        ? t("manage.status_independent_conflict")
+        : t("manage.status_independent"),
+      source,
+    };
+  }
+  if (!source.symlink_target || source.content_hash === "") {
+    return {
+      status: "dangling",
+      icon: "CircleSlash",
+      color: "var(--c-danger)",
+      label: t("manage.status_dangling"),
+      source,
+    };
+  }
   const vibeLib = skill.sources.find((s) => s.from === "vibe-lib");
-  if (vibeLib?.path && samePath(source.symlink_target, vibeLib.path))
-    return { status: "synced", icon: "●", color: "var(--c-primary)", source };
-  return { status: "linked_elsewhere", icon: "⚠", color: "var(--c-warning)", source };
+  if (vibeLib?.path && samePath(source.symlink_target, vibeLib.path)) {
+    return {
+      status: "synced",
+      icon: "Link2",
+      color: "var(--c-primary)",
+      label: t("manage.status_synced"),
+      source,
+    };
+  }
+  return {
+    status: "linked_elsewhere",
+    icon: "TriangleAlert",
+    color: "var(--c-warning)",
+    label: t("manage.status_linked_elsewhere"),
+    source,
+  };
 }
 
 function handleCellClick(skill: Skill, agent: Agent, cell: CellInfo) {
-  if (cell.status === "unlinked") return;
-  emit("action", skill.id, agent.id);
+  void agent;
+  void cell;
+  emit("expand-skill", skill.id);
+}
+
+function cellTitle(skill: Skill, agent: Agent, cell: CellInfo): string {
+  const parts = [
+    `${skill.name || skill.id} @ ${agent.name}`,
+    `${t("manage.matrix_status")}: ${cell.label}`,
+    `${t("agents.skills_dir")}: ${agent.skills_dir}`,
+  ];
+  if (cell.source?.path) parts.push(`${t("manage.source_path")}: ${cell.source.path}`);
+  if (cell.source?.symlink_target) parts.push(`${t("manage.symlink_target")}: ${cell.source.symlink_target}`);
+  return parts.join("\n");
 }
 </script>
 
@@ -52,6 +113,9 @@ function handleCellClick(skill: Skill, agent: Agent, cell: CellInfo) {
     <div class="px-3 py-2 border-b" style="border-color: var(--c-border);">
       <h3 class="text-xs font-semibold" style="color: var(--c-text);">
         {{ t("manage.agent_matrix") }}
+        <span class="ml-1 font-normal" style="color: var(--c-text-secondary);">
+          {{ t("manage.matrix_diagnostic_hint") }}
+        </span>
       </h3>
     </div>
 
@@ -126,14 +190,18 @@ function handleCellClick(skill: Skill, agent: Agent, cell: CellInfo) {
               class="px-2 py-1.5 text-center cursor-pointer"
               @click="handleCellClick(skill, agent, getCell(skill, agent))"
             >
-              <span
-                class="inline-block w-3 h-3 leading-3 rounded-full transition-colors"
+              <button
+                class="inline-flex w-6 h-6 items-center justify-center rounded transition-colors"
                 :style="{
-                  background: getCell(skill, agent).color,
-                  cursor: getCell(skill, agent).status !== 'unlinked' ? 'pointer' : 'default',
+                  color: getCell(skill, agent).color,
+                  background: expandedSkillId === skill.id ? 'var(--c-primary-light)' : 'transparent',
+                  border: getCell(skill, agent).status === 'unlinked' ? '1px dashed var(--c-border)' : '1px solid transparent',
                 }"
-                :title="`${skill.name || skill.id} @ ${agent.name}: ${getCell(skill, agent).status}`"
-              />
+                :title="cellTitle(skill, agent, getCell(skill, agent))"
+                type="button"
+              >
+                <component :is="getCell(skill, agent).icon" :size="13" />
+              </button>
             </td>
           </tr>
         </tbody>
@@ -142,10 +210,10 @@ function handleCellClick(skill: Skill, agent: Agent, cell: CellInfo) {
 
     <div class="px-3 py-1.5 text-[10px] flex items-center gap-3" style="color: var(--c-text-secondary);">
       <span class="inline-flex items-center gap-1"><Link2 :size="12" /> {{ t("manage.status_synced") }}</span>
-      <span class="inline-flex items-center gap-1"><Circle :size="12" /> {{ t("manage.real_file") }}</span>
+      <span class="inline-flex items-center gap-1"><Folder :size="12" /> {{ t("manage.status_independent") }}</span>
       <span class="inline-flex items-center gap-1"><TriangleAlert :size="12" /> {{ t("manage.status_linked_elsewhere") }}</span>
       <span class="inline-flex items-center gap-1"><CircleDashed :size="12" /> {{ t("manage.status_unlinked") }}</span>
-      <span class="inline-flex items-center gap-1"><CircleX :size="12" /> {{ t("manage.status_dangling") }}</span>
+      <span class="inline-flex items-center gap-1"><CircleSlash :size="12" /> {{ t("manage.status_dangling") }}</span>
     </div>
   </div>
 </template>

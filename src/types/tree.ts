@@ -17,7 +17,7 @@ export type NodeLinkState =
   | "linked_elsewhere"; // 软链指向其它 agent/目录 → relink
 
 export interface TreeRoot {
-  kind: "agent" | "library";
+  kind: "agent" | "library" | "project";
   id: string; // agent.id 或 'library'
   label: string;
   dirPath: string; // skills_dir 或 ~/.vibe-skills
@@ -80,7 +80,7 @@ function deriveLinkState(
 }
 
 /**
- * 由 Skill[] 纯前端派生目录树，无需改后端。
+ * 由 Skill[] 纯前端派生来源树，无需改后端。
  * @param skills 已按筛选/排序处理后的展示列表
  * @param agents  检测到的 agents
  */
@@ -123,6 +123,36 @@ export function buildSkillTree(skills: Skill[], agents: Agent[]): TreeRoot[] {
     roots.push(buildRoot("agent", agent.id, agent.name, agent.skills_dir, agent.detected, children, 0));
   }
 
+  const projectSources = new Map<string, { label: string; children: TreeSkillNode[] }>();
+  for (const skill of skills) {
+    for (const source of skill.sources.filter((x) => x.from.startsWith("project:") || x.source_kind === "project")) {
+      const rootId = source.from;
+      const label = source.from.replace(/^project:/, "") || "Project";
+      const vibeSource = skill.sources.find((x) => x.from === "vibe-lib");
+      if (!projectSources.has(rootId)) {
+        projectSources.set(rootId, { label, children: [] });
+      }
+      projectSources.get(rootId)!.children.push({
+        kind: "skill",
+        nodeKey: `${rootId}/${skill.id}`,
+        rootId,
+        id: skill.id,
+        name: skill.name || skill.id,
+        dirName: skill.id,
+        path: source.path,
+        isSymlink: source.is_symlink,
+        symlinkTarget: source.symlink_target,
+        linkState: deriveLinkState(source, vibeSource),
+        hasConflict: skill.has_conflict,
+        skill,
+      });
+    }
+  }
+  for (const [rootId, project] of projectSources) {
+    const dirPath = project.children[0]?.path.split(/[\\/]/).slice(0, -1).join("/") ?? "";
+    roots.push(buildRoot("project", rootId, `Project · ${project.label}`, dirPath, true, project.children, 0));
+  }
+
   // —— library 根 ——
   const libChildren: TreeSkillNode[] = [];
   for (const skill of skills) {
@@ -162,15 +192,16 @@ export function buildSkillTree(skills: Skill[], agents: Agent[]): TreeRoot[] {
   }
 
   // 排序：agent 根在前，library 根置后；根内子节点按「异常优先 + 名称」
+  const rootOrder = { library: 0, agent: 1, project: 2 };
   roots.sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === "agent" ? -1 : 1;
+    if (a.kind !== b.kind) return rootOrder[a.kind] - rootOrder[b.kind];
     return a.label.localeCompare(b.label);
   });
   return roots;
 }
 
 function buildRoot(
-  kind: "agent" | "library",
+  kind: "agent" | "library" | "project",
   id: string,
   label: string,
   dirPath: string,

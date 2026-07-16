@@ -7,6 +7,7 @@ import SkillRow from "./SkillRow.vue";
 import SkillTree from "./SkillTree.vue";
 import AgentMatrix from "./AgentMatrix.vue";
 import BatchSyncPanel from "./BatchSyncPanel.vue";
+import IssueRepairPanel from "./IssueRepairPanel.vue";
 import InstallDialog from "../skills/InstallDialog.vue";
 import EmptyState from "../common/EmptyState.vue";
 import SkeletonCard from "../common/SkeletonCard.vue";
@@ -297,6 +298,13 @@ function onBatchApplied() {
   // 面板内部已统一 refreshSkills + fetchAgents；此处保留选择，便于继续操作
 }
 
+function selectIssueGroup(skillIds: string[], openBatch: boolean) {
+  selectedSkills.value = new Set(skillIds);
+  if (skillIds.length === 0) return;
+  viewMode.value = "list";
+  if (openBatch) showBatch.value = true;
+}
+
 // ── 矩阵操作 ──────────────────────────────────────
 function handleMatrixExpand(skillId: string) {
   expandedSkillId.value = skillId;
@@ -477,6 +485,12 @@ const chipGroups = computed(() => {
         <span style="color: var(--c-warning);">{{ issueSkills.length }} {{ t("manage.conflict_count") || "异常" }}</span>
       </template>
     </div>
+
+    <IssueRepairPanel
+      :skills="skillsStore.skills"
+      :agents="agentsStore.agents"
+      @select-group="selectIssueGroup"
+    />
 
     <!-- Loading -->
     <div v-if="skillsStore.loading" class="space-y-3">

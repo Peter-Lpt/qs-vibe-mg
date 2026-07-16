@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
-import { marked } from "marked";
 import { useSkillAgentStatus } from "../../composables/useSkillAgentStatus";
+import { useSkillActions } from "../../composables/useSkillActions";
 import type { Skill, Agent } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 import SkillDetail from "./SkillDetail.vue";
@@ -22,8 +21,8 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-const skillsStore = useSkillsStore();
 const toast = useToast();
+const actions = useSkillActions((k, p) => t(k, p as Record<string, unknown>));
 
 const agentsRef = computed(() => props.agents);
 const skillRef = computed(() => props.skill);
@@ -46,6 +45,7 @@ const previewContent = ref("");
 const previewLoading = ref(false);
 const showPreview = ref(false);
 const showDeleteConfirm = ref(false);
+const showAgentLegend = ref(false);
 
 async function toggleExpand() {
   isExpanded.value = !isExpanded.value;
@@ -55,25 +55,25 @@ async function togglePreview() {
   showPreview.value = !showPreview.value;
   if (showPreview.value && !previewContent.value) {
     previewLoading.value = true;
-    try {
-      const md = await skillsStore.previewSkill(props.skill.id);
-      previewContent.value = marked.parse(md) as string;
-    } catch {
-      previewContent.value = "";
-    } finally {
-      previewLoading.value = false;
-    }
+    previewContent.value = await actions.loadPreview(props.skill);
+    previewLoading.value = false;
   }
 }
 
 async function handleDelete() {
   try {
-    await skillsStore.deleteSkill(props.skill.id);
+    await actions.deleteLibrarySkill(props.skill);
     showDeleteConfirm.value = false;
-    toast.show(t("skills.delete"), "success");
   } catch (e: unknown) {
     toast.show(String(e), "error");
   }
+}
+
+function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
+  const parts = [`${item.agent.name}: ${item.statusLabel}`, item.agent.skills_dir];
+  if (item.source?.path) parts.push(`${t("manage.source_path")}: ${item.source.path}`);
+  if (item.source?.symlink_target) parts.push(`${t("manage.symlink_target")}: ${item.source.symlink_target}`);
+  return parts.join("\n");
 }
 </script>
 
@@ -134,14 +134,47 @@ async function handleDelete() {
       </span>
 
       <!-- Agent 状态点 -->
-      <span class="flex items-center gap-0.5 shrink-0 overflow-hidden">
+      <span class="relative flex items-center gap-0.5 shrink-0 overflow-visible">
         <span
           v-for="item in allAgentStatuses"
           :key="item.agent.id"
-          class="w-2 h-2 rounded-full shrink-0"
-          :style="{ background: item.statusColor, fontSize: '8px' }"
-          :title="`${item.agent.name}: ${item.statusLabel}`"
+          class="w-3.5 h-3.5 rounded-full shrink-0 inline-flex items-center justify-center text-[8px] font-medium cursor-help"
+          :style="{ background: item.statusColor, color: item.status === 'unlinked' ? 'var(--c-text-secondary)' : 'white', border: item.status === 'unlinked' ? '1px solid var(--c-border)' : '0' }"
+          :title="statusTip(item)"
+          @mouseenter="showAgentLegend = true"
         />
+        <button
+          class="w-5 h-5 inline-flex items-center justify-center rounded cursor-help"
+          style="color: var(--c-text-secondary);"
+          :title="t('manage.agent_status_legend')"
+          @mouseenter="showAgentLegend = true"
+          @mouseleave="showAgentLegend = false"
+          @click.stop="showAgentLegend = !showAgentLegend"
+        >
+          <CircleAlert :size="12" />
+        </button>
+        <div
+          v-if="showAgentLegend"
+          class="absolute right-0 top-6 z-20 w-64 rounded-md border p-2 shadow-lg"
+          style="background: var(--c-surface); border-color: var(--c-border);"
+          @mouseenter="showAgentLegend = true"
+          @mouseleave="showAgentLegend = false"
+        >
+          <div class="text-[10px] font-medium mb-1" style="color: var(--c-text);">
+            {{ t("manage.agent_status_legend") }}
+          </div>
+          <div v-for="item in allAgentStatuses" :key="item.agent.id" class="flex items-start gap-2 py-0.5">
+            <span class="w-2 h-2 rounded-full mt-1 shrink-0" :style="{ background: item.statusColor }" />
+            <div class="min-w-0">
+              <div class="text-[10px] truncate" style="color: var(--c-text);">
+                {{ item.agent.name }} · {{ item.statusLabel }}
+              </div>
+              <div class="text-[9px] truncate" style="color: var(--c-text-secondary);" :title="item.source?.path || item.agent.skills_dir">
+                {{ item.source?.path || item.agent.skills_dir }}
+              </div>
+            </div>
+          </div>
+        </div>
       </span>
 
       <span

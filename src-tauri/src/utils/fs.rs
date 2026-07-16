@@ -20,6 +20,13 @@ pub fn normalize_path(path: &Path) -> PathBuf {
     canonical
 }
 
+/// Component-aware containment check after normalization/canonicalization.
+pub fn is_path_within(path: &Path, base: &Path) -> bool {
+    let normalized_path = normalize_path(path);
+    let normalized_base = normalize_path(base);
+    normalized_path.strip_prefix(normalized_base).is_ok()
+}
+
 /// 递归复制目录
 pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), VibeError> {
     fs::create_dir_all(dst)?;

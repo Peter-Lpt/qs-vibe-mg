@@ -1,5 +1,6 @@
 export interface SkillSource {
   from: string;
+  source_kind?: "library" | "agent" | "project" | "external";
   path: string;
   name: string;
   description: string;

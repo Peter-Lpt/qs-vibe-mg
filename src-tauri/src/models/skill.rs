@@ -42,6 +42,9 @@ pub struct Skill {
 pub struct SkillSource {
     /// 来源标识：vibe-lib 或 agent id（如 claude-code）
     pub from: String,
+    /// 来源类型：library / agent / project / external
+    #[serde(default = "default_source_kind")]
+    pub source_kind: String,
     /// 该来源下的绝对路径
     pub path: String,
     /// 该来源下 SKILL.md 中的 name
@@ -54,6 +57,10 @@ pub struct SkillSource {
     pub symlink_target: Option<String>,
     /// SKILL.md 内容的 SHA-256 hex hash
     pub content_hash: String,
+}
+
+fn default_source_kind() -> String {
+    "agent".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

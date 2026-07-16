@@ -61,6 +61,11 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
         )?;
     }
 
+    scan_project_sources(
+        &mut map,
+        &mut hash_cache,
+    )?;
+
     crate::utils::hash::save_hash_cache(&vibe_dir, &hash_cache);
 
     let mut skills: Vec<Skill> = map
@@ -475,10 +480,14 @@ pub fn preview_skill_at_path(path: String) -> Result<String, VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let agents = load_agents()?;
     let target = vibe_fs::normalize_path(skill_path);
-    let allowed = target.starts_with(vibe_fs::normalize_path(&vibe_dir))
-        || agents.iter().any(|a| {
-            target.starts_with(vibe_fs::normalize_path(Path::new(&a.skills_dir)))
-        });
+    let project_roots = project_skill_roots();
+    let allowed = vibe_fs::is_path_within(&target, &vibe_dir)
+        || agents
+            .iter()
+            .any(|a| vibe_fs::is_path_within(&target, Path::new(&a.skills_dir)))
+        || project_roots
+            .iter()
+            .any(|root| vibe_fs::is_path_within(&target, root));
     if !allowed {
         return Err(VibeError::Path(
             "preview_skill_at_path 仅允许读取 vibe 目录或 agent 目录内的文件".to_string(),
@@ -576,6 +585,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
         linked_agents: Vec::new(),
         sources: vec![SkillSource {
             from: "vibe-lib".to_string(),
+            source_kind: "library".to_string(),
             path: dest.to_string_lossy().to_string(),
             name,
             description: String::new(),
@@ -681,6 +691,58 @@ struct SkillEntry {
     modified_at: String,
 }
 
+fn source_kind_for(source_id: &str) -> String {
+    if source_id == "vibe-lib" {
+        "library".to_string()
+    } else if source_id.starts_with("project:") {
+        "project".to_string()
+    } else {
+        "agent".to_string()
+    }
+}
+
+fn project_skill_roots() -> Vec<std::path::PathBuf> {
+    let cwd = match std::env::current_dir() {
+        Ok(dir) => dir,
+        Err(_) => return Vec::new(),
+    };
+
+    [".codex/skills", ".agents/skills", "skills"]
+        .iter()
+        .map(|relative| cwd.join(relative))
+        .filter(|path| path.exists() && path.is_dir())
+        .collect()
+}
+
+fn scan_project_sources(
+    map: &mut HashMap<String, SkillEntry>,
+    hash_cache: &mut crate::utils::hash::HashCache,
+) -> Result<(), VibeError> {
+    let cwd = match std::env::current_dir() {
+        Ok(dir) => dir,
+        Err(_) => return Ok(()),
+    };
+
+    for root in project_skill_roots() {
+        let label = root
+            .strip_prefix(&cwd)
+            .unwrap_or(&root)
+            .to_string_lossy()
+            .replace('\\', "/");
+        scan_directory(
+            &root,
+            &format!("project:{}", label),
+            map,
+            false,
+            0,
+            &mut std::collections::HashSet::new(),
+            hash_cache,
+            None,
+        )?;
+    }
+    Ok(())
+}
+
 /// 递归扫描目录，找到所有包含 SKILL.md 的子目录
 /// symlink_only=true 时跳过真实文件（仅扫描 symlink/junction）
 fn scan_directory(
@@ -731,6 +793,9 @@ fn scan_directory(
         }
 
         let is_link = vibe_fs::is_link(&path);
+        if source_id.starts_with("project:") && is_link {
+            continue;
+        }
         let symlink_target = if is_link {
             vibe_fs::read_link_target(&path)
                 .ok()
@@ -748,6 +813,7 @@ fn scan_directory(
         if is_broken_link {
             let source = SkillSource {
                 from: source_id.to_string(),
+                source_kind: source_kind_for(source_id),
                 path: path.to_string_lossy().to_string(),
                 name: id.clone(),
                 description: String::new(),
@@ -793,6 +859,7 @@ fn scan_directory(
 
             let source = SkillSource {
                 from: source_id.to_string(),
+                source_kind: source_kind_for(source_id),
                 path: path.to_string_lossy().to_string(),
                 name: name.clone(),
                 description: description.clone(),

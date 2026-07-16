@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
 import { useFileLogger } from "../../composables/useFileLogger";
+import { useSkillActions } from "../../composables/useSkillActions";
 import { marked } from "marked";
 import {
   useSkillAgentStatus,
@@ -23,6 +24,7 @@ const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const toast = useToast();
 const logger = useFileLogger();
+const actions = useSkillActions((k, p) => t(k, p as Record<string, unknown>));
 
 const agentsRef = computed(() => props.agents);
 const skillRef = computed(() => props.skill);
@@ -150,6 +152,28 @@ const batchAvailableActions = computed(() => {
   return actions;
 });
 
+const sourceRows = computed(() =>
+  props.skill.sources.map((source) => {
+    const metadataUrl = props.skill.metadata?.repository || props.skill.metadata?.source || props.skill.metadata?.homepage;
+    const inferredProvider = /github/i.test(`${metadataUrl || ""} ${source.path}`)
+      ? "GitHub"
+      : /gitee/i.test(`${metadataUrl || ""} ${source.path}`)
+        ? "Gitee"
+        : /gitlab/i.test(`${metadataUrl || ""} ${source.path}`)
+          ? "GitLab"
+          : "";
+    const confidence = inferredProvider
+        ? t("manage.source_confidence_inferred", { provider: inferredProvider })
+        : t("manage.source_confidence_unknown");
+    return {
+      source,
+      label: sourceLabel(source),
+      kind: source.source_kind || (source.from === "vibe-lib" ? "library" : source.from.startsWith("project:") ? "project" : "agent"),
+      confidence,
+    };
+  })
+);
+
 // 逐 agent 按钮文案：sync 显示「从 {agent} 同步」，其余复用 actionLabel
 function cellBtnLabel(action: string, agentName: string): string {
   if (action === "sync_to_vibe") return t("manage.btn_sync_from", { agent: agentName });
@@ -240,6 +264,13 @@ function sourceLabel(source: SkillSource): string {
 
 function shortHash(source: SkillSource): string {
   return source.content_hash ? source.content_hash.slice(0, 8) : "—";
+}
+
+function sourceKindLabel(kind: string): string {
+  if (kind === "library") return t("manage.source_kind_library");
+  if (kind === "project") return t("manage.source_kind_project");
+  if (kind === "external") return t("manage.source_kind_external");
+  return t("manage.source_kind_agent");
 }
 
 async function executeConflictResolution() {
@@ -388,6 +419,43 @@ function getAgentNameFromPath(path: string): string {
 
 <template>
   <div class="px-3 pb-3">
+    <div class="mb-3 rounded-md border p-2" style="background: var(--c-bg); border-color: var(--c-border);">
+      <div class="text-[10px] font-medium uppercase tracking-wide mb-1.5" style="color: var(--c-text-secondary);">
+        {{ t("manage.sources_title") }}
+      </div>
+      <div class="space-y-1">
+        <div
+          v-for="row in sourceRows"
+          :key="row.source.path"
+          class="flex items-center gap-2 rounded px-2 py-1"
+          style="background: var(--c-surface);"
+        >
+          <component :is="row.source.is_symlink ? 'Link2' : row.kind === 'project' ? 'FileBox' : 'Folder'" :size="13" style="color: var(--c-text-secondary);" />
+          <span class="text-[10px] font-medium shrink-0" style="color: var(--c-text);">
+            {{ row.label }}
+          </span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded shrink-0" style="background: var(--c-surface-hover); color: var(--c-text-secondary);">
+            {{ sourceKindLabel(row.kind) }}
+          </span>
+          <span class="text-[10px] truncate min-w-0 flex-1" style="color: var(--c-text-secondary);" :title="row.source.path">
+            {{ row.source.path }}
+          </span>
+          <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);">
+            {{ shortHash(row.source) }}
+          </span>
+          <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="row.confidence">
+            {{ row.confidence }}
+          </span>
+          <button class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer" style="color: var(--c-text-secondary);" :title="t('manage.reveal')" @click.stop="actions.reveal(row.source)">
+            <FolderOpen :size="12" />
+          </button>
+          <button class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer" style="color: var(--c-text-secondary);" :title="t('manage.copy_path')" @click.stop="actions.copyPath(row.source)">
+            <Copy :size="12" />
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 冲突解决：先选择主版本，再预览影响，最后执行 -->
     <div v-if="skill.has_conflict" class="mb-3">
       <div class="flex items-center justify-between gap-2 mb-2">

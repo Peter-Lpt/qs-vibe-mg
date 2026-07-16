@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { openPath } from "@tauri-apps/plugin-opener";
 import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
+import { useSkillActions } from "../../composables/useSkillActions";
 import type { Agent, Skill } from "../../types";
 import type { TreeRoot, TreeSkillNode, NodeLinkState } from "../../types/tree";
 import { buildSkillTree } from "../../types/tree";
@@ -25,6 +25,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const toast = useToast();
+const actions = useSkillActions((k, p) => t(k, p as Record<string, unknown>));
 
 const roots = computed<TreeRoot[]>(() => buildSkillTree(props.skills, props.agents));
 
@@ -70,8 +71,13 @@ async function doUnlink(node: TreeSkillNode) {
 }
 async function doSync(node: TreeSkillNode) {
   try {
-    await skillsStore.syncToVibe(node.id, node.rootId, true, node.path);
-    toast.show(t("manage.synced_to_vibe", { agent: rootName(node.rootId) }), "success");
+    if (node.rootId.startsWith("project:")) {
+      await skillsStore.installSkill(node.path);
+      toast.show(t("manage.imported_to_library", { skill: node.name }), "success");
+    } else {
+      await skillsStore.syncToVibe(node.id, node.rootId, true, node.path);
+      toast.show(t("manage.synced_to_vibe", { agent: rootName(node.rootId) }), "success");
+    }
   } catch (e: unknown) {
     toast.show(String(e), "error");
   }
@@ -107,19 +113,11 @@ async function confirmDelete() {
 }
 
 async function reveal(node: TreeSkillNode) {
-  try {
-    await openPath(node.path);
-  } catch (e: unknown) {
-    toast.show(String(e), "error");
-  }
+  await actions.reveal(node);
 }
 
 function copyPath(node: TreeSkillNode) {
-  const p = node.path;
-  navigator.clipboard?.writeText(p).then(
-    () => toast.show(t("manage.path_copied") || "路径已复制", "success"),
-    () => toast.show(String(p), "info")
-  );
+  actions.copyPath(node);
 }
 
 function rootName(rootId: string): string {
@@ -135,6 +133,7 @@ function linkedByCount(root: TreeRoot, node: TreeSkillNode): number {
 
 // —— 树内拖拽链接（审计 P0-4：拖放前校验目标已存在实体）——
 const dragSkillId = ref<string | null>(null);
+const pendingDrop = ref<{ skillId: string; root: TreeRoot; sourcePath: string; targetPath: string } | null>(null);
 function onDragStart(node: TreeSkillNode) {
   dragSkillId.value = node.id;
 }
@@ -149,7 +148,35 @@ function onDropOnRoot(root: TreeRoot, ev: DragEvent) {
     toast.show(t("manage.already_exists_at_agent", { agent: root.label }) || "该 Agent 已存在此 skill", "warning");
     return;
   }
-  doLink({ ...({ id: skillId, rootId: root.id } as TreeSkillNode) });
+  const skill = props.skills.find((s) => s.id === skillId);
+  const sourcePath = skill?.sources.find((s) => s.from === "vibe-lib")?.path || skill?.path || skillId;
+  pendingDrop.value = {
+    skillId,
+    root,
+    sourcePath,
+    targetPath: `${root.dirPath.replace(/[\\/]+$/, "")}/${skillId}`,
+  };
+}
+
+async function confirmDrop() {
+  const drop = pendingDrop.value;
+  pendingDrop.value = null;
+  if (!drop || drop.root.kind !== "agent") return;
+  await doLink({ ...({ id: drop.skillId, rootId: drop.root.id } as TreeSkillNode) });
+}
+
+const previewKey = ref<string | null>(null);
+const previewHtml = ref<Record<string, string>>({});
+const previewLoadingKey = ref<string | null>(null);
+async function togglePreview(node: TreeSkillNode) {
+  previewKey.value = previewKey.value === node.nodeKey ? null : node.nodeKey;
+  if (!previewKey.value || previewHtml.value[node.nodeKey]) return;
+  previewLoadingKey.value = node.nodeKey;
+  previewHtml.value = {
+    ...previewHtml.value,
+    [node.nodeKey]: await actions.loadPreview(node.skill, node),
+  };
+  previewLoadingKey.value = null;
 }
 
 // —— 详情：行内展开（与列表模式 SkillRow 一致，避免抽屉遮挡与竞态；单列列表下仅下推兄弟节点，无网格留白问题）——
@@ -254,14 +281,27 @@ const highlighted = computed(() => {
 
             <!-- 行内主操作 -->
             <div class="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-              <button v-if="node.linkState === 'independent'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-primary);" :title="t('manage.btn_sync')" @click.stop="doSync(node)"><Plus :size="14" /></button>
-              <button v-if="node.linkState === 'independent_same'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-primary);" :title="t('manage.btn_replace')" @click.stop="doReplace(node)"><Link2 :size="14" /></button>
-              <button v-if="node.linkState === 'synced'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('skills.unlink')" @click.stop="doUnlink(node)"><Unlink :size="14" /></button>
-              <button v-if="node.linkState === 'linked_elsewhere'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" :title="t('manage.relink')" @click.stop="doRelink(node)"><RefreshCw :size="14" /></button>
+              <button v-if="node.linkState === 'independent'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-primary);" :title="root.kind === 'project' ? t('manage.import_library') : t('manage.btn_sync')" @click.stop="doSync(node)"><Plus :size="14" /></button>
+              <button v-if="root.kind !== 'project' && node.linkState === 'independent_same'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-primary);" :title="t('manage.btn_replace')" @click.stop="doReplace(node)"><Link2 :size="14" /></button>
+              <button v-if="root.kind !== 'project' && node.linkState === 'synced'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('skills.unlink')" @click.stop="doUnlink(node)"><Unlink :size="14" /></button>
+              <button v-if="root.kind !== 'project' && node.linkState === 'linked_elsewhere'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" :title="t('manage.relink')" @click.stop="doRelink(node)"><RefreshCw :size="14" /></button>
+              <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('skills.preview')" @click.stop="togglePreview(node)"><Eye :size="14" /></button>
               <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('manage.reveal')" @click.stop="reveal(node)"><FolderOpen :size="14" /></button>
               <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('manage.copy_path')" @click.stop="copyPath(node)"><Copy :size="14" /></button>
-              <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-danger);" :title="t('skills.delete')" @click.stop="showDelete = { node }"><Trash2 :size="14" /></button>
+              <button v-if="root.kind !== 'project'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-danger);" :title="t('skills.delete')" @click.stop="showDelete = { node }"><Trash2 :size="14" /></button>
             </div>
+          </div>
+
+          <div v-if="previewKey === node.nodeKey" class="ml-6 my-1 border-l pl-3 py-1" style="border-color: var(--c-border);">
+            <div v-if="previewLoadingKey === node.nodeKey" class="text-[10px]" style="color: var(--c-text-secondary);">
+              {{ t("app.loading") }}
+            </div>
+            <div
+              v-else
+              class="markdown-body rounded-md border p-3 max-h-[280px] overflow-y-auto"
+              style="background: var(--c-bg); border-color: var(--c-border);"
+              v-html="previewHtml[node.nodeKey]"
+            />
           </div>
 
           <!-- 行内展开详情：作为 header 行的兄弟节点（而非子节点），
@@ -279,9 +319,24 @@ const highlighted = computed(() => {
       v-if="showDelete"
       :title="t('skills.delete_confirm_title')"
       :message="t('skills.delete_confirm', { name: showDelete.node.name })"
-      :confirm-label="t('skills.delete')"
+      :confirm-text="t('skills.delete')"
+      :danger="true"
       @confirm="confirmDelete"
       @cancel="showDelete = null"
+    />
+
+    <ConfirmDialog
+      v-if="pendingDrop"
+      :title="t('manage.drag_preview_title')"
+      :message="t('manage.drag_preview_message', {
+        skill: pendingDrop.skillId,
+        agent: pendingDrop.root.label,
+        source: pendingDrop.sourcePath,
+        target: pendingDrop.targetPath,
+      })"
+      :confirm-text="t('manage.btn_link')"
+      @confirm="confirmDrop"
+      @cancel="pendingDrop = null"
     />
   </div>
 </template>

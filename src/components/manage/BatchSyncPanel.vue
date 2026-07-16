@@ -37,7 +37,29 @@ const hasConflictSelected = ref(false);
 
 const selectedCells = ref<Set<string>>(new Set());
 
-const result = ref<{ synced: number; errors: { skillId: string; agentId: string; message: string }[] } | null>(null);
+interface DryRunItem {
+  key: string;
+  skillId: string;
+  skillName: string;
+  agentId: string;
+  agentName: string;
+  action: AgentAction | "conflict" | "needs_import" | "skipped";
+  category: "execute" | "skip" | "conflict" | "blocked";
+  reason: string;
+}
+
+interface BatchResult {
+  synced: number;
+  success: DryRunItem[];
+  failed: { item: DryRunItem | null; skillId: string; agentId: string; message: string }[];
+  skipped: DryRunItem[];
+  conflicts: DryRunItem[];
+  blocked: DryRunItem[];
+}
+
+const result = ref<BatchResult | null>(null);
+const dryRunExpanded = ref(true);
+const resultExpanded = ref(true);
 
 const panelSkills = computed(() =>
   skillsStore.skills.filter((s) => props.selectedSkillIds.includes(s.id))
@@ -203,32 +225,100 @@ function cellOf(row: Row, agent: Agent): CellView {
 const selectedSummary = computed(() => {
   let exec = 0;
   let conflict = 0;
-  for (const key of selectedCells.value) {
-    const idx = key.indexOf("::");
-    const skillId = key.slice(0, idx);
-    const agentId = key.slice(idx + 2);
-    const row = rows.value.find((r) => r.skill.id === skillId);
-    if (!row) continue;
-    const st = row.statuses.find((s) => s.agent.id === agentId);
-    if (!st) continue;
-    const sw = applySwitch(mode.value, st.status, st.action, hasVibe(row.skill));
-    if (!sw.selectable) continue;
-    if (isConflictCell(st.status, st.action, hasVibe(row.skill))) conflict++;
-    else exec++;
+  let skipped = 0;
+  let blocked = 0;
+  for (const item of dryRunItems.value) {
+    if (item.category === "execute") exec++;
+    else if (item.category === "conflict") conflict++;
+    else if (item.category === "blocked") blocked++;
+    else skipped++;
   }
-  return { exec, conflict };
+  return { exec, conflict, skipped, blocked };
 });
 
 const importNeededCount = computed(() => {
-  let k = 0;
+  return dryRunItems.value.filter((item) => item.action === "needs_import").length;
+});
+
+const selectedTargetAgentIds = computed(() => {
+  const ids = new Set<string>();
+  for (const key of selectedCells.value) {
+    const idx = key.indexOf("::");
+    if (idx >= 0) ids.add(key.slice(idx + 2));
+  }
+  return ids;
+});
+
+const dryRunItems = computed<DryRunItem[]>(() => {
+  const items: DryRunItem[] = [];
+  const targetAgentIds = selectedTargetAgentIds.value;
+  if (targetAgentIds.size === 0) return items;
   for (const row of rows.value) {
     const vibe = hasVibe(row.skill);
     for (const st of row.statuses) {
-      if (st.status === "unlinked" && !vibe) k++;
+      if (!targetAgentIds.has(st.agent.id)) continue;
+      const key = `${row.skill.id}::${st.agent.id}`;
+      const sw = applySwitch(mode.value, st.status, st.action, vibe);
+      const selected = selectedCells.value.has(key);
+      const base = {
+        key,
+        skillId: row.skill.id,
+        skillName: row.skill.name || row.skill.id,
+        agentId: st.agent.id,
+        agentName: st.agent.name,
+      };
+
+      if (isConflictCell(st.status, st.action, vibe)) {
+        items.push({
+          ...base,
+          action: "conflict",
+          category: "conflict",
+          reason: t("manage.batch_panel_reason_conflict"),
+        });
+      } else if (st.status === "unlinked" && !vibe) {
+        items.push({
+          ...base,
+          action: "needs_import",
+          category: "blocked",
+          reason: t("manage.batch_panel_reason_needs_import"),
+        });
+      } else if (selected && sw.selectable && sw.effectiveAction !== "none") {
+        items.push({
+          ...base,
+          action: sw.effectiveAction,
+          category: "execute",
+          reason: actionLabel(t, sw.effectiveAction) || st.statusLabel,
+        });
+      } else if (!selected && sw.selectable && sw.effectiveAction !== "none") {
+        items.push({
+          ...base,
+          action: "skipped",
+          category: "skip",
+          reason: t("manage.batch_panel_reason_not_selected"),
+        });
+      } else if (!sw.selectable) {
+        items.push({
+          ...base,
+          action: "skipped",
+          category: "skip",
+          reason: st.statusLabel,
+        });
+      }
     }
   }
-  return k;
+  return items;
 });
+
+const dryRunCounts = computed(() => ({
+  execute: dryRunItems.value.filter((i) => i.category === "execute").length,
+  link: dryRunItems.value.filter((i) => i.action === "link").length,
+  relink: dryRunItems.value.filter((i) => i.action === "relink").length,
+  clean: dryRunItems.value.filter((i) => i.action === "remove_dangling").length,
+  sync: dryRunItems.value.filter((i) => i.action === "sync_to_vibe" || i.action === "replace_with_link").length,
+  skipped: dryRunItems.value.filter((i) => i.category === "skip").length,
+  conflict: dryRunItems.value.filter((i) => i.category === "conflict").length,
+  blocked: dryRunItems.value.filter((i) => i.category === "blocked").length,
+}));
 
 // ── 选择操作 ──────────────────────────────────
 function toggleCell(skillId: string, agentId: string) {
@@ -292,22 +382,11 @@ function clearSelection() {
 // ── 执行 ──────────────────────────────────────
 async function execute() {
   result.value = null;
-  hasConflictSelected.value = false;
-  const cells: { skillId: string; agentId: string; action: AgentAction }[] = [];
-  for (const key of selectedCells.value) {
-    const idx = key.indexOf("::");
-    const skillId = key.slice(0, idx);
-    const agentId = key.slice(idx + 2);
-    const row = rows.value.find((r) => r.skill.id === skillId);
-    if (!row) continue;
-    const st = row.statuses.find((s) => s.agent.id === agentId);
-    if (!st) continue;
-    const vibe = hasVibe(row.skill);
-    const sw = applySwitch(mode.value, st.status, st.action, vibe);
-    if (!sw.selectable || sw.effectiveAction === "none") continue;
-    if (isConflictCell(st.status, st.action, vibe)) continue;
-    cells.push({ skillId, agentId, action: sw.effectiveAction });
-  }
+  const plan = dryRunItems.value;
+  hasConflictSelected.value = plan.some((item) => item.category === "conflict");
+  const cells = plan
+    .filter((item): item is DryRunItem & { action: AgentAction } => item.category === "execute")
+    .map((item) => ({ skillId: item.skillId, agentId: item.agentId, action: item.action }));
 
   if (cells.length === 0) {
     toast.show(t("manage.batch_panel_no_selection"), "warning");
@@ -317,10 +396,10 @@ async function execute() {
     showConflictConfirm.value = true;
     return;
   }
-  await runExecute(cells);
+  await runExecute(cells, plan);
 }
 
-async function runExecute(cells: { skillId: string; agentId: string; action: AgentAction }[]) {
+async function runExecute(cells: { skillId: string; agentId: string; action: AgentAction }[], plan: DryRunItem[]) {
   operating.value = true;
   // 按 (skillId, 有效动作) 分组 → 同一 skill 行内混合动作自动拆成独立调用，不串味
   const groups = new Map<string, { skillId: string; action: AgentAction; agentIds: string[] }>();
@@ -353,7 +432,19 @@ async function runExecute(cells: { skillId: string; agentId: string; action: Age
   operating.value = false;
   confirmAck.value = false;
   hasConflictSelected.value = false;
-  result.value = { synced: totalSynced, errors };
+  const failedKeys = new Set(errors.map((e) => `${e.skillId}::${e.agentId}`));
+  const success = plan.filter((item) => item.category === "execute" && !failedKeys.has(item.key));
+  result.value = {
+    synced: totalSynced,
+    success,
+    failed: errors.map((e) => ({
+      item: plan.find((item) => item.key === `${e.skillId}::${e.agentId}`) ?? null,
+      ...e,
+    })),
+    skipped: plan.filter((item) => item.category === "skip"),
+    conflicts: plan.filter((item) => item.category === "conflict"),
+    blocked: plan.filter((item) => item.category === "blocked"),
+  };
 
   if (errors.length === 0) {
     toast.show(t("manage.batch_panel_result_success", { count: totalSynced }), "success");
@@ -375,6 +466,13 @@ function onConfirmConflict() {
 
 function closePanel() {
   emit("close");
+}
+
+function actionName(action: DryRunItem["action"]): string {
+  if (action === "conflict") return t("manage.batch_panel_conflict");
+  if (action === "needs_import") return t("manage.batch_panel_needs_import");
+  if (action === "skipped") return t("manage.batch_result_skipped");
+  return actionLabel(t, action) || action;
 }
 </script>
 
@@ -472,7 +570,7 @@ function closePanel() {
                     :checked="selectableKeysForCol(agent.id).length > 0 && selectableKeysForCol(agent.id).every((k) => selectedCells.has(k))"
                     class="w-3 h-3 rounded cursor-pointer"
                     style="accent-color: var(--c-primary);"
-                    @click.stop.prevent="toggleCol(agent.id)"
+                    @click.stop="toggleCol(agent.id)"
                   />
                 </div>
               </th>
@@ -492,7 +590,7 @@ function closePanel() {
                     :checked="selectableKeysForRow(row).length > 0 && selectableKeysForRow(row).every((k) => selectedCells.has(k))"
                     class="w-3.5 h-3.5 rounded cursor-pointer shrink-0"
                     style="accent-color: var(--c-primary);"
-                    @click.stop.prevent="toggleRow(row)"
+                    @click.stop="toggleRow(row)"
                   />
                   <span class="text-xs font-medium truncate max-w-[110px]" style="color: var(--c-text);">
                     {{ row.skill.name || row.skill.id }}
@@ -550,20 +648,84 @@ function closePanel() {
         </table>
       </div>
 
-      <!-- Result detail -->
-      <div v-if="result && result.errors.length > 0" class="px-4 pb-2 max-h-[120px] overflow-auto">
-        <div class="text-[11px] font-medium mb-1" style="color: var(--c-danger);">
-          {{ t("manage.batch_panel_error_detail") }}
-        </div>
-        <div
-          v-for="(err, i) in result.errors"
-          :key="i"
-          class="text-[10px] py-0.5"
-          style="color: var(--c-text-secondary);"
+      <!-- Dry-run preview -->
+      <div class="px-4 pb-2 border-t" style="border-color: var(--c-border);">
+        <button
+          class="w-full flex items-center gap-2 py-2 text-left cursor-pointer"
+          style="color: var(--c-text);"
+          @click="dryRunExpanded = !dryRunExpanded"
         >
-          {{ skillsStore.skills.find((s) => s.id === err.skillId)?.name || err.skillId }}
-          @ {{ agentsStore.agents.find((a) => a.id === err.agentId)?.name || err.agentId || "?" }}
-          : {{ err.message }}
+          <ChevronRight :size="14" class="transition-transform" :style="{ transform: dryRunExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }" />
+          <span class="text-[11px] font-medium">{{ t("manage.batch_dry_run_title") }}</span>
+          <span class="text-[10px] ml-auto" style="color: var(--c-text-secondary);">
+            {{ t("manage.batch_dry_run_counts", dryRunCounts) }}
+          </span>
+        </button>
+        <div v-if="dryRunExpanded" class="max-h-[140px] overflow-auto rounded border" style="border-color: var(--c-border);">
+          <div
+            v-for="item in dryRunItems"
+            :key="item.key + item.category"
+            class="grid gap-2 px-2 py-1 text-[10px]"
+            style="grid-template-columns: minmax(120px,1fr) minmax(90px,.7fr) minmax(84px,.6fr) minmax(140px,1fr); color: var(--c-text-secondary); border-bottom: 1px solid var(--c-border);"
+          >
+            <span class="truncate" :title="item.skillName">{{ item.skillName }}</span>
+            <span class="truncate" :title="item.agentName">{{ item.agentName }}</span>
+            <span :style="{ color: item.category === 'execute' ? 'var(--c-primary)' : item.category === 'conflict' ? 'var(--c-warning)' : item.category === 'blocked' ? 'var(--c-danger)' : 'var(--c-text-secondary)' }">
+              {{ actionName(item.action) }}
+            </span>
+            <span class="truncate" :title="item.reason">{{ item.reason }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result detail -->
+      <div v-if="result" class="px-4 pb-2 border-t" style="border-color: var(--c-border);">
+        <button
+          class="w-full flex items-center gap-2 py-2 text-left cursor-pointer"
+          style="color: var(--c-text);"
+          @click="resultExpanded = !resultExpanded"
+        >
+          <ChevronRight :size="14" class="transition-transform" :style="{ transform: resultExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }" />
+          <span class="text-[11px] font-medium">{{ t("manage.batch_result_detail") }}</span>
+          <span class="text-[10px] ml-auto" style="color: var(--c-text-secondary);">
+            {{ t("manage.batch_result_counts", {
+              success: result.success.length,
+              failed: result.failed.length,
+              skipped: result.skipped.length,
+              conflict: result.conflicts.length,
+              blocked: result.blocked.length,
+            }) }}
+          </span>
+        </button>
+        <div v-if="resultExpanded" class="grid gap-2 max-h-[160px] overflow-auto" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));">
+          <div
+            v-for="group in [
+              { key: 'success', label: t('manage.batch_result_success_group'), color: 'var(--c-success)', items: result.success },
+              { key: 'failed', label: t('manage.batch_result_failed_group'), color: 'var(--c-danger)', items: result.failed },
+              { key: 'skipped', label: t('manage.batch_result_skipped_group'), color: 'var(--c-text-secondary)', items: result.skipped },
+              { key: 'conflicts', label: t('manage.batch_result_conflict_group'), color: 'var(--c-warning)', items: result.conflicts },
+              { key: 'blocked', label: t('manage.batch_result_blocked_group'), color: 'var(--c-danger)', items: result.blocked },
+            ]"
+            :key="group.key"
+            class="rounded border p-2"
+            style="border-color: var(--c-border);"
+          >
+            <div class="text-[10px] font-medium mb-1" :style="{ color: group.color }">
+              {{ group.label }} ({{ group.items.length }})
+            </div>
+            <div v-for="(entry, i) in group.items.slice(0, 20)" :key="i" class="text-[10px] truncate py-0.5" style="color: var(--c-text-secondary);">
+              <template v-if="'item' in entry && entry.item">
+                {{ entry.item.skillName }} @ {{ entry.item.agentName }}: {{ entry.message }}
+              </template>
+              <template v-else-if="'item' in entry">
+                {{ skillsStore.skills.find((s) => s.id === entry.skillId)?.name || entry.skillId }}
+                @ {{ agentsStore.agents.find((a) => a.id === entry.agentId)?.name || entry.agentId || "?" }}: {{ entry.message }}
+              </template>
+              <template v-else>
+                {{ entry.skillName }} @ {{ entry.agentName }} · {{ entry.reason }}
+              </template>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -574,6 +736,8 @@ function closePanel() {
             exec: selectedSummary.exec,
             conflict: selectedSummary.conflict,
             import: importNeededCount,
+            skipped: selectedSummary.skipped,
+            blocked: selectedSummary.blocked,
           }) }}
         </span>
         <div class="ml-auto flex items-center gap-2">
