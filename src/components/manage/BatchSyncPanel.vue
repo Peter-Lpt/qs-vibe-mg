@@ -172,7 +172,10 @@ function cellOf(row: Row, agent: Agent): CellView {
   let label = "";
   let color = "";
   let muted = false;
-  if (!sw.selectable) {
+  if (isConflict) {
+    muted = true;
+    label = t("manage.batch_panel_conflict");
+  } else if (!sw.selectable) {
     muted = true;
     if (st.status === "origin") label = t("manage.status_origin");
     else if (st.status === "synced") label = t("manage.status_synced");
@@ -185,7 +188,7 @@ function cellOf(row: Row, agent: Agent): CellView {
   return {
     skillId: row.skill.id,
     agentId: agent.id,
-    selectable: sw.selectable,
+    selectable: isConflict ? false : sw.selectable,
     effectiveAction: sw.effectiveAction,
     isConflict,
     needsImport,
@@ -239,7 +242,10 @@ function toggleCell(skillId: string, agentId: string) {
 function selectableKeysForRow(row: Row): string[] {
   const vibe = hasVibe(row.skill);
   return row.statuses
-    .filter((st) => applySwitch(mode.value, st.status, st.action, vibe).selectable)
+    .filter((st) =>
+      applySwitch(mode.value, st.status, st.action, vibe).selectable &&
+      !isConflictCell(st.status, st.action, vibe)
+    )
     .map((st) => `${row.skill.id}::${st.agent.id}`);
 }
 
@@ -255,7 +261,12 @@ function selectableKeysForCol(agentId: string): string[] {
   const keys: string[] = [];
   for (const row of rows.value) {
     const st = row.statuses.find((x) => x.agent.id === agentId);
-    if (st && applySwitch(mode.value, st.status, st.action, hasVibe(row.skill)).selectable) {
+    const vibe = hasVibe(row.skill);
+    if (
+      st &&
+      applySwitch(mode.value, st.status, st.action, vibe).selectable &&
+      !isConflictCell(st.status, st.action, vibe)
+    ) {
       keys.push(`${row.skill.id}::${agentId}`);
     }
   }
@@ -291,11 +302,10 @@ async function execute() {
     if (!row) continue;
     const st = row.statuses.find((s) => s.agent.id === agentId);
     if (!st) continue;
-    const sw = applySwitch(mode.value, st.status, st.action, hasVibe(row.skill));
+    const vibe = hasVibe(row.skill);
+    const sw = applySwitch(mode.value, st.status, st.action, vibe);
     if (!sw.selectable || sw.effectiveAction === "none") continue;
-    if (isConflictCell(st.status, st.action, hasVibe(row.skill))) {
-      hasConflictSelected.value = true;
-    }
+    if (isConflictCell(st.status, st.action, vibe)) continue;
     cells.push({ skillId, agentId, action: sw.effectiveAction });
   }
 

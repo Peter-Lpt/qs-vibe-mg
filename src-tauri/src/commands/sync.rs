@@ -696,7 +696,7 @@ pub fn batch_skill_action(
         let op_result = match action.as_str() {
             "link" => link_skill(&skill_id, agent),
             "unlink" => unlink_skill(&skill_id, agent, None),
-            "sync_to_vibe" => sync_to_vibe_impl(&skill_id, agent, true, None),
+            "sync_to_vibe" => sync_to_vibe_impl(&skill_id, agent, false, None),
             "replace_with_link" => sync_to_vibe_impl(&skill_id, agent, false, None),
             "relink" => relink_impl(&skill_id, agent, None),
             "remove_dangling" => unlink_skill(&skill_id, agent, None),

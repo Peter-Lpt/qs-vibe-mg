@@ -65,6 +65,11 @@ async function handlePrimaryAction() {
     (s) => s.action === summary.value.primaryAction
   );
   if (!status) return;
+  if (status.action === "sync_to_vibe" && props.skill.has_conflict) {
+    isExpanded.value = true;
+    toast.show(t("manage.conflict_use_resolution"), "warning");
+    return;
+  }
   try {
     switch (status.action) {
       case "link":
@@ -72,23 +77,23 @@ async function handlePrimaryAction() {
         toast.show(t("skills.linked", { agent: status.agent.name }), "success");
         break;
       case "unlink":
-        await skillsStore.removeLink(props.skill.id, status.agent.id);
+        await skillsStore.removeLink(props.skill.id, status.agent.id, status.source?.path);
         toast.show(t("skills.unlinked", { agent: status.agent.name }), "success");
         break;
       case "sync_to_vibe":
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id, true);
+        await skillsStore.syncToVibe(props.skill.id, status.agent.id, true, status.source?.path);
         toast.show(t("manage.synced_to_vibe", { agent: status.agent.name }), "success");
         break;
       case "replace_with_link":
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id, false);
+        await skillsStore.syncToVibe(props.skill.id, status.agent.id, false, status.source?.path);
         toast.show(t("manage.replaced_with_link", { agent: status.agent.name }), "success");
         break;
       case "relink":
-        await skillsStore.relink(props.skill.id, status.agent.id);
+        await skillsStore.relink(props.skill.id, status.agent.id, status.source?.path);
         toast.show(t("manage.relinked", { agent: status.agent.name }), "success");
         break;
       case "remove_dangling":
-        await skillsStore.removeLink(props.skill.id, status.agent.id);
+        await skillsStore.removeLink(props.skill.id, status.agent.id, status.source?.path);
         toast.show(t("manage.dangling_removed", { agent: status.agent.name }), "success");
         break;
     }

@@ -35,6 +35,9 @@ const showBatchMenu = ref(false);
 const batchOperating = ref(false);
 const resolvingConflict = ref<string | null>(null);
 const pendingOverwrite = ref<AgentStatus | null>(null);
+const pendingPlanOverwrite = ref(false);
+const selectedConflictPath = ref<string>("");
+const resolvingPlan = ref(false);
 
 interface ConflictItem {
   source: SkillSource;
@@ -53,6 +56,10 @@ async function loadConflictSources() {
     content: "",
     loading: true,
   }));
+  selectedConflictPath.value =
+    props.skill.sources.find((s) => s.from === "vibe-lib")?.path ||
+    props.skill.sources[0]?.path ||
+    "";
   await Promise.all(
     conflictItems.value.map(async (it) => {
       try {
@@ -74,6 +81,45 @@ watch(
   () => loadConflictSources()
 );
 
+const selectedConflictSource = computed(() =>
+  props.skill.sources.find((s) => s.path === selectedConflictPath.value)
+);
+
+const selectedConflictAgent = computed(() => {
+  const source = selectedConflictSource.value;
+  if (!source || source.from === "vibe-lib") return null;
+  return props.agents.find((a) => a.id === source.from) ?? null;
+});
+
+const sameContentSources = computed(() => {
+  const selected = selectedConflictSource.value;
+  if (!selected) return [];
+  return props.skill.sources.filter(
+    (s) =>
+      s.from !== "vibe-lib" &&
+      s.path !== selected.path &&
+      s.content_hash !== "" &&
+      s.content_hash === selected.content_hash
+  );
+});
+
+const differentContentSources = computed(() => {
+  const selected = selectedConflictSource.value;
+  if (!selected) return [];
+  return props.skill.sources.filter(
+    (s) =>
+      s.path !== selected.path &&
+      s.content_hash !== "" &&
+      s.content_hash !== selected.content_hash
+  );
+});
+
+const planWillOverwriteLibrary = computed(() => {
+  const selected = selectedConflictSource.value;
+  const library = vibeSource.value;
+  return !!selected && selected.from !== "vibe-lib" && !!library && selected.content_hash !== library.content_hash;
+});
+
 const batchAvailableActions = computed(() => {
   const selected = allAgentStatuses.value.filter((s) =>
     selectedAgents.value.has(s.agent.id)
@@ -89,7 +135,7 @@ const batchAvailableActions = computed(() => {
   const hasClean = selected.some((s) => s.action === "remove_dangling");
 
   if (hasLink) actions.push({ action: "link", label: t("manage.btn_link"), color: "var(--c-primary)" });
-  if (hasSync) actions.push({ action: "sync_to_vibe", label: t("manage.btn_sync_from", { agent: "" }), color: "var(--c-primary)" });
+  if (hasSync && !props.skill.has_conflict) actions.push({ action: "sync_to_vibe", label: t("manage.btn_sync_from", { agent: "" }), color: "var(--c-primary)" });
   if (hasReplace) actions.push({ action: "replace_with_link", label: t("manage.btn_replace"), color: "var(--c-text)" });
   if (hasRelink) actions.push({ action: "relink", label: t("manage.btn_relink"), color: "var(--c-warning)" });
   if (hasUnlink) actions.push({ action: "unlink", label: t("manage.btn_unlink"), color: "var(--c-text-secondary)" });
@@ -177,7 +223,84 @@ async function runAction(status: AgentStatus) {
 async function confirmOverwrite() {
   const status = pendingOverwrite.value;
   pendingOverwrite.value = null;
+  pendingPlanOverwrite.value = false;
   if (status) await runAction(status);
+}
+
+function sourceLabel(source: SkillSource): string {
+  if (source.from === "vibe-lib") return t("manage.library");
+  return props.agents.find((a) => a.id === source.from)?.name ?? source.from;
+}
+
+function shortHash(source: SkillSource): string {
+  return source.content_hash ? source.content_hash.slice(0, 8) : "—";
+}
+
+async function executeConflictResolution() {
+  const selected = selectedConflictSource.value;
+  if (!selected || resolvingPlan.value) return;
+
+  if (planWillOverwriteLibrary.value && selected.from !== "vibe-lib") {
+    const agent = selectedConflictAgent.value;
+    if (agent) {
+      pendingOverwrite.value = {
+        agent,
+        source: selected,
+        status: "independent",
+        action: "sync_to_vibe",
+        statusLabel: t("manage.status_independent_conflict"),
+        statusColor: "var(--c-warning)",
+        statusIcon: "⚠",
+      };
+      pendingPlanOverwrite.value = true;
+      return;
+    }
+  }
+
+  await runConflictResolution(selected);
+}
+
+async function runConflictResolution(selected: SkillSource) {
+  resolvingPlan.value = true;
+  try {
+    if (selected.from !== "vibe-lib") {
+      const agent = props.agents.find((a) => a.id === selected.from);
+      if (!agent) throw new Error(`Agent not found: ${selected.from}`);
+      await skillsStore.syncToVibe(props.skill.id, agent.id, true, selected.path);
+    }
+
+    for (const source of sameContentSources.value) {
+      const agent = props.agents.find((a) => a.id === source.from);
+      if (!agent || source.is_symlink) continue;
+      await skillsStore.syncToVibe(props.skill.id, agent.id, false, source.path);
+    }
+
+    toast.show(t("manage.conflict_resolve_success", { skill: props.skill.name || props.skill.id }), "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  } finally {
+    resolvingPlan.value = false;
+  }
+}
+
+async function confirmConflictResolutionOverwrite() {
+  const selected = selectedConflictSource.value;
+  pendingOverwrite.value = null;
+  pendingPlanOverwrite.value = false;
+  if (selected) await runConflictResolution(selected);
+}
+
+async function confirmPendingOverwrite() {
+  if (pendingPlanOverwrite.value) {
+    await confirmConflictResolutionOverwrite();
+    return;
+  }
+  await confirmOverwrite();
+}
+
+function cancelPendingOverwrite() {
+  pendingOverwrite.value = null;
+  pendingPlanOverwrite.value = false;
 }
 
 async function handleBatchAction(action: string) {
@@ -226,48 +349,61 @@ function getAgentNameFromPath(path: string): string {
   return "";
 }
 
-async function useThisVersion(source: SkillSource) {
-  try {
-    const agent = props.agents.find((a) => a.id === source.from);
-    if (agent) {
-      await skillsStore.syncToVibe(props.skill.id, agent.id, true);
-      toast.show(t("manage.synced_to_vibe", { agent: agent.name }), "success");
-    }
-  } catch (e: unknown) {
-    toast.show(String(e), "error");
-  }
-}
 </script>
 
 <template>
   <div class="px-3 pb-3">
-    <!-- 冲突路径预览（默认并排展示各 source 的 SKILL.md 内容，便于直接对比） -->
+    <!-- 冲突解决：先选择主版本，再预览影响，最后执行 -->
     <div v-if="skill.has_conflict" class="mb-3">
-      <div class="mb-2 text-[10px] font-medium uppercase tracking-wide" style="color: var(--c-warning);">
-        {{ t("manage.conflict_paths") }}
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <div class="text-[10px] font-medium uppercase tracking-wide" style="color: var(--c-warning);">
+          {{ t("manage.conflict_resolution") }}
+        </div>
+        <button
+          class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+          :disabled="!selectedConflictSource || resolvingPlan"
+          style="background: var(--c-primary); color: white;"
+          @click.stop="executeConflictResolution"
+        >
+          {{ resolvingPlan ? "..." : t("manage.conflict_apply_plan") }}
+        </button>
       </div>
       <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
         <div
           v-for="it in conflictItems"
           :key="it.source.path"
-          class="rounded-md border p-2"
-          style="background: var(--c-bg); border-color: var(--c-border);"
+          class="rounded-md border p-2 cursor-pointer transition-colors"
+          :style="{
+            background: selectedConflictPath === it.source.path ? 'var(--c-primary-light)' : 'var(--c-bg)',
+            borderColor: selectedConflictPath === it.source.path ? 'var(--c-primary)' : 'var(--c-border)',
+          }"
+          @click="selectedConflictPath = it.source.path"
         >
           <div class="flex items-center justify-between gap-2 mb-1.5">
             <div class="flex items-center gap-2 min-w-0">
+              <input
+                type="radio"
+                :checked="selectedConflictPath === it.source.path"
+                class="w-3 h-3 shrink-0"
+                style="accent-color: var(--c-primary);"
+                @click.stop="selectedConflictPath = it.source.path"
+              />
               <component :is="it.source.is_symlink ? 'Link2' : 'Folder'" class="shrink-0" :size="12" :style="{ color: it.source.is_symlink ? 'var(--c-primary)' : 'var(--c-text-secondary)' }" />
-              <span class="text-[10px] truncate" style="color: var(--c-text-secondary);">
-                {{ it.source.from }}: {{ it.source.path.split(/[/\\]/).slice(-2, -1)[0] || it.source.path.split(/[/\\]/).pop() }}
-              </span>
+              <div class="min-w-0">
+                <div class="text-[11px] font-medium truncate" style="color: var(--c-text);">
+                  {{ sourceLabel(it.source) }}
+                  <span v-if="it.source.from === 'vibe-lib'" class="ml-1 text-[9px]" style="color: var(--c-primary);">
+                    {{ t("manage.current_library_version") }}
+                  </span>
+                </div>
+                <div class="text-[10px] truncate" style="color: var(--c-text-secondary);" :title="it.source.path">
+                  {{ it.source.path }}
+                </div>
+              </div>
             </div>
-            <button
-              v-if="it.source.from !== 'vibe-lib'"
-              class="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors shrink-0"
-              style="background: var(--c-primary); color: white;"
-              @click.stop="useThisVersion(it.source)"
-            >
-              {{ t("manage.use_this_version") }}
-            </button>
+            <span class="text-[10px] shrink-0" style="color: var(--c-text-secondary);">
+              {{ shortHash(it.source) }}
+            </span>
           </div>
           <div v-if="it.loading" class="text-[10px]" style="color: var(--c-text-secondary);">
             {{ t("app.loading") }}
@@ -279,6 +415,33 @@ async function useThisVersion(source: SkillSource) {
             v-html="it.content"
           />
           <div v-else class="text-[10px]" style="color: var(--c-text-secondary);">—</div>
+        </div>
+      </div>
+
+      <div
+        v-if="selectedConflictSource"
+        class="mt-2 rounded-md border p-2 text-[11px]"
+        style="background: var(--c-surface); border-color: var(--c-border);"
+      >
+        <div class="font-medium mb-1.5" style="color: var(--c-text);">
+          {{ t("manage.conflict_plan_title") }}
+        </div>
+        <div class="space-y-1" style="color: var(--c-text-secondary);">
+          <div v-if="planWillOverwriteLibrary" style="color: var(--c-warning);">
+            {{ t("manage.conflict_plan_overwrite_library", { source: sourceLabel(selectedConflictSource) }) }}
+          </div>
+          <div v-else>
+            {{ t("manage.conflict_plan_keep_library") }}
+          </div>
+          <div v-if="selectedConflictSource.from !== 'vibe-lib'">
+            {{ t("manage.conflict_plan_link_selected", { source: sourceLabel(selectedConflictSource) }) }}
+          </div>
+          <div>
+            {{ t("manage.conflict_plan_align_same", { count: sameContentSources.length }) }}
+          </div>
+          <div>
+            {{ t("manage.conflict_plan_keep_different", { count: differentContentSources.length }) }}
+          </div>
         </div>
       </div>
     </div>
@@ -426,8 +589,8 @@ async function useThisVersion(source: SkillSource) {
       })"
       :confirm-text="t('manage.overwrite_confirm_action')"
       :danger="true"
-      @confirm="confirmOverwrite"
-      @cancel="pendingOverwrite = null"
+      @confirm="confirmPendingOverwrite"
+      @cancel="cancelPendingOverwrite"
     />
   </div>
 </template>

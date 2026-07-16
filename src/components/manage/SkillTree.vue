@@ -76,6 +76,14 @@ async function doSync(node: TreeSkillNode) {
     toast.show(String(e), "error");
   }
 }
+async function doReplace(node: TreeSkillNode) {
+  try {
+    await skillsStore.syncToVibe(node.id, node.rootId, false, node.path);
+    toast.show(t("manage.replaced_with_link", { agent: rootName(node.rootId) }), "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
 async function doRelink(node: TreeSkillNode) {
   try {
     await skillsStore.relink(node.id, node.rootId, node.path);
@@ -246,9 +254,9 @@ const highlighted = computed(() => {
 
             <!-- 行内主操作 -->
             <div class="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-              <button v-if="node.linkState.startsWith('independent')" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-primary);" :title="t('skills.link')" @click.stop="doLink(node)"><Plus :size="14" /></button>
+              <button v-if="node.linkState === 'independent'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-primary);" :title="t('manage.btn_sync')" @click.stop="doSync(node)"><Plus :size="14" /></button>
+              <button v-if="node.linkState === 'independent_same'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-primary);" :title="t('manage.btn_replace')" @click.stop="doReplace(node)"><Link2 :size="14" /></button>
               <button v-if="node.linkState === 'synced'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('skills.unlink')" @click.stop="doUnlink(node)"><Unlink :size="14" /></button>
-              <button v-if="node.linkState === 'independent_conflict' || node.linkState === 'linked_elsewhere'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-warning);" :title="t('skills.sync')" @click.stop="doSync(node)"><ArrowLeftRight :size="14" /></button>
               <button v-if="node.linkState === 'linked_elsewhere'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" :title="t('manage.relink')" @click.stop="doRelink(node)"><RefreshCw :size="14" /></button>
               <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('manage.reveal')" @click.stop="reveal(node)"><FolderOpen :size="14" /></button>
               <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('manage.copy_path')" @click.stop="copyPath(node)"><Copy :size="14" /></button>
