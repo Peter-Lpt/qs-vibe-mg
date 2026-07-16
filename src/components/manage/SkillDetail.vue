@@ -129,11 +129,11 @@ async function handleAction(status: ReturnType<typeof useSkillAgentStatus>["allA
         break;
       case "sync_to_vibe":
         resolvingConflict.value = status.agent.id;
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id);
+        await skillsStore.syncToVibe(props.skill.id, status.agent.id, true);
         toast.show(t("manage.synced_to_vibe", { agent: status.agent.name }), "success");
         break;
       case "replace_with_link":
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id);
+        await skillsStore.syncToVibe(props.skill.id, status.agent.id, false);
         toast.show(t("manage.replaced_with_link", { agent: status.agent.name }), "success");
         break;
       case "relink":
@@ -202,7 +202,7 @@ async function useThisVersion(source: SkillSource) {
   try {
     const agent = props.agents.find((a) => a.id === source.from);
     if (agent) {
-      await skillsStore.syncToVibe(props.skill.id, agent.id);
+      await skillsStore.syncToVibe(props.skill.id, agent.id, true);
       toast.show(t("manage.synced_to_vibe", { agent: agent.name }), "success");
     }
   } catch (e: unknown) {

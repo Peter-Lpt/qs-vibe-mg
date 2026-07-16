@@ -43,7 +43,8 @@ fn unlink_skill(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
 }
 
 /// 将 agent 的 skill 同步到技能库（复制 + 创建 symlink），不记录历史
-fn sync_to_vibe_impl(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
+/// 当 force=true 时，如果技能库已有同名 skill 且内容不同，会用 agent 的版本覆盖技能库的版本
+fn sync_to_vibe_impl(skill_id: &str, agent: &Agent, force: bool) -> Result<(), VibeError> {
     let agent_skills_dir = Path::new(&agent.skills_dir);
     let source_path = agent_skills_dir.join(skill_id);
 
@@ -69,13 +70,22 @@ fn sync_to_vibe_impl(skill_id: &str, agent: &Agent) -> Result<(), VibeError> {
         let vibe_hash = dir_hash(&vibe_path);
 
         if source_hash != vibe_hash {
-            return Err(VibeError::Conflict {
-                skill_id: skill_id.to_string(),
-                details: "技能库已有同名 skill，内容不同".to_string(),
-            });
+            if !force {
+                return Err(VibeError::Conflict {
+                    skill_id: skill_id.to_string(),
+                    details: "技能库已有同名 skill，内容不同".to_string(),
+                });
+            }
+            // force=true：用 agent 的版本覆盖技能库
+            tracing::info!(
+                "sync_to_vibe_impl: force overwriting vibe library copy of {}",
+                skill_id
+            );
+            fs::remove_dir_all(&vibe_path)?;
+            vibe_fs::copy_dir_all(&real_source, &vibe_path)?;
         }
 
-        // 内容一致，只需创建 symlink
+        // 内容一致（或已强制覆盖），只需创建 symlink
         if vibe_fs::is_link(&source_path) {
             vibe_fs::remove_symlink(&source_path)?;
         } else {
@@ -513,8 +523,8 @@ fn remove_symlinks_recursive(dir: &Path) -> Result<usize, VibeError> {
 
 /// 将 agent 的 skill 同步到技能库（命令入口，记录单条 Link 历史）
 #[tauri::command]
-pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VibeError> {
-    tracing::info!("sync_to_vibe: skill={}, agent={}", skill_id, agent_id);
+pub fn sync_to_vibe(skill_id: String, agent_id: String, force: bool) -> Result<(), VibeError> {
+    tracing::info!("sync_to_vibe: skill={}, agent={}, force={}", skill_id, agent_id, force);
 
     let agents = load_agents()?;
     let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
@@ -524,7 +534,7 @@ pub fn sync_to_vibe(skill_id: String, agent_id: String) -> Result<(), VibeError>
         }
     })?;
 
-    sync_to_vibe_impl(&skill_id, agent)?;
+    sync_to_vibe_impl(&skill_id, agent, force)?;
     tracing::info!("sync_to_vibe: sync completed successfully");
 
     if let Err(e) = record_action_with_skills(
@@ -628,8 +638,8 @@ pub fn batch_skill_action(
         let op_result = match action.as_str() {
             "link" => link_skill(&skill_id, agent),
             "unlink" => unlink_skill(&skill_id, agent),
-            "sync_to_vibe" => sync_to_vibe_impl(&skill_id, agent),
-            "replace_with_link" => sync_to_vibe_impl(&skill_id, agent),
+            "sync_to_vibe" => sync_to_vibe_impl(&skill_id, agent, true),
+            "replace_with_link" => sync_to_vibe_impl(&skill_id, agent, false),
             "relink" => relink_impl(&skill_id, agent),
             "remove_dangling" => unlink_skill(&skill_id, agent),
             _ => {

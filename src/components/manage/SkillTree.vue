@@ -70,7 +70,7 @@ async function doUnlink(node: TreeSkillNode) {
 }
 async function doSync(node: TreeSkillNode) {
   try {
-    await skillsStore.syncToVibe(node.id, node.rootId);
+    await skillsStore.syncToVibe(node.id, node.rootId, true);
     toast.show(t("manage.synced_to_vibe", { agent: rootName(node.rootId) }), "success");
   } catch (e: unknown) {
     toast.show(String(e), "error");

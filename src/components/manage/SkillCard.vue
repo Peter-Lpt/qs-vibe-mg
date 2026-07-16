@@ -76,11 +76,11 @@ async function handlePrimaryAction() {
         toast.show(t("skills.unlinked", { agent: status.agent.name }), "success");
         break;
       case "sync_to_vibe":
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id);
+        await skillsStore.syncToVibe(props.skill.id, status.agent.id, true);
         toast.show(t("manage.synced_to_vibe", { agent: status.agent.name }), "success");
         break;
       case "replace_with_link":
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id);
+        await skillsStore.syncToVibe(props.skill.id, status.agent.id, false);
         toast.show(t("manage.replaced_with_link", { agent: status.agent.name }), "success");
         break;
       case "relink":

@@ -115,8 +115,8 @@ export const useSkillsStore = defineStore("skills", () => {
     return await invoke<string>("preview_skill_at_path", { path });
   }
 
-  async function syncToVibe(skillId: string, agentId: string) {
-    await invoke("sync_to_vibe", { skillId, agentId });
+  async function syncToVibe(skillId: string, agentId: string, force = false) {
+    await invoke("sync_to_vibe", { skillId, agentId, force });
     refreshSkills();
     useAgentsStore().fetchAgents();
   }
