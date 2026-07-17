@@ -208,6 +208,49 @@ fn replace_with_library_impl(
     Ok(())
 }
 
+fn remove_agent_skill_copy_impl(
+    skill_id: &str,
+    agent: &Agent,
+    source_path: &str,
+) -> Result<(), VibeError> {
+    let target = resolve_agent_skill_path(agent, skill_id, Some(source_path), false)?;
+    if target.file_name().and_then(|name| name.to_str()) != Some(skill_id) {
+        return Err(VibeError::Path(format!(
+            "Source path does not point to skill folder '{}': {}",
+            skill_id, source_path
+        )));
+    }
+
+    if vibe_fs::is_link(&target) {
+        vibe_fs::remove_symlink(&target)?;
+        invalidate_agents_cache();
+        return Ok(());
+    }
+
+    if !target.exists() {
+        return Err(VibeError::SkillNotFound {
+            skill_id: skill_id.to_string(),
+        });
+    }
+
+    let vibe_dir = vibe_skills_dir()?;
+    let trash_root = vibe_dir.join(".trash").join("agent-copies").join(&agent.id);
+    fs::create_dir_all(&trash_root)?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let mut trash_path = trash_root.join(format!("{}-{}", skill_id, stamp));
+    let mut suffix = 1;
+    while trash_path.exists() {
+        trash_path = trash_root.join(format!("{}-{}-{}", skill_id, stamp, suffix));
+        suffix += 1;
+    }
+    fs::rename(&target, trash_path)?;
+    invalidate_agents_cache();
+    Ok(())
+}
+
 #[tauri::command]
 pub fn create_link(skill_id: String, agent_id: String) -> Result<(), VibeError> {
     tracing::info!("create_link: skill={}, agent={}", skill_id, agent_id);
@@ -265,6 +308,31 @@ pub fn remove_link(
         warn!("Failed to record Unlink action: {}", e);
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+pub fn remove_agent_skill_copy(
+    skill_id: String,
+    agent_id: String,
+    source_path: String,
+) -> Result<(), VibeError> {
+    tracing::info!(
+        "remove_agent_skill_copy: skill={}, agent={}, source={}",
+        skill_id,
+        agent_id,
+        source_path
+    );
+
+    let agents = load_agents()?;
+    let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
+        tracing::error!("remove_agent_skill_copy: agent not found: {}", agent_id);
+        VibeError::AgentNotFound {
+            agent_id: agent_id.clone(),
+        }
+    })?;
+
+    remove_agent_skill_copy_impl(&skill_id, agent, &source_path)?;
     Ok(())
 }
 

@@ -92,6 +92,12 @@ export const useSkillsStore = defineStore("skills", () => {
     useAgentsStore().fetchAgents();
   }
 
+  async function removeAgentSkillCopy(skillId: string, agentId: string, sourcePath: string) {
+    await invoke("remove_agent_skill_copy", { skillId, agentId, sourcePath });
+    refreshSkills();
+    useAgentsStore().fetchAgents();
+  }
+
   async function installSkill(sourcePath: string): Promise<Skill> {
     const skill = await invoke<Skill>("install_skill", { sourcePath });
     // P3：install_skill 已返回最新 Skill，本地原地更新而非整表重取
@@ -172,6 +178,7 @@ export const useSkillsStore = defineStore("skills", () => {
     fetchIssues,
     createLink,
     removeLink,
+    removeAgentSkillCopy,
     installSkill,
     deleteSkill,
     previewSkill,

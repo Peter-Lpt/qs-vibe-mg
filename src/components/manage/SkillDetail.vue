@@ -120,6 +120,21 @@ const differentAgentSources = computed(() =>
   differentContentSources.value.filter((s) => s.from !== "vibe-lib")
 );
 
+const agentConflictSources = computed(() =>
+  props.skill.sources.filter((s) => s.from !== "vibe-lib" && !s.from.startsWith("project:"))
+);
+
+const isSingleAgentPathConflict = computed(() => {
+  if (vibeSource.value || agentConflictSources.value.length < 2) return false;
+  return new Set(agentConflictSources.value.map((s) => s.from)).size === 1;
+});
+
+const internalConflictRemovalSources = computed(() => {
+  const selected = selectedConflictSource.value;
+  if (!selected || !isSingleAgentPathConflict.value || selected.from === "vibe-lib") return [];
+  return agentConflictSources.value.filter((s) => s.path !== selected.path);
+});
+
 const planWillOverwriteLibrary = computed(() => {
   const selected = selectedConflictSource.value;
   const library = vibeSource.value;
@@ -349,6 +364,23 @@ async function runConflictResolution(selected: SkillSource) {
   }
 }
 
+async function keepSelectedAgentCopy() {
+  const selected = selectedConflictSource.value;
+  if (!selected || selected.from === "vibe-lib" || resolvingPlan.value) return;
+
+  resolvingPlan.value = true;
+  try {
+    for (const source of internalConflictRemovalSources.value) {
+      await skillsStore.removeAgentSkillCopy(props.skill.id, source.from, source.path);
+    }
+    toast.show(t("manage.internal_conflict_resolve_success", { skill: props.skill.name || props.skill.id }), "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  } finally {
+    resolvingPlan.value = false;
+  }
+}
+
 async function confirmConflictResolutionOverwrite() {
   const selected = selectedConflictSource.value;
   pendingOverwrite.value = null;
@@ -463,6 +495,7 @@ function getAgentNameFromPath(path: string): string {
           {{ t("manage.conflict_resolution") }}
         </div>
         <button
+          v-if="!isSingleAgentPathConflict"
           class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
           :disabled="!selectedConflictSource || resolvingPlan"
           style="background: var(--c-primary); color: white;"
@@ -527,24 +560,55 @@ function getAgentNameFromPath(path: string): string {
         style="background: var(--c-surface); border-color: var(--c-border);"
       >
         <div class="font-medium mb-1.5" style="color: var(--c-text);">
-          {{ t("manage.conflict_plan_title") }}
+          {{ t(isSingleAgentPathConflict ? "manage.internal_conflict_plan_title" : "manage.conflict_plan_title") }}
         </div>
         <div class="space-y-1" style="color: var(--c-text-secondary);">
-          <div v-if="planWillOverwriteLibrary" style="color: var(--c-warning);">
-            {{ t("manage.conflict_plan_overwrite_library", { source: sourceLabel(selectedConflictSource) }) }}
-          </div>
-          <div v-else>
-            {{ t("manage.conflict_plan_keep_library") }}
-          </div>
-          <div v-if="selectedConflictSource.from !== 'vibe-lib'">
-            {{ t("manage.conflict_plan_link_selected", { source: sourceLabel(selectedConflictSource) }) }}
-          </div>
-          <div>
-            {{ t("manage.conflict_plan_align_same", { count: sameContentSources.length }) }}
-          </div>
-          <div>
-            {{ t("manage.conflict_plan_replace_different", { count: differentAgentSources.length }) }}
-          </div>
+          <template v-if="isSingleAgentPathConflict">
+            <div>
+              {{ t("manage.internal_conflict_keep_selected", { path: selectedConflictSource.path }) }}
+            </div>
+            <div>
+              {{ t("manage.internal_conflict_remove_others", { count: internalConflictRemovalSources.length }) }}
+            </div>
+            <div style="color: var(--c-warning);">
+              {{ t("manage.internal_conflict_no_library") }}
+            </div>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <button
+                class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+                style="background: var(--c-primary); color: white;"
+                :disabled="resolvingPlan || internalConflictRemovalSources.length === 0"
+                @click.stop="keepSelectedAgentCopy"
+              >
+                {{ resolvingPlan ? "..." : t("manage.internal_conflict_keep_action") }}
+              </button>
+              <button
+                class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+                style="border: 1px solid var(--c-border); color: var(--c-text-secondary); background: var(--c-bg);"
+                :disabled="!selectedConflictSource || resolvingPlan"
+                @click.stop="executeConflictResolution"
+              >
+                {{ t("manage.internal_conflict_import_action") }}
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <div v-if="planWillOverwriteLibrary" style="color: var(--c-warning);">
+              {{ t("manage.conflict_plan_overwrite_library", { source: sourceLabel(selectedConflictSource) }) }}
+            </div>
+            <div v-else>
+              {{ t("manage.conflict_plan_keep_library") }}
+            </div>
+            <div v-if="selectedConflictSource.from !== 'vibe-lib'">
+              {{ t("manage.conflict_plan_link_selected", { source: sourceLabel(selectedConflictSource) }) }}
+            </div>
+            <div>
+              {{ t("manage.conflict_plan_align_same", { count: sameContentSources.length }) }}
+            </div>
+            <div>
+              {{ t("manage.conflict_plan_replace_different", { count: differentAgentSources.length }) }}
+            </div>
+          </template>
         </div>
       </div>
     </div>
