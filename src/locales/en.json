@@ -213,6 +213,7 @@
     "redo": "Redo",
     "empty": "No history yet",
     "linked": "Linked {skill} → {agent} ({mode})",
+    "replaced_with_library": "Replaced {skill} in {agent} with the library version",
     "unlinked": "Unlinked {skill} → {agent}",
     "installed": "Installed {skill}",
     "deleted": "Deleted {skill}",

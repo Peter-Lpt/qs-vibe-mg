@@ -76,6 +76,9 @@ function getActionLabel(entry: {
 
   switch (entry.action) {
     case "link":
+      if (mode === "replace_with_library") {
+        return t("history.replaced_with_library", { skill, agent });
+      }
       return t("history.linked", { skill, agent, mode });
     case "unlink":
       return t("history.unlinked", { skill, agent });

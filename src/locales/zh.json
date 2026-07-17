@@ -213,6 +213,7 @@
     "redo": "重做",
     "empty": "暂无操作记录",
     "linked": "已关联 {skill} → {agent} ({mode})",
+    "replaced_with_library": "已用中心库版本替换 {skill} → {agent}",
     "unlinked": "已取消关联 {skill} → {agent}",
     "installed": "已安装 {skill}",
     "deleted": "已删除 {skill}",

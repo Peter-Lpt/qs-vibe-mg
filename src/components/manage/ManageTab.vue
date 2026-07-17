@@ -308,10 +308,20 @@ function onBatchApplied() {
 }
 
 function selectIssueGroup(skillIds: string[], openBatch: boolean) {
-  selectedSkills.value = new Set(skillIds);
   if (skillIds.length === 0) return;
   viewMode.value = "list";
-  if (openBatch) showBatch.value = true;
+  if (openBatch) {
+    selectedSkills.value = new Set(skillIds);
+    showBatch.value = true;
+    return;
+  }
+
+  selectedSkills.value = new Set();
+  showBatch.value = false;
+  expandedSkillId.value = skillIds[0];
+  setTimeout(() => {
+    document.getElementById(`skill-${skillIds[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 100);
 }
 
 // ── 矩阵操作 ──────────────────────────────────────
