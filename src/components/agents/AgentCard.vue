@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAgentsStore } from "../../stores/agents";
 import { useToast } from "../../composables/useToast";
@@ -19,6 +19,22 @@ const showRemoveConfirm = ref(false);
 const editing = ref(false);
 const editName = ref(props.agent.name);
 const editDir = ref(props.agent.skills_dir);
+const isCommonAgent = computed(() => props.agent.kind === "common" || props.agent.id === "agents-shared" || props.agent.id === "agents-common");
+const agentInitial = computed(() => props.agent.name.charAt(0).toUpperCase());
+const directoryStatusLabel = computed(() => {
+  if (isCommonAgent.value) return t("agents.common_source");
+  return props.agent.detected ? t("agents.directory_exists") : t("agents.directory_missing");
+});
+const directoryStatusTitle = computed(() => {
+  if (isCommonAgent.value) return t("agents.common_source_hint");
+  if (props.agent.detect_dir) {
+    return t("agents.directory_tool_hint", {
+      detectDir: props.agent.detect_dir,
+      skillsDir: props.agent.skills_dir,
+    });
+  }
+  return props.agent.detected ? t("agents.directory_exists_hint") : t("agents.directory_missing_hint");
+});
 
 async function handleRemove() {
   try {
@@ -81,7 +97,7 @@ async function pickDirectory() {
           color: agent.detected ? 'var(--c-primary)' : 'var(--c-text-tertiary)',
         }"
       >
-        {{ agent.name.charAt(0).toUpperCase() }}
+        {{ agentInitial }}
       </div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
@@ -95,9 +111,26 @@ async function pickDirectory() {
           >
             {{ t('agents.custom') }}
           </span>
+          <span
+            class="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
+            :style="{
+              background: isCommonAgent ? 'var(--c-info-light)' : agent.detected ? 'var(--c-success-light)' : 'var(--c-danger-light)',
+              color: isCommonAgent ? 'var(--c-info)' : agent.detected ? 'var(--c-success)' : 'var(--c-danger)',
+            }"
+            :title="directoryStatusTitle"
+          >
+            {{ directoryStatusLabel }}
+          </span>
         </div>
         <p class="text-[11px] truncate mt-0.5" style="color: var(--c-text-tertiary);">
           {{ agent.skills_dir }}
+        </p>
+        <p
+          v-if="isCommonAgent"
+          class="text-[11px] mt-1 leading-snug"
+          style="color: var(--c-text-secondary);"
+        >
+          {{ t('agents.common_source_hint') }}
         </p>
       </div>
     </div>

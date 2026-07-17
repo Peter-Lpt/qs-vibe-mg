@@ -4,6 +4,24 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Agent } from "../types";
 import { useSkillsStore } from "./skills";
 
+const COMMON_AGENT_IDS = new Set(["agents-shared", "agents-common"]);
+
+function commonAgentName() {
+  const locale = localStorage.getItem("vibe-locale") || "zh";
+  if (locale === "en") return "Agents Common";
+  if (locale === "zh-TW") return "Agents 公共技能目錄";
+  return "Agents 公共技能目录";
+}
+
+function normalizeAgentForDisplay(agent: Agent): Agent {
+  if (agent.kind !== "common" && !COMMON_AGENT_IDS.has(agent.id)) return agent;
+  return {
+    ...agent,
+    kind: "common",
+    name: commonAgentName(),
+  };
+}
+
 export const useAgentsStore = defineStore("agents", () => {
   const agents = ref<Agent[]>([]);
   const loading = ref(false);
@@ -13,7 +31,8 @@ export const useAgentsStore = defineStore("agents", () => {
     loading.value = true;
     error.value = null;
     try {
-      agents.value = await invoke<Agent[]>("list_agents");
+      const result = await invoke<Agent[]>("list_agents");
+      agents.value = result.map(normalizeAgentForDisplay);
     } catch (e: unknown) {
       error.value = String(e);
     } finally {

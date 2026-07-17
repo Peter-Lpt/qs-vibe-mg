@@ -63,6 +63,10 @@ pub struct AgentConfig {
     pub id: String,
     pub name: String,
     pub skills_dir: String,
+    #[serde(default = "default_agent_kind")]
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detect_dir: Option<String>,
     #[serde(default = "default_true")]
     pub enabled: bool,
     #[serde(default = "default_true")]
@@ -93,12 +97,28 @@ fn default_true() -> bool {
     true
 }
 
+fn default_agent_kind() -> String {
+    "agent".to_string()
+}
+
+fn normalize_agent_kind(id: &str, kind: &str) -> String {
+    if id == "agents-shared" || id == "agents-common" {
+        "common".to_string()
+    } else if kind.trim().is_empty() {
+        default_agent_kind()
+    } else {
+        kind.to_string()
+    }
+}
+
 pub fn default_agents() -> Vec<AgentConfig> {
     vec![
         AgentConfig {
             id: "claude-code".to_string(),
             name: "Claude Code".to_string(),
             skills_dir: "~/.claude/skills".to_string(),
+            kind: "agent".to_string(),
+            detect_dir: Some("~/.claude".to_string()),
             enabled: true,
             auto_detected: true,
         },
@@ -106,6 +126,8 @@ pub fn default_agents() -> Vec<AgentConfig> {
             id: "hermes".to_string(),
             name: "Hermes".to_string(),
             skills_dir: hermes_skills_dir(),
+            kind: "agent".to_string(),
+            detect_dir: Some(hermes_detect_dir()),
             enabled: true,
             auto_detected: true,
         },
@@ -113,6 +135,8 @@ pub fn default_agents() -> Vec<AgentConfig> {
             id: "pi-agent".to_string(),
             name: "Pi Agent".to_string(),
             skills_dir: "~/.pi/agent/skills".to_string(),
+            kind: "agent".to_string(),
+            detect_dir: Some("~/.pi/agent".to_string()),
             enabled: true,
             auto_detected: true,
         },
@@ -120,6 +144,8 @@ pub fn default_agents() -> Vec<AgentConfig> {
             id: "opencode".to_string(),
             name: "OpenCode".to_string(),
             skills_dir: "~/.config/opencode/skills".to_string(),
+            kind: "agent".to_string(),
+            detect_dir: Some("~/.config/opencode".to_string()),
             enabled: true,
             auto_detected: true,
         },
@@ -127,6 +153,8 @@ pub fn default_agents() -> Vec<AgentConfig> {
             id: "codex".to_string(),
             name: "Codex CLI".to_string(),
             skills_dir: "~/.codex/skills".to_string(),
+            kind: "agent".to_string(),
+            detect_dir: Some("~/.codex".to_string()),
             enabled: true,
             auto_detected: true,
         },
@@ -134,13 +162,17 @@ pub fn default_agents() -> Vec<AgentConfig> {
             id: "mimocode".to_string(),
             name: "MiMo Code".to_string(),
             skills_dir: "~/.config/mimocode/skills".to_string(),
+            kind: "agent".to_string(),
+            detect_dir: Some("~/.config/mimocode".to_string()),
             enabled: true,
             auto_detected: true,
         },
         AgentConfig {
             id: "agents-shared".to_string(),
-            name: "Shared".to_string(),
+            name: "Agents Common".to_string(),
             skills_dir: "~/.agents/skills".to_string(),
+            kind: "common".to_string(),
+            detect_dir: None,
             enabled: true,
             auto_detected: true,
         },
@@ -163,6 +195,20 @@ fn hermes_skills_dir() -> String {
     #[cfg(not(windows))]
     {
         "~/.hermes/skills".to_string()
+    }
+}
+
+fn hermes_detect_dir() -> String {
+    #[cfg(windows)]
+    {
+        if let Some(local) = dirs::data_local_dir() {
+            return local.join("hermes").to_string_lossy().to_string();
+        }
+        "~/.hermes".to_string()
+    }
+    #[cfg(not(windows))]
+    {
+        "~/.hermes".to_string()
     }
 }
 
@@ -233,6 +279,11 @@ pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VibeError
 
         let skills_dir = expand_tilde(&ac.skills_dir)?;
         let detected = skills_dir.exists();
+        let detect_dir = ac.detect_dir.as_ref().and_then(|dir| expand_tilde(dir).ok());
+        let tool_detected = detect_dir
+            .as_ref()
+            .map(|dir| dir.exists())
+            .unwrap_or(detected);
 
         let linked_skills = if detected {
             scan_linked_skills(&skills_dir)
@@ -244,6 +295,9 @@ pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VibeError
             id: ac.id.clone(),
             name: ac.name.clone(),
             skills_dir: skills_dir.to_string_lossy().to_string(),
+            kind: normalize_agent_kind(&ac.id, &ac.kind),
+            detect_dir: detect_dir.map(|dir| dir.to_string_lossy().to_string()),
+            tool_detected,
             detected,
             enabled: ac.enabled,
             auto_detected: ac.auto_detected,

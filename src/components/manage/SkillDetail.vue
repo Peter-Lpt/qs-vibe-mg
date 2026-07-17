@@ -330,8 +330,12 @@ function sourceKindLabel(kind: string): string {
   return t("manage.source_kind_agent");
 }
 
+function isProjectSource(source: SkillSource): boolean {
+  return source.source_kind === "project" || source.from.startsWith("project:");
+}
+
 async function cleanDanglingSource(source: SkillSource) {
-  if (source.from === "vibe-lib" || cleaningDanglingPath.value) return;
+  if (source.from === "vibe-lib" || isProjectSource(source) || cleaningDanglingPath.value) return;
   cleaningDanglingPath.value = source.path;
   try {
     await skillsStore.removeLink(props.skill.id, source.from, source.path);
@@ -370,6 +374,9 @@ async function executeConflictResolution() {
         id: "vibe-lib",
         name: t("manage.library"),
         skills_dir: selected.path,
+        kind: "external",
+        detect_dir: undefined,
+        tool_detected: true,
         detected: true,
         enabled: true,
         auto_detected: false,
@@ -552,7 +559,7 @@ function getAgentNameFromPath(path: string): string {
             {{ row.confidence }}
           </span>
           <button
-            v-if="row.dangling"
+            v-if="row.dangling && !isProjectSource(row.source)"
             class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer"
             style="color: var(--c-danger);"
             :disabled="cleaningDanglingPath === row.source.path"

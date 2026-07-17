@@ -133,6 +133,9 @@ async function handleAdd() {
             <p class="text-xs mt-0.5" style="color: var(--c-text-secondary);">
               {{ t('agents.skills_dir_hint') }}
             </p>
+            <p class="text-xs mt-1 leading-snug" style="color: var(--c-text-secondary);">
+              {{ t('agents.runtime_hint') }}
+            </p>
           </div>
         </div>
 

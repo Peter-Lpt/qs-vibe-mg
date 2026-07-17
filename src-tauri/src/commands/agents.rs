@@ -37,6 +37,8 @@ pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VibeE
         id: id.clone(),
         name: name.clone(),
         skills_dir: skills_dir.clone(),
+        kind: "agent".to_string(),
+        detect_dir: None,
         enabled: true,
         auto_detected: false,
     };
@@ -52,6 +54,9 @@ pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VibeE
         id,
         name,
         skills_dir: skills_dir_expanded.to_string_lossy().to_string(),
+        kind: "agent".to_string(),
+        detect_dir: None,
+        tool_detected: detected,
         detected,
         enabled: true,
         auto_detected: false,
