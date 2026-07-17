@@ -20,6 +20,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "remove-skill", skillId: string): void;
+  (e: "resolve-conflict", skillId: string): void;
   (e: "applied"): void;
 }>();
 
@@ -630,13 +631,22 @@ function actionName(action: DryRunItem["action"]): string {
                 >
                   {{ cellOf(row, agent).label }}
                 </button>
+                <button
+                  v-else-if="cellOf(row, agent).isConflict"
+                  class="w-full min-w-[64px] px-1.5 py-1 rounded border text-[10px] cursor-pointer transition-colors"
+                  style="color: var(--c-danger); background: var(--c-danger-light); border-color: var(--c-danger);"
+                  :title="t('manage.batch_panel_resolve_conflict_tip')"
+                  @click.stop="emit('resolve-conflict', row.skill.id)"
+                >
+                  {{ t("manage.batch_panel_resolve_conflict") }}
+                </button>
                 <span
                   v-else
                   class="inline-block px-1.5 py-1 text-[10px] rounded"
                   :style="{
                     color: cellOf(row, agent).needsImport ? 'var(--c-text-secondary)' : 'var(--c-text-secondary)',
-                    background: cellOf(row, agent).isConflict ? 'var(--c-danger-light)' : 'transparent',
-                    border: cellOf(row, agent).isConflict ? '1px solid var(--c-danger)' : '1px dashed var(--c-border)',
+                    background: 'transparent',
+                    border: '1px dashed var(--c-border)',
                   }"
                   :title="cellOf(row, agent).needsImport ? t('manage.batch_panel_needs_import_tip') : ''"
                 >

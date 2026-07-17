@@ -142,6 +142,8 @@
     "batch_panel_mode_unlink": "取消連結",
     "batch_panel_summary": "將執行 {exec} 項，衝突 {conflict} 項，跳過 {skipped} 項，不可操作 {blocked} 項，需先入庫 {import} 項",
     "batch_panel_conflict": "衝突",
+    "batch_panel_resolve_conflict": "解決衝突",
+    "batch_panel_resolve_conflict_tip": "開啟該 Skill 的衝突解決面板",
     "batch_panel_needs_import": "需先入庫",
     "batch_panel_needs_import_tip": "該 skill 尚未入庫，且目標 Agent 內無真實檔案；請先在某 Agent 將其同步入庫，再回來連結到本 Agent",
     "batch_panel_none": "—",

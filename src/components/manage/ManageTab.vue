@@ -294,6 +294,15 @@ function closeBatchPanel() {
   showBatch.value = false;
 }
 
+function resolveConflictFromBatch(skillId: string) {
+  showBatch.value = false;
+  viewMode.value = "list";
+  expandedSkillId.value = skillId;
+  setTimeout(() => {
+    document.getElementById(`skill-${skillId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 100);
+}
+
 function onBatchApplied() {
   // 面板内部已统一 refreshSkills + fetchAgents；此处保留选择，便于继续操作
 }
@@ -610,6 +619,7 @@ const chipGroups = computed(() => {
       :selected-skill-ids="selectedSkillIds"
       @close="closeBatchPanel"
       @remove-skill="removeSkillFromSelection"
+      @resolve-conflict="resolveConflictFromBatch"
       @applied="onBatchApplied"
     />
   </div>

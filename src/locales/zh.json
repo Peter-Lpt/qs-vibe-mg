@@ -142,6 +142,8 @@
     "batch_panel_mode_unlink": "取消链接",
     "batch_panel_summary": "将执行 {exec} 项，冲突 {conflict} 项，跳过 {skipped} 项，不可操作 {blocked} 项，需先入库 {import} 项",
     "batch_panel_conflict": "冲突",
+    "batch_panel_resolve_conflict": "解决冲突",
+    "batch_panel_resolve_conflict_tip": "打开该 Skill 的冲突解决面板",
     "batch_panel_needs_import": "需先入库",
     "batch_panel_needs_import_tip": "该 skill 尚未入库，且目标 Agent 内无真实文件；请先在某 Agent 将其同步入库，再回来链接到本 Agent",
     "batch_panel_none": "—",

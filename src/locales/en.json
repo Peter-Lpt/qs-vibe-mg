@@ -142,6 +142,8 @@
     "batch_panel_mode_unlink": "Unlink only",
     "batch_panel_summary": "Will run {exec}, conflict {conflict}, skipped {skipped}, blocked {blocked}, needs import {import}",
     "batch_panel_conflict": "Conflict",
+    "batch_panel_resolve_conflict": "Resolve",
+    "batch_panel_resolve_conflict_tip": "Open this skill's conflict resolution panel",
     "batch_panel_needs_import": "Needs import",
     "batch_panel_needs_import_tip": "This skill is not in the library and the target agent has no real copy. Import it via some agent first, then link it to this agent.",
     "batch_panel_none": "—",
