@@ -57,6 +57,9 @@ pub struct SkillSource {
     pub symlink_target: Option<String>,
     /// SKILL.md 内容的 SHA-256 hex hash
     pub content_hash: String,
+    /// 该来源目录最后修改时间
+    #[serde(default)]
+    pub modified_at: String,
 }
 
 fn default_source_kind() -> String {

@@ -168,6 +168,42 @@ const batchAvailableActions = computed(() => {
   return actions;
 });
 
+const comparableSources = computed(() =>
+  props.skill.sources.filter((source) => source.content_hash)
+);
+
+const latestSourcePath = computed(() => {
+  let latestPath = "";
+  let latestTime = 0;
+  for (const source of props.skill.sources) {
+    const time = source.modified_at ? Date.parse(source.modified_at) : 0;
+    if (!Number.isNaN(time) && time > latestTime) {
+      latestTime = time;
+      latestPath = source.path;
+    }
+  }
+  return latestPath;
+});
+
+function sameContentCount(source: SkillSource): number {
+  if (!source.content_hash) return 0;
+  return comparableSources.value.filter((s) => s.content_hash === source.content_hash).length;
+}
+
+function contentRelation(source: SkillSource): "unknown" | "same" | "different" {
+  if (!source.content_hash || comparableSources.value.length < 2) return "unknown";
+  return sameContentCount(source) === comparableSources.value.length ? "same" : "different";
+}
+
+function formatSourceTime(source: SkillSource): string {
+  if (!source.modified_at) return "";
+  try {
+    return new Date(source.modified_at).toLocaleString();
+  } catch {
+    return source.modified_at;
+  }
+}
+
 const sourceRows = computed(() =>
   props.skill.sources.map((source) => {
     const metadataUrl = props.skill.metadata?.repository || props.skill.metadata?.source || props.skill.metadata?.homepage;
@@ -187,6 +223,10 @@ const sourceRows = computed(() =>
       kind: source.source_kind || (source.from === "vibe-lib" ? "library" : source.from.startsWith("project:") ? "project" : "agent"),
       confidence,
       dangling: source.is_symlink && (!source.symlink_target || source.content_hash === ""),
+      isLatest: source.path === latestSourcePath.value,
+      sameCount: sameContentCount(source),
+      relation: contentRelation(source),
+      modifiedAtLabel: formatSourceTime(source),
     };
   })
 );
@@ -484,6 +524,24 @@ function getAgentNameFromPath(path: string): string {
           <span class="text-[9px] px-1.5 py-0.5 rounded shrink-0" style="background: var(--c-surface-hover); color: var(--c-text-secondary);">
             {{ sourceKindLabel(row.kind) }}
           </span>
+          <span
+            v-if="row.isLatest"
+            class="text-[9px] px-1.5 py-0.5 rounded shrink-0"
+            style="background: var(--c-primary-light); color: var(--c-primary);"
+            :title="row.modifiedAtLabel"
+          >
+            {{ t("manage.source_latest") }}
+          </span>
+          <span
+            v-if="row.relation !== 'unknown'"
+            class="text-[9px] px-1.5 py-0.5 rounded shrink-0"
+            :style="row.relation === 'same'
+              ? 'background: var(--c-success-light); color: var(--c-success);'
+              : 'background: var(--c-warning-light); color: var(--c-warning);'"
+            :title="t('manage.source_same_count', { count: row.sameCount })"
+          >
+            {{ t(row.relation === "same" ? "manage.source_content_same" : "manage.source_content_different") }}
+          </span>
           <span class="text-[10px] truncate min-w-0 flex-1" style="color: var(--c-text-secondary);" :title="row.source.path">
             {{ row.source.path }}
           </span>
@@ -556,6 +614,9 @@ function getAgentNameFromPath(path: string): string {
                   {{ sourceLabel(it.source) }}
                   <span v-if="it.source.from === 'vibe-lib'" class="ml-1 text-[9px]" style="color: var(--c-primary);">
                     {{ t("manage.current_library_version") }}
+                  </span>
+                  <span v-if="it.source.path === latestSourcePath" class="ml-1 text-[9px]" style="color: var(--c-primary);">
+                    {{ t("manage.source_latest") }}
                   </span>
                 </div>
                 <div class="text-[10px] truncate" style="color: var(--c-text-secondary);" :title="it.source.path">

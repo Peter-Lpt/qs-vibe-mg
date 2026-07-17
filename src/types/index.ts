@@ -7,6 +7,7 @@ export interface SkillSource {
   is_symlink: boolean;
   symlink_target?: string;
   content_hash: string;
+  modified_at?: string;
 }
 
 export interface Skill {

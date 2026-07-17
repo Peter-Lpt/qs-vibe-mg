@@ -592,6 +592,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
             is_symlink: false,
             symlink_target: None,
             content_hash: hash,
+            modified_at: modified_at.clone(),
         }],
         license,
         compatibility,
@@ -811,6 +812,7 @@ fn scan_directory(
                 .unwrap_or(true);
 
         if is_broken_link {
+            let modified_at = get_modified_at(&path);
             let source = SkillSource {
                 from: source_id.to_string(),
                 source_kind: source_kind_for(source_id),
@@ -820,8 +822,8 @@ fn scan_directory(
                 is_symlink: true,
                 symlink_target,
                 content_hash: String::new(),
+                modified_at: modified_at.clone(),
             };
-            let modified_at = get_modified_at(&path);
 
             map.entry(id.clone())
                 .and_modify(|e| {
@@ -856,6 +858,7 @@ fn scan_directory(
 
             // P1：哈希缓存——三元组未变时复用真哈希，避免重复读文件
             let hash = crate::utils::hash::dir_hash_into(hash_cache, &path);
+            let modified_at = get_modified_at(&path);
 
             let source = SkillSource {
                 from: source_id.to_string(),
@@ -866,9 +869,8 @@ fn scan_directory(
                 is_symlink: is_link,
                 symlink_target,
                 content_hash: hash,
+                modified_at: modified_at.clone(),
             };
-
-            let modified_at = get_modified_at(&path);
 
             map.entry(id.clone())
                 .and_modify(|e| {
