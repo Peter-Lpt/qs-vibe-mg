@@ -120,6 +120,7 @@
     "filter_exclude": "Exclude these Agents",
     "filter_include": "Include these Agents",
     "clear_filters": "Clear Filters",
+    "refresh": "Refresh",
     "agent_overview": "Agent Overview",
     "agent_selected": "selected",
     "filter_group_issue": "Issues",

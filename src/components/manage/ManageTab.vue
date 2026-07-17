@@ -16,10 +16,12 @@ import type { Agent } from "../../types";
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const agentsStore = useAgentsStore();
+const isRefreshing = ref(false);
 
 // ── 初始化 ──────────────────────────────────────
 onMounted(async () => {
   if (skillsStore.skills.length === 0) await skillsStore.fetchSkills();
+  if (agentsStore.agents.length === 0) await agentsStore.fetchAgents();
   if (skillsStore.issues.length === 0) await skillsStore.fetchIssues();
 });
 
@@ -206,6 +208,30 @@ function clearAllFilters() {
   searchQuery.value = "";
 }
 
+async function refreshManageData() {
+  if (isRefreshing.value) return;
+  isRefreshing.value = true;
+  try {
+    await Promise.all([
+      skillsStore.fetchSkills(),
+      agentsStore.fetchAgents(),
+      skillsStore.fetchIssues(),
+    ]);
+    if (
+      expandedSkillId.value &&
+      !skillsStore.skills.some((skill) => skill.id === expandedSkillId.value)
+    ) {
+      expandedSkillId.value = null;
+    }
+    const currentIds = new Set(skillsStore.skills.map((skill) => skill.id));
+    selectedSkills.value = new Set(
+      [...selectedSkills.value].filter((skillId) => currentIds.has(skillId))
+    );
+  } finally {
+    isRefreshing.value = false;
+  }
+}
+
 const hasActiveFilters = computed(
   () =>
     activeStatusFilters.value.size > 0 ||
@@ -363,6 +389,15 @@ const chipGroups = computed(() => {
           @click="clearAllFilters"
         >
           {{ t("manage.clear_filters") || "清除筛选" }}
+        </button>
+        <button
+          class="w-7 h-7 flex items-center justify-center rounded-md border cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          style="border-color: var(--c-border); color: var(--c-text-secondary); background: var(--c-bg);"
+          :title="t('manage.refresh')"
+          :disabled="isRefreshing"
+          @click="refreshManageData"
+        >
+          <RefreshCw :size="14" :class="{ 'animate-spin': isRefreshing }" />
         </button>
         <button
           class="text-xs px-3 py-1.5 rounded-md cursor-pointer btn-primary"

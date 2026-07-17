@@ -120,6 +120,7 @@
     "filter_exclude": "不包含這些 Agent",
     "filter_include": "包含這些 Agent",
     "clear_filters": "清除篩選",
+    "refresh": "刷新",
     "agent_overview": "Agent 概覽",
     "agent_selected": "個已選",
     "filter_group_issue": "異常",
