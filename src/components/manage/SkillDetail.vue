@@ -40,6 +40,7 @@ const pendingOverwrite = ref<AgentStatus | null>(null);
 const pendingPlanOverwrite = ref(false);
 const selectedConflictPath = ref<string>("");
 const resolvingPlan = ref(false);
+const cleaningDanglingPath = ref<string | null>(null);
 
 interface ConflictItem {
   source: SkillSource;
@@ -185,6 +186,7 @@ const sourceRows = computed(() =>
       label: sourceLabel(source),
       kind: source.source_kind || (source.from === "vibe-lib" ? "library" : source.from.startsWith("project:") ? "project" : "agent"),
       confidence,
+      dangling: source.is_symlink && (!source.symlink_target || source.content_hash === ""),
     };
   })
 );
@@ -286,6 +288,19 @@ function sourceKindLabel(kind: string): string {
   if (kind === "project") return t("manage.source_kind_project");
   if (kind === "external") return t("manage.source_kind_external");
   return t("manage.source_kind_agent");
+}
+
+async function cleanDanglingSource(source: SkillSource) {
+  if (source.from === "vibe-lib" || cleaningDanglingPath.value) return;
+  cleaningDanglingPath.value = source.path;
+  try {
+    await skillsStore.removeLink(props.skill.id, source.from, source.path);
+    toast.show(t("manage.dangling_removed", { agent: sourceLabel(source) }), "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  } finally {
+    cleaningDanglingPath.value = null;
+  }
 }
 
 async function executeConflictResolution() {
@@ -478,6 +493,17 @@ function getAgentNameFromPath(path: string): string {
           <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="row.confidence">
             {{ row.confidence }}
           </span>
+          <button
+            v-if="row.dangling"
+            class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer"
+            style="color: var(--c-danger);"
+            :disabled="cleaningDanglingPath === row.source.path"
+            :title="t('manage.btn_clean')"
+            @click.stop="cleanDanglingSource(row.source)"
+          >
+            <Link2Off v-if="cleaningDanglingPath !== row.source.path" :size="12" />
+            <RefreshCw v-else :size="12" class="animate-spin" />
+          </button>
           <button class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer" style="color: var(--c-text-secondary);" :title="t('manage.reveal')" @click.stop="actions.reveal(row.source)">
             <FolderOpen :size="12" />
           </button>
