@@ -9,6 +9,8 @@ import AgentMatrix from "./AgentMatrix.vue";
 import BatchSyncPanel from "./BatchSyncPanel.vue";
 import IssueRepairPanel from "./IssueRepairPanel.vue";
 import InstallDialog from "../skills/InstallDialog.vue";
+import AddAgentDialog from "../agents/AddAgentDialog.vue";
+import AgentCard from "../agents/AgentCard.vue";
 import EmptyState from "../common/EmptyState.vue";
 import SkeletonCard from "../common/SkeletonCard.vue";
 import type { Agent } from "../../types";
@@ -67,6 +69,8 @@ function deselectAllSkills() {
 const agentOverviewExpanded = ref(true);
 const matrixExpanded = ref(false);
 const expandedSkillId = ref<string | null>(null);
+const showAgentManager = ref(false);
+const showAddAgent = ref(false);
 
 // ── 安装弹窗 ──────────────────────────────────────
 const showInstall = ref(false);
@@ -111,6 +115,12 @@ function selectAgentFromOverview(agentId: string) {
   if (set.has(agentId)) set.delete(agentId);
   else set.add(agentId);
   selectedAgentFilter.value = set;
+}
+
+function agentSkillCount(agentId: string): number {
+  return skillsStore.skills.filter((skill) =>
+    skill.sources.some((source) => source.from === agentId)
+  ).length;
 }
 
 // ── 状态 chips 定义 ──────────────────────────────
@@ -412,6 +422,13 @@ const chipGroups = computed(() => {
             <RefreshCw :size="15" :class="{ 'animate-spin': isRefreshing }" />
           </button>
           <button
+            class="action-toolbar-icon"
+            :title="t('manage.agent_management')"
+            @click="showAgentManager = true"
+          >
+            <Settings :size="15" />
+          </button>
+          <button
             class="action-toolbar-primary"
             @click="showInstall = true"
           >
@@ -472,6 +489,15 @@ const chipGroups = computed(() => {
         <span v-if="selectedAgentFilter.size > 0" class="text-[10px] ml-1" style="color: var(--c-primary);">
           {{ selectedAgentFilter.size }} {{ t("manage.agent_selected") || "个已选" }}
         </span>
+        <button
+          class="ml-auto inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[10px] cursor-pointer"
+          style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+          type="button"
+          @click.stop="showAgentManager = true"
+        >
+          <Settings :size="12" />
+          {{ t("manage.agent_management") }}
+        </button>
       </div>
       <div v-if="agentOverviewExpanded" class="grid gap-2 mt-3" style="grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));">
         <div
@@ -673,6 +699,66 @@ const chipGroups = computed(() => {
         @expand-skill="handleMatrixExpand"
       />
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="showAgentManager"
+        class="fixed inset-0 z-50 flex items-center justify-center"
+        style="background: rgba(0, 0, 0, 0.5);"
+        @click.self="showAgentManager = false"
+      >
+        <div
+          class="w-full max-w-3xl mx-4 max-h-[82vh] rounded-xl border shadow-xl overflow-hidden flex flex-col"
+          style="background: var(--c-surface); border-color: var(--c-border);"
+        >
+          <div class="flex items-center justify-between gap-3 border-b px-4 py-3 shrink-0" style="border-color: var(--c-border);">
+            <div>
+              <h3 class="text-sm font-semibold" style="color: var(--c-text);">
+                {{ t("manage.agent_management") }}
+              </h3>
+              <p class="text-[11px] mt-0.5" style="color: var(--c-text-secondary);">
+                {{ t("manage.agent_management_hint") }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                class="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-xs cursor-pointer"
+                style="background: var(--c-primary); color: white;"
+                type="button"
+                @click="showAddAgent = true"
+              >
+                <Plus :size="14" />
+                {{ t("agents.add") }}
+              </button>
+              <button
+                class="w-7 h-7 inline-flex items-center justify-center rounded-md cursor-pointer"
+                style="color: var(--c-text-secondary);"
+                type="button"
+                @click="showAgentManager = false"
+              >
+                &times;
+              </button>
+            </div>
+          </div>
+          <div class="overflow-y-auto p-4">
+            <div class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+              <AgentCard
+                v-for="agent in agentsStore.agents"
+                :key="agent.id"
+                :agent="agent"
+                :skill-count="agentSkillCount(agent.id)"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <AddAgentDialog
+      v-if="showAddAgent"
+      @close="showAddAgent = false"
+      @added="showAddAgent = false"
+    />
 
     <!-- Install dialog -->
     <InstallDialog v-if="showInstall" @close="showInstall = false" />

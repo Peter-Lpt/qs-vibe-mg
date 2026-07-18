@@ -146,6 +146,8 @@
     "clear_filters": "清除筛选",
     "refresh": "刷新",
     "agent_overview": "Agent 概览",
+    "agent_management": "Agent 管理",
+    "agent_management_hint": "新增、编辑和移除自定义 Agent，调整检测目录、技能目录和附加扫描目录。",
     "agent_selected": "个已选",
     "filter_group_issue": "异常",
     "filter_group_status": "状态",

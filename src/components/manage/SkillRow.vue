@@ -148,22 +148,21 @@ function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
           style="color: var(--c-text-secondary);"
           :title="t('manage.agent_status_legend')"
           @mouseenter="showAgentLegend = true"
-          @mouseleave="showAgentLegend = false"
           @click.stop="showAgentLegend = !showAgentLegend"
         >
           <CircleAlert :size="12" />
         </button>
         <div
           v-if="showAgentLegend"
-          class="absolute right-0 top-6 z-20 w-64 rounded-md border p-2 shadow-lg"
+          class="fixed right-6 top-24 z-[1000] w-72 rounded-lg border p-3 shadow-xl"
           style="background: var(--c-surface-raised); border-color: var(--c-border);"
           @mouseenter="showAgentLegend = true"
           @mouseleave="showAgentLegend = false"
         >
-          <div class="text-[10px] font-medium mb-1" style="color: var(--c-text);">
+          <div class="text-[11px] font-semibold mb-2" style="color: var(--c-text);">
             {{ t("manage.agent_status_legend") }}
           </div>
-          <div v-for="item in allAgentStatuses" :key="item.agent.id" class="flex items-start gap-2 py-0.5">
+          <div v-for="item in allAgentStatuses" :key="item.agent.id" class="flex items-start gap-2 py-1">
             <span class="w-2 h-2 rounded-full mt-1 shrink-0" :style="{ background: item.statusColor }" />
             <div class="min-w-0">
               <div class="text-[10px] truncate" style="color: var(--c-text);">

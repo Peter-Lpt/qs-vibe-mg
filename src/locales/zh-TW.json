@@ -146,6 +146,8 @@
     "clear_filters": "清除篩選",
     "refresh": "刷新",
     "agent_overview": "Agent 概覽",
+    "agent_management": "Agent 管理",
+    "agent_management_hint": "新增、編輯和移除自訂 Agent，調整偵測目錄、技能目錄和附加掃描目錄。",
     "agent_selected": "個已選",
     "filter_group_issue": "異常",
     "filter_group_status": "狀態",
