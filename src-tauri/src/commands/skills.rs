@@ -653,36 +653,49 @@ fn install_skill_from_path(source: &Path, reference: bool) -> Result<Skill, Vibe
 
 fn install_skill_from_git_url(git_url: &str, reference: bool) -> Result<Skill, VibeError> {
     let source_root = managed_install_source_dir("git")?;
-    if source_root.exists() {
-        remove_path(&source_root)?;
-    }
-    if let Some(parent) = source_root.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    clone_git_repo(git_url, &source_root)?;
+    let result = (|| {
+        if let Some(parent) = source_root.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        clone_git_repo(git_url, &source_root)?;
 
-    let install_root = locate_skill_root(&source_root)?;
-    let probe = probe_git_origin(&source_root).ok_or_else(|| {
-        VibeError::Path(format!("Unable to read Git provenance from {}", source_root.display()))
-    })?;
-    let origin = build_git_origin(&source_root, &probe);
-    install_skill_from_materialized_source(&install_root, reference, origin)
+        let install_root = locate_skill_root(&source_root)?;
+        let probe = probe_git_origin(&source_root).ok_or_else(|| {
+            VibeError::Path(format!(
+                "Unable to read Git provenance from {}",
+                source_root.display()
+            ))
+        })?;
+        let origin = build_git_origin(&source_root, &probe);
+        install_skill_from_materialized_source(&install_root, reference, origin)
+    })();
+
+    if result.is_err() {
+        let _ = remove_path(&source_root);
+    }
+
+    result
 }
 
 fn install_skill_from_command(command: &str, reference: bool) -> Result<Skill, VibeError> {
     let source_root = managed_install_source_dir("command")?;
-    if source_root.exists() {
-        remove_path(&source_root)?;
-    }
-    if let Some(parent) = source_root.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::create_dir_all(&source_root)?;
-    run_update_command(command, Some(&source_root))?;
+    let result = (|| {
+        if let Some(parent) = source_root.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::create_dir_all(&source_root)?;
+        run_update_command(command, Some(&source_root))?;
 
-    let install_root = locate_skill_root(&source_root)?;
-    let origin = build_command_origin(&source_root, command);
-    install_skill_from_materialized_source(&install_root, reference, origin)
+        let install_root = locate_skill_root(&source_root)?;
+        let origin = build_command_origin(&source_root, command);
+        install_skill_from_materialized_source(&install_root, reference, origin)
+    })();
+
+    if result.is_err() {
+        let _ = remove_path(&source_root);
+    }
+
+    result
 }
 
 fn install_skill_from_materialized_source(

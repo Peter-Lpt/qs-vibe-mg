@@ -480,6 +480,16 @@ mod tests {
     }
 
     #[test]
+    fn build_command_origin_records_command() {
+        let origin = build_command_origin(Path::new("F:/skill-source"), "npx my-skill");
+        assert_eq!(origin.method, SOURCE_METHOD_NPX);
+        assert_eq!(origin.source_path.as_deref(), Some("F:/skill-source"));
+        assert_eq!(origin.command.as_deref(), Some("npx my-skill"));
+        assert_eq!(origin.update_command.as_deref(), Some("npx my-skill"));
+        assert_eq!(origin.refresh_command.as_deref(), Some("npx my-skill"));
+    }
+
+    #[test]
     fn write_and_read_sidecar_origin() {
         let dir = std::env::temp_dir().join(format!(
             "vibe_origin_sidecar_{}",
