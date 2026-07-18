@@ -13,6 +13,8 @@ pub struct Agent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detect_dir: Option<String>,
     #[serde(default)]
+    pub additional_scan_dirs: Vec<String>,
+    #[serde(default)]
     pub tool_detected: bool,
     /// 是否检测到已安装
     pub detected: bool,

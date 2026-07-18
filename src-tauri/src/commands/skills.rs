@@ -63,6 +63,24 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
             &mut hash_cache,
             None,
         )?;
+
+        for scan_dir in &agent.additional_scan_dirs {
+            let scan_path = Path::new(scan_dir);
+            if !scan_path.exists() || !scan_path.is_dir() {
+                continue;
+            }
+            let source_id = external_source_id(&agent.id, scan_path);
+            scan_directory(
+                scan_path,
+                &source_id,
+                &mut map,
+                false,
+                0,
+                &mut std::collections::HashSet::new(),
+                &mut hash_cache,
+                None,
+            )?;
+        }
     }
 
     scan_project_sources(&mut map, &mut hash_cache)?;
@@ -494,6 +512,16 @@ pub fn preview_skill(skill_id: String) -> Result<String, VibeError> {
         ) {
             return Ok(content);
         }
+        for scan_dir in &agent.additional_scan_dirs {
+            if let Ok(content) = find_skill_md_recursive(
+                Path::new(scan_dir),
+                &skill_id,
+                0,
+                &mut std::collections::HashSet::new(),
+            ) {
+                return Ok(content);
+            }
+        }
     }
 
     Err(VibeError::SkillNotFound { skill_id })
@@ -516,6 +544,11 @@ pub fn preview_skill_at_path(path: String) -> Result<String, VibeError> {
         || agents
             .iter()
             .any(|a| vibe_fs::is_path_within(&target, Path::new(&a.skills_dir)))
+        || agents.iter().any(|a| {
+            a.additional_scan_dirs
+                .iter()
+                .any(|dir| vibe_fs::is_path_within(&target, Path::new(dir)))
+        })
         || project_skill_roots(&config)
             .iter()
             .any(|root| vibe_fs::is_path_within(&target, root));
@@ -737,9 +770,19 @@ fn source_kind_for(source_id: &str) -> String {
         "library".to_string()
     } else if source_id.starts_with("project:") {
         "project".to_string()
+    } else if source_id.starts_with("external:") {
+        "external".to_string()
     } else {
         "agent".to_string()
     }
+}
+
+fn external_source_id(agent_id: &str, dir: &Path) -> String {
+    format!(
+        "external:{}:{}",
+        agent_id,
+        dir.to_string_lossy().replace('\\', "/")
+    )
 }
 
 fn scan_project_sources(

@@ -53,6 +53,7 @@ export interface Agent {
   skills_dir: string;
   kind?: "agent" | "common" | "project" | "external";
   detect_dir?: string;
+  additional_scan_dirs?: string[];
   tool_detected?: boolean;
   detected: boolean;
   enabled: boolean;
@@ -91,6 +92,7 @@ export interface AgentConfig {
   skills_dir: string;
   kind?: "agent" | "common" | "project" | "external";
   detect_dir?: string;
+  additional_scan_dirs?: string[];
   enabled: boolean;
   auto_detected: boolean;
 }

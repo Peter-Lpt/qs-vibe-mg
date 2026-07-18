@@ -50,12 +50,37 @@ export const useAgentsStore = defineStore("agents", () => {
     }
   }
 
-  async function updateAgent(agentId: string, updates: { name?: string; skillsDir?: string }): Promise<Agent> {
+  async function addCustomAgentWithOptions(
+    name: string,
+    skillsDir: string,
+    detectDir?: string,
+    additionalScanDirs: string[] = []
+  ): Promise<Agent> {
+    try {
+      const agent = await invoke<Agent>("add_custom_agent_with_options", {
+        name,
+        skillsDir,
+        detectDir: detectDir || null,
+        additionalScanDirs,
+      });
+      await fetchAgents();
+      return agent;
+    } catch (e: unknown) {
+      throw new Error(String(e));
+    }
+  }
+
+  async function updateAgent(
+    agentId: string,
+    updates: { name?: string; skillsDir?: string; detectDir?: string | null; additionalScanDirs?: string[] }
+  ): Promise<Agent> {
     try {
       const agent = await invoke<Agent>("update_agent", {
         agentId,
         name: updates.name ?? null,
         skillsDir: updates.skillsDir ?? null,
+        detectDir: updates.detectDir === undefined ? null : updates.detectDir,
+        additionalScanDirs: updates.additionalScanDirs ?? null,
       });
       await fetchAgents();
       await useSkillsStore().fetchSkills();
@@ -91,6 +116,7 @@ export const useAgentsStore = defineStore("agents", () => {
     error,
     fetchAgents,
     addCustomAgent,
+    addCustomAgentWithOptions,
     updateAgent,
     removeCustomAgent,
     setVibeSkillsPath,

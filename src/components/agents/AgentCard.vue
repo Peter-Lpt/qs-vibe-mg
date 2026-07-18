@@ -19,6 +19,8 @@ const showRemoveConfirm = ref(false);
 const editing = ref(false);
 const editName = ref(props.agent.name);
 const editDir = ref(props.agent.skills_dir);
+const editDetectDir = ref(props.agent.detect_dir ?? "");
+const editAdditionalScanDirs = ref((props.agent.additional_scan_dirs ?? []).join("\n"));
 const isCommonAgent = computed(() => props.agent.kind === "common" || props.agent.id === "agents-shared" || props.agent.id === "agents-common");
 const agentInitial = computed(() => props.agent.name.charAt(0).toUpperCase());
 const directoryStatusLabel = computed(() => {
@@ -51,6 +53,8 @@ async function handleSaveEdit() {
     await agentsStore.updateAgent(props.agent.id, {
       name: editName.value.trim(),
       skillsDir: editDir.value.trim(),
+      detectDir: editDetectDir.value.trim(),
+      additionalScanDirs: parseAdditionalScanDirs(editAdditionalScanDirs.value),
     });
     editing.value = false;
   } catch (e: unknown) {
@@ -61,7 +65,20 @@ async function handleSaveEdit() {
 function cancelEdit() {
   editName.value = props.agent.name;
   editDir.value = props.agent.skills_dir;
+  editDetectDir.value = props.agent.detect_dir ?? "";
+  editAdditionalScanDirs.value = (props.agent.additional_scan_dirs ?? []).join("\n");
   editing.value = false;
+}
+
+function parseAdditionalScanDirs(text: string) {
+  return Array.from(
+    new Set(
+      text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 async function pickDirectory() {
@@ -125,6 +142,12 @@ async function pickDirectory() {
         <p class="text-[11px] truncate mt-0.5" style="color: var(--c-text-tertiary);">
           {{ agent.skills_dir }}
         </p>
+        <p v-if="agent.detect_dir" class="text-[11px] truncate mt-0.5" style="color: var(--c-text-tertiary);">
+          {{ t('agents.detect_dir') }}: {{ agent.detect_dir }}
+        </p>
+        <p v-if="agent.additional_scan_dirs?.length" class="text-[11px] truncate mt-0.5" style="color: var(--c-text-secondary);">
+          {{ t('agents.additional_scan_dirs') }}: {{ agent.additional_scan_dirs.length }}
+        </p>
         <p
           v-if="isCommonAgent"
           class="text-[11px] mt-1 leading-snug"
@@ -181,6 +204,22 @@ async function pickDirectory() {
           {{ t('agents.pick_folder') }}
         </button>
       </div>
+      <input
+        v-model="editDetectDir"
+        class="w-full px-2.5 py-1.5 text-xs rounded-md border outline-none transition-colors"
+        style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+        :placeholder="t('agents.detect_dir')"
+      />
+      <textarea
+        v-model="editAdditionalScanDirs"
+        rows="3"
+        class="w-full px-2.5 py-1.5 text-xs rounded-md border outline-none resize-none transition-colors"
+        style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+        :placeholder="t('agents.additional_scan_dirs_placeholder')"
+      />
+      <p class="text-[11px] leading-snug" style="color: var(--c-text-secondary);">
+        {{ t('agents.path_config_hint') }}
+      </p>
       <div class="flex gap-1.5">
         <button
           class="text-xs px-3 py-1.5 rounded-md cursor-pointer font-medium btn-primary"

@@ -18,8 +18,20 @@ useEscapeKey(() => emit("close"));
 const name = ref("");
 const agentPath = ref("");
 const skillsDir = ref("");
+const additionalScanDirsText = ref("");
 const adding = ref(false);
 const addError = ref<string | null>(null);
+
+function parseAdditionalScanDirs(text: string) {
+  return Array.from(
+    new Set(
+      text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ),
+  );
+}
 
 function updateSkillsDir() {
   if (agentPath.value && !skillsDir.value) {
@@ -57,7 +69,12 @@ async function handleAdd() {
 
   adding.value = true;
   try {
-    await agentsStore.addCustomAgent(name.value.trim(), skillsDir.value.trim());
+    await agentsStore.addCustomAgentWithOptions(
+      name.value.trim(),
+      skillsDir.value.trim(),
+      agentPath.value.trim() || undefined,
+      parseAdditionalScanDirs(additionalScanDirsText.value)
+    );
     emit("added");
     emit("close");
   } catch (e: unknown) {
@@ -101,7 +118,7 @@ async function handleAdd() {
 
           <div>
             <label class="text-xs block mb-1" style="color: var(--c-text-secondary);">
-              {{ t('agents.path') }}
+              {{ t('agents.detect_dir') }}
             </label>
             <div class="flex gap-2">
               <input
@@ -118,6 +135,9 @@ async function handleAdd() {
                 {{ t('agents.pick_folder') }}
               </button>
             </div>
+            <p class="text-xs mt-0.5" style="color: var(--c-text-secondary);">
+              {{ t('agents.detect_dir_hint') }}
+            </p>
           </div>
 
           <div>
@@ -135,6 +155,22 @@ async function handleAdd() {
             </p>
             <p class="text-xs mt-1 leading-snug" style="color: var(--c-text-secondary);">
               {{ t('agents.runtime_hint') }}
+            </p>
+          </div>
+
+          <div>
+            <label class="text-xs block mb-1" style="color: var(--c-text-secondary);">
+              {{ t('agents.additional_scan_dirs') }}
+            </label>
+            <textarea
+              v-model="additionalScanDirsText"
+              rows="3"
+              :placeholder="t('agents.additional_scan_dirs_placeholder')"
+              class="w-full px-3 py-2 text-xs rounded-md border outline-none resize-none"
+              style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+            />
+            <p class="text-xs mt-0.5" style="color: var(--c-text-secondary);">
+              {{ t('agents.additional_scan_dirs_hint') }}
             </p>
           </div>
         </div>

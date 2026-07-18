@@ -1,7 +1,10 @@
 use crate::errors::VibeError;
 use crate::models::agent::Agent;
 use crate::models::sync::SkillsTreeNode;
-use crate::utils::config::{build_agents_from_config, invalidate_agents_cache, load_agents, load_config, save_config, AgentConfig};
+use crate::utils::config::{
+    build_agents_from_config, invalidate_agents_cache, load_agents, load_config, save_config,
+    AgentConfig,
+};
 use crate::utils::fs as vibe_fs;
 use crate::utils::path::vibe_skills_dir;
 use std::fs;
@@ -14,6 +17,16 @@ pub fn list_agents() -> Result<Vec<Agent>, VibeError> {
 
 #[tauri::command]
 pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VibeError> {
+    add_custom_agent_with_options(name, skills_dir, None, Vec::new())
+}
+
+#[tauri::command]
+pub fn add_custom_agent_with_options(
+    name: String,
+    skills_dir: String,
+    detect_dir: Option<String>,
+    additional_scan_dirs: Vec<String>,
+) -> Result<Agent, VibeError> {
     let mut config = load_config()?;
 
     let id = name
@@ -38,7 +51,8 @@ pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VibeE
         name: name.clone(),
         skills_dir: skills_dir.clone(),
         kind: "agent".to_string(),
-        detect_dir: None,
+        detect_dir: detect_dir.clone().filter(|dir| !dir.trim().is_empty()),
+        additional_scan_dirs,
         enabled: true,
         auto_detected: false,
     };
@@ -47,21 +61,12 @@ pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VibeE
     save_config(&config)?;
     invalidate_agents_cache();
 
-    let skills_dir_expanded = crate::utils::path::expand_tilde(&skills_dir)?;
-    let detected = skills_dir_expanded.exists();
-
-    Ok(Agent {
-        id,
-        name,
-        skills_dir: skills_dir_expanded.to_string_lossy().to_string(),
-        kind: "agent".to_string(),
-        detect_dir: None,
-        tool_detected: detected,
-        detected,
-        enabled: true,
-        auto_detected: false,
-        linked_skills: Vec::new(),
-    })
+    let updated_config = load_config()?;
+    let agents = build_agents_from_config(&updated_config)?;
+    agents
+        .into_iter()
+        .find(|a| a.id == id)
+        .ok_or_else(|| VibeError::AgentNotFound { agent_id: id })
 }
 
 #[tauri::command]
@@ -69,6 +74,8 @@ pub fn update_agent(
     agent_id: String,
     name: Option<String>,
     skills_dir: Option<String>,
+    detect_dir: Option<String>,
+    additional_scan_dirs: Option<Vec<String>>,
 ) -> Result<Agent, VibeError> {
     let mut config = load_config()?;
 
@@ -85,6 +92,16 @@ pub fn update_agent(
     }
     if let Some(d) = skills_dir {
         agent_config.skills_dir = d;
+    }
+    if let Some(d) = detect_dir {
+        agent_config.detect_dir = if d.trim().is_empty() { None } else { Some(d) };
+    }
+    if let Some(dirs) = additional_scan_dirs {
+        agent_config.additional_scan_dirs = dirs
+            .into_iter()
+            .map(|dir| dir.trim().to_string())
+            .filter(|dir| !dir.is_empty())
+            .collect();
     }
 
     save_config(&config)?;
@@ -146,7 +163,13 @@ pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let target_dir = vibe_dir.join(&agent_id);
 
-    let root = build_tree_node(skills_dir, skills_dir, &target_dir, 0, &mut std::collections::HashSet::new());
+    let root = build_tree_node(
+        skills_dir,
+        skills_dir,
+        &target_dir,
+        0,
+        &mut std::collections::HashSet::new(),
+    );
     Ok(root)
 }
 

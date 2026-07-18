@@ -61,6 +61,7 @@ pub fn run() {
             commands::sync::batch_skill_action,
             commands::agents::list_agents,
             commands::agents::add_custom_agent,
+            commands::agents::add_custom_agent_with_options,
             commands::agents::update_agent,
             commands::agents::remove_custom_agent,
             commands::agents::get_skills_tree,

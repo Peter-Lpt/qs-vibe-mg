@@ -341,6 +341,11 @@ function sourceLabel(source: SkillSource): string {
     const parts = raw.split(/[\\/]/).filter(Boolean);
     return `Project · ${parts[parts.length - 1] || "Project"}`;
   }
+  if (source.from.startsWith("external:")) {
+    const raw = source.from.replace(/^external:[^:]+:/, "");
+    const parts = raw.split(/[\\/]/).filter(Boolean);
+    return `External · ${parts[parts.length - 1] || "External"}`;
+  }
   return props.agents.find((a) => a.id === source.from)?.name ?? source.from;
 }
 
