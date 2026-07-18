@@ -9,7 +9,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "select-group", skillIds: string[], openBatch: boolean): void;
+  (e: "select-group", skillIds: string[], openBatch: boolean, repairContext: string): void;
 }>();
 
 const { t } = useI18n();
@@ -108,7 +108,7 @@ const groups = computed(() => {
         :key="group.id"
         class="rounded-md border px-2.5 py-2 text-left cursor-pointer transition-colors hover:bg-[var(--c-surface-hover)]"
         style="border-color: var(--c-border); background: var(--c-bg);"
-        @click="emit('select-group', group.skills.map((skill) => skill.id), group.batch)"
+        @click="emit('select-group', group.skills.map((skill) => skill.id), group.batch, group.id)"
       >
         <div class="flex items-center gap-2">
           <component :is="group.icon" :size="14" :style="{ color: group.color }" />

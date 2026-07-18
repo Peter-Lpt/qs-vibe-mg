@@ -16,6 +16,7 @@ import ConfirmDialog from "../common/ConfirmDialog.vue";
 
 const props = defineProps<{
   selectedSkillIds: string[];
+  repairContext?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -64,6 +65,15 @@ const result = ref<BatchResult | null>(null);
 const dryRunExpanded = ref(true);
 const resultExpanded = ref(true);
 
+const repairInfo = computed(() => {
+  if (!props.repairContext) return null;
+  const key = `manage.batch_repair_${props.repairContext}`;
+  return {
+    label: t(key),
+    hint: t(`${key}_hint`),
+  };
+});
+
 const panelSkills = computed(() =>
   skillsStore.skills.filter((s) => props.selectedSkillIds.includes(s.id))
 );
@@ -97,6 +107,16 @@ watch(
 watch(mode, () => {
   selectedCells.value = defaultSelection();
 });
+
+watch(
+  () => props.repairContext,
+  (context) => {
+    mode.value = context === "uncovered" ? "link_only" : "sync";
+    selectedCells.value = defaultSelection();
+    result.value = null;
+  },
+  { immediate: true }
+);
 
 function hasVibe(skill: Skill): boolean {
   return skill.sources.some((s) => s.from === "vibe-lib");
@@ -521,6 +541,16 @@ function resultEntryText(entry: DryRunItem | BatchResult["failed"][number] | Bat
 
       <!-- Mode switch -->
       <div class="flex items-center gap-2 px-4 py-2 border-b" style="border-color: var(--c-border);">
+        <div
+          v-if="repairInfo"
+          class="flex items-center gap-2 px-2 py-1 rounded text-[10px]"
+          style="background: var(--c-warning-light); color: var(--c-warning);"
+          :title="repairInfo.hint"
+        >
+          <Wrench :size="12" />
+          <span class="font-medium">{{ repairInfo.label }}</span>
+          <span class="hidden sm:inline" style="color: var(--c-text-secondary);">{{ repairInfo.hint }}</span>
+        </div>
         <button
           v-for="m in (['sync', 'link_only', 'unlink_only'] as Mode[])"
           :key="m"

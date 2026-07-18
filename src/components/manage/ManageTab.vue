@@ -304,9 +304,11 @@ watch(searchQuery, (val) => {
 // ── 批量操作面板（多 skill 同步交互，详见 docs/multi-skill-sync-interaction.v3.md） ──
 const showBatch = ref(false);
 const selectedSkillIds = computed(() => [...selectedSkills.value]);
+const batchRepairContext = ref<string | null>(null);
 
 function openBatchPanel() {
   if (selectedSkills.value.size === 0) return;
+  batchRepairContext.value = null;
   showBatch.value = true;
 }
 
@@ -318,10 +320,12 @@ function removeSkillFromSelection(skillId: string) {
 
 function closeBatchPanel() {
   showBatch.value = false;
+  batchRepairContext.value = null;
 }
 
 function resolveConflictFromBatch(skillId: string) {
   showBatch.value = false;
+  batchRepairContext.value = "conflict";
   viewMode.value = "list";
   expandedSkillId.value = skillId;
   setTimeout(() => {
@@ -333,16 +337,18 @@ function onBatchApplied() {
   // 面板内部已统一 refreshSkills + fetchAgents；此处保留选择，便于继续操作
 }
 
-function selectIssueGroup(skillIds: string[], openBatch: boolean) {
+function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext: string) {
   if (skillIds.length === 0) return;
   viewMode.value = "list";
   if (openBatch) {
     selectedSkills.value = new Set(skillIds);
+    batchRepairContext.value = repairContext;
     showBatch.value = true;
     return;
   }
 
   selectedSkills.value = new Set();
+  batchRepairContext.value = repairContext;
   showBatch.value = false;
   expandedSkillId.value = skillIds[0];
   setTimeout(() => {
@@ -662,6 +668,7 @@ const chipGroups = computed(() => {
     <BatchSyncPanel
       v-if="showBatch"
       :selected-skill-ids="selectedSkillIds"
+      :repair-context="batchRepairContext"
       @close="closeBatchPanel"
       @remove-skill="removeSkillFromSelection"
       @resolve-conflict="resolveConflictFromBatch"
