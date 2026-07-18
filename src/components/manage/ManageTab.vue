@@ -395,48 +395,48 @@ const chipGroups = computed(() => {
             {{ t("manage.workspace_hint") }}
           </p>
         </div>
-        <div class="flex items-center gap-2">
-        <button
-          v-if="hasActiveFilters"
-          class="text-[11px] px-3 py-1.5 rounded-md cursor-pointer toolbar-control"
-          @click="clearAllFilters"
-        >
-          {{ t("manage.clear_filters") || "清除筛选" }}
-        </button>
-        <button
-          class="w-8 h-8 flex items-center justify-center rounded-md cursor-pointer toolbar-control disabled:opacity-50 disabled:cursor-not-allowed"
-          :title="t('manage.refresh')"
-          :disabled="isRefreshing"
-          @click="refreshManageData"
-        >
-          <RefreshCw :size="14" :class="{ 'animate-spin': isRefreshing }" />
-        </button>
-        <button
-          class="text-xs px-3.5 py-2 rounded-md cursor-pointer btn-primary inline-flex items-center gap-1.5"
-          @click="showInstall = true"
-        >
-          <Plus :size="14" />
-          {{ t("skills.install") }}
-        </button>
-        <div class="segmented-nav inline-flex items-center">
+        <div class="action-toolbar">
           <button
-            class="px-2.5 py-1.5 flex items-center justify-center cursor-pointer rounded-md transition-colors"
-            :style="{ background: viewMode === 'list' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'var(--c-text-secondary)' }"
-            :title="t('manage.view_list') || '列表视图'"
-            @click="setViewMode('list')"
+            v-if="hasActiveFilters"
+            class="action-toolbar-text"
+            @click="clearAllFilters"
           >
-            <List :size="14" />
+            {{ t("manage.clear_filters") || "清除筛选" }}
           </button>
           <button
-            class="px-2.5 py-1.5 flex items-center justify-center cursor-pointer rounded-md transition-colors"
-            :style="{ background: viewMode === 'tree' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'tree' ? 'white' : 'var(--c-text-secondary)' }"
-            :title="t('manage.view_tree') || '树视图'"
-            @click="setViewMode('tree')"
+            class="action-toolbar-icon disabled:opacity-50 disabled:cursor-not-allowed"
+            :title="t('manage.refresh')"
+            :disabled="isRefreshing"
+            @click="refreshManageData"
           >
-            <ListTree :size="14" />
+            <RefreshCw :size="15" :class="{ 'animate-spin': isRefreshing }" />
           </button>
+          <button
+            class="action-toolbar-primary"
+            @click="showInstall = true"
+          >
+            <Plus :size="15" />
+            {{ t("skills.install") }}
+          </button>
+          <div class="action-toolbar-segment">
+            <button
+              class="action-toolbar-segment-button"
+              :style="{ background: viewMode === 'list' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'var(--c-text-secondary)' }"
+              :title="t('manage.view_list') || '列表视图'"
+              @click="setViewMode('list')"
+            >
+              <List :size="15" />
+            </button>
+            <button
+              class="action-toolbar-segment-button"
+              :style="{ background: viewMode === 'tree' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'tree' ? 'white' : 'var(--c-text-secondary)' }"
+              :title="t('manage.view_tree') || '树视图'"
+              @click="setViewMode('tree')"
+            >
+              <ListTree :size="15" />
+            </button>
+          </div>
         </div>
-      </div>
       </div>
 
       <div class="grid gap-3 mt-4" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">

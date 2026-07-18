@@ -229,6 +229,86 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.action-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-toolbar-icon,
+.action-toolbar-text,
+.action-toolbar-primary,
+.action-toolbar-segment-button {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  border: 1px solid var(--c-border);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.action-toolbar-icon {
+  width: 36px;
+  background: var(--c-surface);
+  color: var(--c-text-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.action-toolbar-icon:hover,
+.action-toolbar-text:hover {
+  background: var(--c-surface-hover);
+  color: var(--c-text);
+}
+
+.action-toolbar-text {
+  padding: 0 12px;
+  background: var(--c-surface);
+  color: var(--c-text-secondary);
+  font-size: 11px;
+  box-shadow: var(--shadow-sm);
+}
+
+.action-toolbar-primary {
+  gap: 6px;
+  padding: 0 16px;
+  background: var(--c-primary);
+  border-color: var(--c-primary);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(36, 87, 214, 0.2);
+}
+
+.action-toolbar-primary:hover {
+  background: var(--c-primary-hover);
+  border-color: var(--c-primary-hover);
+}
+
+.action-toolbar-segment {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.action-toolbar-segment-button {
+  width: 34px;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+}
+
+.action-toolbar-segment-button:hover {
+  background: var(--c-surface-hover) !important;
+}
+
 .skill-row-shell {
   border-radius: 12px;
   overflow: hidden;
