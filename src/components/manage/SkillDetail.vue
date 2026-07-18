@@ -208,7 +208,7 @@ function canUpdateSource(source: SkillSource): boolean {
   return (
     source.from === "vibe-lib" &&
     source.origin !== undefined &&
-    source.origin.method === "git"
+    (source.origin.method === "git" || !!source.origin.update_command?.trim())
   );
 }
 

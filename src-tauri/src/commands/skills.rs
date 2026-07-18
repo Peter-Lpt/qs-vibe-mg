@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 use tracing::warn;
+use uuid::Uuid;
 
 use crate::errors::VibeError;
 use crate::models::dashboard::{
@@ -19,10 +21,11 @@ use crate::utils::fs as vibe_fs;
 use crate::utils::fs::{copy_dir_all, copy_skill_dir_all};
 use crate::utils::history::record_action;
 use crate::utils::origin::{
-    build_git_origin, build_install_origin, git_pull_ff_only, git_status_clean, normalize_source_method,
-    probe_git_origin, read_skill_origin, refresh_git_origin, run_update_command, trust_level_for,
-    update_status_for, write_skill_origin, write_skill_origin_sidecar, SOURCE_METHOD_GIT,
-    SOURCE_METHOD_LOCAL_FOLDER, SOURCE_METHOD_MARKETPLACE, SOURCE_METHOD_NPM, SOURCE_METHOD_NPX,
+    build_command_origin, build_git_origin, build_install_origin, git_pull_ff_only, git_status_clean,
+    normalize_source_method, probe_git_origin, read_skill_origin, refresh_git_origin,
+    run_update_command, trust_level_for, update_status_for, write_skill_origin,
+    write_skill_origin_sidecar, SOURCE_METHOD_GIT, SOURCE_METHOD_LOCAL_FOLDER,
+    SOURCE_METHOD_MARKETPLACE, SOURCE_METHOD_NPM, SOURCE_METHOD_NPX,
 };
 use crate::utils::path::vibe_skills_dir;
 
@@ -611,17 +614,89 @@ fn find_skill_md_recursive(
 
 #[tauri::command]
 pub fn install_skill(source_path: String, reference: bool) -> Result<Skill, VibeError> {
-    let source = Path::new(&source_path);
+    install_skill_from_path(Path::new(&source_path), reference)
+}
+
+#[tauri::command]
+pub fn install_skill_from_source(
+    source_mode: String,
+    source_value: String,
+    reference: bool,
+) -> Result<Skill, VibeError> {
+    let mode = source_mode.trim().to_ascii_lowercase();
+    match mode.as_str() {
+        "folder" | "local-folder" | "local_folder" => {
+            install_skill_from_path(Path::new(&source_value), reference)
+        }
+        "git" | "git-url" | "git_url" => install_skill_from_git_url(&source_value, reference),
+        "command" => install_skill_from_command(&source_value, reference),
+        _ => Err(VibeError::Path(format!(
+            "Unsupported install source mode: {}",
+            source_mode
+        ))),
+    }
+}
+
+fn install_skill_from_path(source: &Path, reference: bool) -> Result<Skill, VibeError> {
     if !source.exists() {
         return Err(VibeError::InvalidSkillMd {
-            reason: format!("Source path does not exist: {}", source_path),
+            reason: format!("Source path does not exist: {}", source.display()),
         });
     }
 
-    let skill_md = source.join("SKILL.md");
+    let install_root = locate_skill_root(source)?;
+    let origin = probe_git_origin(source)
+        .map(|probe| build_git_origin(source, &probe))
+        .unwrap_or_else(|| build_install_origin(source));
+    install_skill_from_materialized_source(&install_root, reference, origin)
+}
+
+fn install_skill_from_git_url(git_url: &str, reference: bool) -> Result<Skill, VibeError> {
+    let source_root = managed_install_source_dir("git")?;
+    if source_root.exists() {
+        remove_path(&source_root)?;
+    }
+    if let Some(parent) = source_root.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    clone_git_repo(git_url, &source_root)?;
+
+    let install_root = locate_skill_root(&source_root)?;
+    let probe = probe_git_origin(&source_root).ok_or_else(|| {
+        VibeError::Path(format!("Unable to read Git provenance from {}", source_root.display()))
+    })?;
+    let origin = build_git_origin(&source_root, &probe);
+    install_skill_from_materialized_source(&install_root, reference, origin)
+}
+
+fn install_skill_from_command(command: &str, reference: bool) -> Result<Skill, VibeError> {
+    let source_root = managed_install_source_dir("command")?;
+    if source_root.exists() {
+        remove_path(&source_root)?;
+    }
+    if let Some(parent) = source_root.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::create_dir_all(&source_root)?;
+    run_update_command(command, Some(&source_root))?;
+
+    let install_root = locate_skill_root(&source_root)?;
+    let origin = build_command_origin(&source_root, command);
+    install_skill_from_materialized_source(&install_root, reference, origin)
+}
+
+fn install_skill_from_materialized_source(
+    install_root: &Path,
+    reference: bool,
+    origin: crate::models::origin::SkillOrigin,
+) -> Result<Skill, VibeError> {
+    let skill_md = install_root.join("SKILL.md");
     if !skill_md.exists() {
         return Err(VibeError::InvalidSkillMd {
-            reason: "Source directory does not contain SKILL.md".to_string(),
+            reason: format!(
+                "Source directory does not contain SKILL.md: {}",
+                install_root.display()
+            ),
         });
     }
 
@@ -636,22 +711,20 @@ pub fn install_skill(source_path: String, reference: bool) -> Result<Skill, Vibe
     }
 
     if reference {
-        let report = vibe_fs::create_symlink_with_report(source, &dest)?;
+        let report = vibe_fs::create_symlink_with_report(install_root, &dest)?;
         if let Some(warning) = report.warning {
             warn!("Reference install fallback: {}", warning);
         }
     } else {
-        copy_skill_dir_all(source, &dest)?;
+        copy_skill_dir_all(install_root, &dest)?;
     }
 
-    let origin = probe_git_origin(source)
-        .map(|probe| build_git_origin(source, &probe))
-        .unwrap_or_else(|| build_install_origin(source));
     if reference {
         write_skill_origin_sidecar(&dest, &origin)?;
     } else {
         write_skill_origin(&dest, &origin)?;
     }
+
     let trust_level = trust_level_for(Some(&origin));
     let update_status = update_status_for(Some(&origin), Some(&dest));
 
@@ -697,6 +770,80 @@ pub fn install_skill(source_path: String, reference: bool) -> Result<Skill, Vibe
         is_duplicate: false,
         missing_name: false,
     })
+}
+
+fn locate_skill_root(start: &Path) -> Result<std::path::PathBuf, VibeError> {
+    if start.join("SKILL.md").exists() {
+        return Ok(start.to_path_buf());
+    }
+
+    let mut stack = vec![(start.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = stack.pop() {
+        if depth > 4 {
+            continue;
+        }
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            if path.join("SKILL.md").exists() {
+                return Ok(path);
+            }
+            stack.push((path, depth + 1));
+        }
+    }
+
+    Err(VibeError::InvalidSkillMd {
+        reason: format!("Unable to locate SKILL.md under {}", start.display()),
+    })
+}
+
+fn managed_install_source_dir(kind: &str) -> Result<std::path::PathBuf, VibeError> {
+    let vibe_dir = vibe_skills_dir()?;
+    Ok(vibe_dir
+        .join(".sources")
+        .join(kind)
+        .join(Uuid::new_v4().to_string()))
+}
+
+fn clone_git_repo(url: &str, dest: &Path) -> Result<(), VibeError> {
+    let output = Command::new("git")
+        .args(["clone", "--depth", "1", url])
+        .arg(dest)
+        .output()
+        .map_err(VibeError::Io)?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(VibeError::Path(format!(
+        "Git clone failed for {}: {}",
+        url,
+        if stderr.is_empty() {
+            "check the URL, authentication, or network access".to_string()
+        } else {
+            stderr
+        }
+    )))
+}
+
+fn remove_path(path: &Path) -> Result<(), VibeError> {
+    if !path.exists() && !vibe_fs::is_link(path) {
+        return Ok(());
+    }
+
+    if vibe_fs::is_link(path) {
+        vibe_fs::remove_symlink(path)?;
+    } else if path.is_dir() {
+        fs::remove_dir_all(path)?;
+    } else {
+        fs::remove_file(path)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

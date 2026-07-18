@@ -21,7 +21,6 @@ export const useSkillsStore = defineStore("skills", () => {
   const issues = ref<SkillIssue[]>([]);
   const issuesLoading = ref(false);
 
-  /** 首次加载，显示 loading */
   async function fetchSkills() {
     loading.value = true;
     error.value = null;
@@ -34,7 +33,6 @@ export const useSkillsStore = defineStore("skills", () => {
     }
   }
 
-  /** 后台静默刷新，不显示 loading（P3：防抖，避免快速连续操作触发多次全量重取） */
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
   async function refreshSkills() {
     if (refreshTimer) clearTimeout(refreshTimer);
@@ -48,7 +46,6 @@ export const useSkillsStore = defineStore("skills", () => {
     }, 120);
   }
 
-  /** 本地搜索：直接过滤已加载的 skills，去掉后端 search_skills 往返（P3） */
   function searchSkills(query: string) {
     searchQuery.value = query;
     const q = query.trim().toLowerCase();
@@ -107,7 +104,22 @@ export const useSkillsStore = defineStore("skills", () => {
 
   async function installSkill(sourcePath: string, reference = false): Promise<Skill> {
     const skill = await invoke<Skill>("install_skill", { sourcePath, reference });
-    // P3：install_skill 已返回最新 Skill，本地原地更新而非整表重取
+    const i = skills.value.findIndex((s) => s.id === skill.id);
+    if (i >= 0) skills.value[i] = skill;
+    else skills.value.push(skill);
+    return skill;
+  }
+
+  async function installSkillFromSource(
+    sourceMode: string,
+    sourceValue: string,
+    reference = false
+  ): Promise<Skill> {
+    const skill = await invoke<Skill>("install_skill_from_source", {
+      sourceMode,
+      sourceValue,
+      reference,
+    });
     const i = skills.value.findIndex((s) => s.id === skill.id);
     if (i >= 0) skills.value[i] = skill;
     else skills.value.push(skill);
@@ -142,21 +154,38 @@ export const useSkillsStore = defineStore("skills", () => {
     force = false,
     sourcePath?: string
   ): Promise<string> {
-    const result = await invoke<string>("sync_to_vibe", { skillId, agentId, force, sourcePath: sourcePath ?? null });
+    const result = await invoke<string>("sync_to_vibe", {
+      skillId,
+      agentId,
+      force,
+      sourcePath: sourcePath ?? null,
+    });
     refreshSkills();
     useAgentsStore().fetchAgents();
     return result;
   }
 
   async function relink(skillId: string, agentId: string, sourcePath?: string): Promise<string> {
-    const result = await invoke<string>("relink", { skillId, agentId, sourcePath: sourcePath ?? null });
+    const result = await invoke<string>("relink", {
+      skillId,
+      agentId,
+      sourcePath: sourcePath ?? null,
+    });
     refreshSkills();
     useAgentsStore().fetchAgents();
     return result;
   }
 
-  async function replaceWithLibrary(skillId: string, agentId: string, sourcePath?: string): Promise<string> {
-    const result = await invoke<string>("replace_with_library", { skillId, agentId, sourcePath: sourcePath ?? null });
+  async function replaceWithLibrary(
+    skillId: string,
+    agentId: string,
+    sourcePath?: string
+  ): Promise<string> {
+    const result = await invoke<string>("replace_with_library", {
+      skillId,
+      agentId,
+      sourcePath: sourcePath ?? null,
+    });
     refreshSkills();
     useAgentsStore().fetchAgents();
     return result;
@@ -168,10 +197,7 @@ export const useSkillsStore = defineStore("skills", () => {
     action: string,
     silent = false
   ): Promise<SyncActionResult> {
-    const result = await invoke<SyncActionResult>(
-      "batch_skill_action",
-      { skillId, agentIds, action }
-    );
+    const result = await invoke<SyncActionResult>("batch_skill_action", { skillId, agentIds, action });
     if (!silent) {
       refreshSkills();
       useAgentsStore().fetchAgents();
@@ -198,6 +224,7 @@ export const useSkillsStore = defineStore("skills", () => {
     removeLink,
     removeAgentSkillCopy,
     installSkill,
+    installSkillFromSource,
     updateSkill,
     deleteSkill,
     previewSkill,

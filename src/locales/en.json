@@ -233,7 +233,15 @@
     "install_reference": "Reference install (keep source link)",
     "install_reference_hint": "Best for Git repositories or skills that should update from one source. Reference install keeps a link in the library.",
     "source_path_required": "Please enter a source path",
-    "source_path_placeholder": "/path/to/skill-directory"
+    "source_path_placeholder": "/path/to/skill-directory",
+    "install_source_label": "Install source",
+    "install_mode_folder": "Folder",
+    "install_mode_git": "Git URL",
+    "install_mode_command": "Command",
+    "install_git_placeholder": "https://github.com/owner/repo.git",
+    "install_git_hint": "Enter a Git repository URL. QS-Vibe will clone it into a managed source directory before installing it into the library.",
+    "install_command_placeholder": "npx your-skill-installer",
+    "install_command_hint": "Enter a shell command. The command should create or fetch a skill directory containing SKILL.md inside a temporary managed source directory."
   },
   "agents": {
     "add": "Add Agent",

@@ -51,6 +51,34 @@ pub fn build_install_origin(source_path: &Path) -> SkillOrigin {
         source_path: Some(source_path.to_string_lossy().to_string()),
         command: Some(format!("local-folder {}", source_path.to_string_lossy())),
         update_command: None,
+        refresh_command: None,
+        package_name: None,
+        version: None,
+        sync_mode: Some("copy".to_string()),
+        last_checked_at: None,
+    }
+}
+
+pub fn build_command_origin(source_path: &Path, command: &str) -> SkillOrigin {
+    let method = infer_source_method_from_text(command)
+        .unwrap_or_else(|| SOURCE_METHOD_LOCAL_FOLDER.to_string());
+
+    SkillOrigin {
+        method,
+        provider: None,
+        url: None,
+        commit: None,
+        branch: None,
+        installed_at: chrono_now(),
+        installed_by: Some("qs-vibe".to_string()),
+        trust_level: "explicit".to_string(),
+        source_path: Some(source_path.to_string_lossy().to_string()),
+        command: Some(command.to_string()),
+        update_command: Some(command.to_string()),
+        refresh_command: Some(command.to_string()),
+        package_name: None,
+        version: None,
+        sync_mode: Some("copy".to_string()),
         last_checked_at: None,
     }
 }
@@ -68,6 +96,10 @@ pub fn build_git_origin(source_path: &Path, probe: &GitProbe) -> SkillOrigin {
         source_path: Some(source_path.to_string_lossy().to_string()),
         command: Some(format!("git-source {}", source_path.to_string_lossy())),
         update_command: Some("git pull --ff-only".to_string()),
+        refresh_command: Some("git pull --ff-only".to_string()),
+        package_name: None,
+        version: None,
+        sync_mode: Some("copy".to_string()),
         last_checked_at: None,
     }
 }
@@ -96,15 +128,22 @@ pub fn update_status_for(origin: Option<&SkillOrigin>, skill_dir: Option<&Path>)
         return UPDATE_STATUS_UNKNOWN.to_string();
     };
 
-    if origin
-        .update_command
-        .as_ref()
-        .is_some_and(|cmd| !cmd.trim().is_empty())
-    {
+    let method = normalize_source_method(&origin.method);
+    let command = origin.command.as_deref().unwrap_or_default();
+    let update_command = origin.update_command.as_deref().unwrap_or_default();
+
+    if !update_command.trim().is_empty() {
         return UPDATE_STATUS_AUTO.to_string();
     }
 
-    let method = normalize_source_method(&origin.method);
+    if let Some(inferred) = infer_source_method_from_text(command) {
+        if inferred == SOURCE_METHOD_NPM
+            || inferred == SOURCE_METHOD_NPX
+            || inferred == SOURCE_METHOD_MARKETPLACE
+        {
+            return UPDATE_STATUS_BEST_EFFORT.to_string();
+        }
+    }
 
     if method == SOURCE_METHOD_GIT {
         if origin
@@ -121,7 +160,8 @@ pub fn update_status_for(origin: Option<&SkillOrigin>, skill_dir: Option<&Path>)
     if matches!(
         method.as_str(),
         SOURCE_METHOD_NPM | SOURCE_METHOD_NPX | SOURCE_METHOD_MARKETPLACE
-    ) {
+    ) || infer_source_method_from_text(command).is_some()
+    {
         return UPDATE_STATUS_BEST_EFFORT.to_string();
     }
 
@@ -137,7 +177,9 @@ pub fn update_status_for(origin: Option<&SkillOrigin>, skill_dir: Option<&Path>)
 
 pub fn normalize_source_method(method: &str) -> String {
     match method.trim().to_ascii_lowercase().as_str() {
-        "local-folder" | "local_folder" | "folder" | "local" => SOURCE_METHOD_LOCAL_FOLDER.to_string(),
+        "local-folder" | "local_folder" | "folder" | "local" => {
+            SOURCE_METHOD_LOCAL_FOLDER.to_string()
+        }
         "git" | "github" | "gitee" | "gitlab" => SOURCE_METHOD_GIT.to_string(),
         "npm" => SOURCE_METHOD_NPM.to_string(),
         "npx" => SOURCE_METHOD_NPX.to_string(),
@@ -155,6 +197,27 @@ pub fn infer_provider_from_url(url: &str) -> Option<String> {
         Some("gitee".to_string())
     } else if lower.contains("gitlab.com") {
         Some("gitlab".to_string())
+    } else {
+        None
+    }
+}
+
+pub fn infer_source_method_from_text(text: &str) -> Option<String> {
+    let lower = text.trim().to_ascii_lowercase();
+    if lower.contains("npx ") || lower.starts_with("npx") {
+        Some(SOURCE_METHOD_NPX.to_string())
+    } else if lower.contains("npm exec")
+        || lower.contains("npm install")
+        || lower.contains("npm i ")
+        || lower.contains("pnpm add")
+    {
+        Some(SOURCE_METHOD_NPM.to_string())
+    } else if lower.contains("claude")
+        || lower.contains("marketplace")
+        || lower.contains("skill store")
+        || lower.contains("plugin marketplace")
+    {
+        Some(SOURCE_METHOD_MARKETPLACE.to_string())
     } else {
         None
     }
@@ -186,7 +249,7 @@ pub fn git_status_clean(path: &Path) -> Result<bool, VibeError> {
 
     if !output.status.success() {
         return Err(VibeError::Path(format!(
-            "无法检查 Git 工作区状态：{}",
+            "Unable to inspect Git status for {}",
             path.display()
         )));
     }
@@ -208,10 +271,10 @@ pub fn git_pull_ff_only(path: &Path) -> Result<(), VibeError> {
 
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     Err(VibeError::Path(format!(
-        "Git 拉取失败：{}。{}",
+        "Git pull failed for {}: {}",
         path.display(),
         if stderr.is_empty() {
-            "请检查远端、权限或本地冲突".to_string()
+            "check remote access, permissions, or local conflicts".to_string()
         } else {
             stderr
         }
@@ -240,10 +303,10 @@ pub fn run_update_command(command: &str, cwd: Option<&Path>) -> Result<(), VibeE
 
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     Err(VibeError::Path(format!(
-        "更新命令执行失败：{}。{}",
+        "Update command failed for {}: {}",
         command,
         if stderr.is_empty() {
-            "请检查命令可用性、权限或来源配置".to_string()
+            "check command availability, permissions, or source configuration".to_string()
         } else {
             stderr
         }
@@ -257,6 +320,7 @@ pub fn refresh_git_origin(origin: &mut SkillOrigin, probe: &GitProbe) {
     origin.commit = Some(probe.commit.clone());
     origin.branch = probe.branch.clone();
     origin.update_command = Some("git pull --ff-only".to_string());
+    origin.refresh_command = Some("git pull --ff-only".to_string());
     origin.last_checked_at = Some(chrono_now());
     if origin.trust_level.trim().is_empty() {
         origin.trust_level = "explicit".to_string();
@@ -286,12 +350,12 @@ fn run_git<const N: usize>(path: &Path, args: [&str; N]) -> Option<String> {
 
 pub fn read_skill_origin(skill_dir: &Path) -> Option<SkillOrigin> {
     if let Some(origin) = read_skill_origin_direct_or_sidecar(skill_dir) {
-        return Some(origin);
+        return Some(normalize_loaded_origin(origin));
     }
 
     if let Ok(target) = crate::utils::fs::read_link_target(skill_dir) {
         if let Some(origin) = read_skill_origin_direct_or_sidecar(&target) {
-            return Some(origin);
+            return Some(normalize_loaded_origin(origin));
         }
     }
 
@@ -305,7 +369,7 @@ pub fn write_skill_origin(skill_dir: &Path, origin: &SkillOrigin) -> Result<(), 
 pub fn write_skill_origin_sidecar(skill_dir: &Path, origin: &SkillOrigin) -> Result<(), VibeError> {
     let path = origin_sidecar_file_path(skill_dir).ok_or_else(|| {
         VibeError::Path(format!(
-            "无法为 {} 生成 provenance 侧边车路径",
+            "Unable to generate origin sidecar for {}",
             skill_dir.display()
         ))
     })?;
@@ -337,6 +401,31 @@ fn read_skill_origin_direct_or_sidecar(skill_dir: &Path) -> Option<SkillOrigin> 
         }
     }
     None
+}
+
+fn normalize_loaded_origin(mut origin: SkillOrigin) -> SkillOrigin {
+    if let Some(inferred) = infer_source_method_from_text(origin.command.as_deref().unwrap_or("")) {
+        if origin.method.trim().is_empty()
+            || normalize_source_method(&origin.method) == SOURCE_METHOD_LOCAL_FOLDER
+        {
+            origin.method = inferred;
+        }
+    }
+
+    if origin.update_command.is_none()
+        && matches!(
+            normalize_source_method(&origin.method).as_str(),
+            SOURCE_METHOD_NPM | SOURCE_METHOD_NPX | SOURCE_METHOD_MARKETPLACE
+        )
+    {
+        origin.update_command = origin.command.clone();
+    }
+
+    if origin.refresh_command.is_none() {
+        origin.refresh_command = origin.update_command.clone();
+    }
+
+    origin
 }
 
 #[cfg(test)]

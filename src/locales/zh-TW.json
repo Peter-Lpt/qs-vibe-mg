@@ -233,7 +233,15 @@
     "install_reference": "引用安裝（保持指向源目錄）",
     "install_reference_hint": "適合 Git 倉庫或希望單點修改、所有位置同步的技能。引用安裝會在技能庫中保留軟連結。",
     "source_path_required": "請輸入來源路徑",
-    "source_path_placeholder": "/path/to/skill-directory"
+    "source_path_placeholder": "/path/to/skill-directory",
+    "install_source_label": "安裝來源",
+    "install_mode_folder": "目錄",
+    "install_mode_git": "Git URL",
+    "install_mode_command": "命令",
+    "install_git_placeholder": "https://github.com/owner/repo.git",
+    "install_git_hint": "填寫 Git 倉庫地址，系統會先克隆到受管源目錄，再安裝到中心庫。",
+    "install_command_placeholder": "npx your-skill-installer",
+    "install_command_hint": "填寫可在 shell 中執行的命令，命令應在臨時源目錄中生成或拉取出一個包含 SKILL.md 的技能目錄。"
   },
   "agents": {
     "add": "添加 Agent",

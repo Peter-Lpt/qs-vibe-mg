@@ -42,6 +42,7 @@ pub fn run() {
             commands::skills::preview_skill,
             commands::skills::preview_skill_at_path,
             commands::skills::install_skill,
+            commands::skills::install_skill_from_source,
             commands::skills::update_skill,
             commands::skills::delete_library_skill,
             commands::skills::delete_skill,

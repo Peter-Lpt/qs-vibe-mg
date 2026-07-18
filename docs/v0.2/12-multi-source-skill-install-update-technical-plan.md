@@ -364,12 +364,21 @@
 - `SkillOrigin` 增加 `branch`，并能区分 `git / local-folder / npm / npx / marketplace`。
 - 安装时会优先探测 Git 来源并写入 provenance。
 - 安装支持默认复制和显式引用安装两种模式。
+- 安装入口已支持 `目录 / Git URL / 命令` 三种来源模式。
+- Git URL 会先克隆到受管源目录，再安装到中心库。
+- 命令模式会先在受管源目录执行，再安装到中心库。
 - 引用安装的 provenance 通过 sidecar 文件保存，不污染源仓库。
 - 中心库与同步链路改为 skill 内容复制，跳过 `.git` 和 `.vibe-origin.json`。
 - 引用型中心库在同步时会尽量保留链接，不直接打平。
 - 详情页补了来源方法徽标和 Git 更新按钮。
+- 详情页已放宽为“只要存在可回放 update_command 就显示更新按钮”。
 - 后端已接入 Git 更新执行器，包含干净工作区检查、`git pull --ff-only`、临时目录替换和 provenance 刷新。
 - 后端已接入通用 update command 执行器，可复用到 `npx / marketplace / local-folder` 这类可回放来源。
+
+待继续：
+
+- `npx / npm` 与 `marketplace` 的专用安装适配与来源探测。
+- 更细的安装预览、dry-run 和失败回滚提示。
 
 仍待继续：
 

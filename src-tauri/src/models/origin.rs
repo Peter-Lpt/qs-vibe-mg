@@ -23,6 +23,14 @@ pub struct SkillOrigin {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_command: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub refresh_command: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub last_checked_at: Option<String>,
 }
 
