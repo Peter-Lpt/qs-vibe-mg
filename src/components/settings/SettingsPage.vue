@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore, type Locale, type ThemeMode } from "../../stores/app";
 import { useAgentsStore } from "../../stores/agents";
@@ -35,6 +35,9 @@ const showMigrateConfirm = ref(false);
 const pendingPath = ref("");
 const savingPath = ref(false);
 const pathError = ref<string | null>(null);
+const savingProjectRoots = ref(false);
+const projectRootsText = ref("");
+const projectRootsLoaded = ref(false);
 
 function handleThemeChange(mode: ThemeMode) {
   appStore.setTheme(mode);
@@ -42,6 +45,40 @@ function handleThemeChange(mode: ThemeMode) {
 
 function handleLocaleChange(loc: Locale) {
   appStore.setLocale(loc);
+}
+
+function parseProjectRoots(text: string) {
+  return Array.from(
+    new Set(
+      text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+async function loadProjectRoots() {
+  try {
+    await appStore.fetchConfig();
+    projectRootsText.value = (appStore.config?.project_roots ?? []).join("\n");
+  } catch (e: unknown) {
+    console.error("Failed to load config:", e);
+  } finally {
+    projectRootsLoaded.value = true;
+  }
+}
+
+async function saveProjectRoots() {
+  savingProjectRoots.value = true;
+  try {
+    await appStore.updateProjectRoots(parseProjectRoots(projectRootsText.value));
+    toast.show(t("settings.project_roots_saved"), "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  } finally {
+    savingProjectRoots.value = false;
+  }
 }
 
 async function pickVibePath() {
@@ -105,6 +142,12 @@ async function handleImport() {
     toast.show(String(e), "error");
   }
 }
+
+const projectRootsCount = computed(() => parseProjectRoots(projectRootsText.value).length);
+
+onMounted(() => {
+  void loadProjectRoots();
+});
 </script>
 
 <template>
@@ -187,6 +230,38 @@ async function handleImport() {
           >
             {{ t('settings.pick_vibe_path') }}
           </button>
+        </div>
+
+        <div>
+          <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">
+            {{ t('settings.project_roots') }}
+          </label>
+          <p class="text-xs mb-2" style="color: var(--c-text-secondary);">
+            {{ t('settings.project_roots_hint') }}
+          </p>
+          <textarea
+            v-model="projectRootsText"
+            rows="4"
+            class="w-full px-3 py-2 text-xs rounded-md border outline-none resize-none"
+            style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+            :placeholder="t('settings.project_roots_placeholder')"
+          />
+          <div class="flex items-center justify-between mt-2">
+            <span class="text-[11px]" style="color: var(--c-text-tertiary);">
+              {{ t('settings.project_roots_count', { count: projectRootsCount }) }}
+            </span>
+            <button
+              class="px-3 py-1.5 text-xs rounded-md border cursor-pointer hover:opacity-80"
+              style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+              :disabled="savingProjectRoots"
+              @click="saveProjectRoots"
+            >
+              {{ savingProjectRoots ? t('app.loading') : t('settings.save_project_roots') }}
+            </button>
+          </div>
+          <p v-if="!projectRootsLoaded" class="text-[11px] mt-1" style="color: var(--c-text-tertiary);">
+            {{ t('settings.project_roots_loading') }}
+          </p>
         </div>
 
         <div>

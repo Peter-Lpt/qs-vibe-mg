@@ -294,6 +294,13 @@
     "export_success": "設定已匯出",
     "import_success": "設定已匯入",
     "save": "儲存",
-    "cancel": "取消"
+    "cancel": "取消",
+    "project_roots": "專案根目錄",
+    "project_roots_hint": "一行一個專案根目錄。QS-Vibe 會掃描每個根目錄下的 .codex/skills、.agents/skills 與 skills。",
+    "project_roots_placeholder": "F:\\workspace\\demo\\repo\nD:\\workspace\\other-repo",
+    "project_roots_count": "{count} 個根目錄",
+    "save_project_roots": "儲存根目錄",
+    "project_roots_loading": "正在載入專案根目錄…",
+    "project_roots_saved": "專案根目錄已儲存"
   }
 }

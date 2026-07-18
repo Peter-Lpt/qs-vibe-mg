@@ -57,6 +57,7 @@ export interface AppConfig {
   version: number;
   sync_mode_default: string;
   agents: AgentConfig[];
+  project_roots: string[];
   ui: {
     theme: string;
     locale: string;

@@ -16,6 +16,8 @@ pub struct Config {
     #[serde(default = "default_agents")]
     pub agents: Vec<AgentConfig>,
     #[serde(default)]
+    pub project_roots: Vec<String>,
+    #[serde(default)]
     pub ui: UiConfig,
     #[serde(default)]
     pub history: HistoryConfig,
@@ -99,6 +101,10 @@ fn default_true() -> bool {
 
 fn default_agent_kind() -> String {
     "agent".to_string()
+}
+
+fn default_project_roots() -> Vec<String> {
+    Vec::new()
 }
 
 fn normalize_agent_kind(id: &str, kind: &str) -> String {
@@ -245,6 +251,7 @@ pub fn default_config() -> Config {
         version: 1,
         sync_mode_default: default_sync_mode(),
         agents: default_agents(),
+        project_roots: default_project_roots(),
         ui: UiConfig::default(),
         history: HistoryConfig::default(),
         vibe_skills_path: None,
@@ -306,6 +313,27 @@ pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VibeError
     }
 
     Ok(agents)
+}
+
+pub fn project_skill_roots(config: &Config) -> Vec<std::path::PathBuf> {
+    let mut roots = Vec::new();
+
+    if config.project_roots.is_empty() {
+        if let Ok(cwd) = std::env::current_dir() {
+            roots.push(cwd);
+        }
+        return roots;
+    }
+
+    for root in &config.project_roots {
+        if let Ok(expanded) = expand_tilde(root) {
+            if expanded.exists() && expanded.is_dir() {
+                roots.push(expanded);
+            }
+        }
+    }
+
+    roots
 }
 
 /// 扫描 agent skills 目录中的 symlink，返回关联的 skill id 列表（P2 亦供 skills 命令统一调用）

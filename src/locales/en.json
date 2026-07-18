@@ -294,6 +294,13 @@
     "export_success": "Config exported",
     "import_success": "Config imported",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "project_roots": "Project Roots",
+    "project_roots_hint": "One project root per line. QS-Vibe will scan .codex/skills, .agents/skills, and skills under each root.",
+    "project_roots_placeholder": "C:\\workspace\\demo\\repo\nD:\\workspace\\other-repo",
+    "project_roots_count": "{count} roots",
+    "save_project_roots": "Save roots",
+    "project_roots_loading": "Loading project roots...",
+    "project_roots_saved": "Project roots saved"
   }
 }

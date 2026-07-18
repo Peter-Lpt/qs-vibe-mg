@@ -10,7 +10,7 @@ use crate::models::dashboard::{
 };
 use crate::models::skill::{ConflictType, Skill, SkillIssue, SkillSource};
 use crate::parsers::skill_md::parse_skill_md_full;
-use crate::utils::config::{build_agents_from_config, load_agents, load_config};
+use crate::utils::config::{build_agents_from_config, load_agents, load_config, project_skill_roots};
 use crate::utils::datetime;
 use crate::utils::fs as vibe_fs;
 use crate::utils::fs::copy_dir_all;
@@ -479,13 +479,13 @@ pub fn preview_skill_at_path(path: String) -> Result<String, VibeError> {
     // 仅允许读取 vibe 库或某个 agent skills 目录内的文件（调用方传入的是已扫描的 source.path）
     let vibe_dir = vibe_skills_dir()?;
     let agents = load_agents()?;
+    let config = load_config()?;
     let target = vibe_fs::normalize_path(skill_path);
-    let project_roots = project_skill_roots();
     let allowed = vibe_fs::is_path_within(&target, &vibe_dir)
         || agents
             .iter()
             .any(|a| vibe_fs::is_path_within(&target, Path::new(&a.skills_dir)))
-        || project_roots
+        || project_skill_roots(&config)
             .iter()
             .any(|root| vibe_fs::is_path_within(&target, root));
     if !allowed {
@@ -702,44 +702,35 @@ fn source_kind_for(source_id: &str) -> String {
     }
 }
 
-fn project_skill_roots() -> Vec<std::path::PathBuf> {
-    let cwd = match std::env::current_dir() {
-        Ok(dir) => dir,
-        Err(_) => return Vec::new(),
-    };
-
-    [".codex/skills", ".agents/skills", "skills"]
-        .iter()
-        .map(|relative| cwd.join(relative))
-        .filter(|path| path.exists() && path.is_dir())
-        .collect()
-}
-
 fn scan_project_sources(
     map: &mut HashMap<String, SkillEntry>,
     hash_cache: &mut crate::utils::hash::HashCache,
 ) -> Result<(), VibeError> {
-    let cwd = match std::env::current_dir() {
-        Ok(dir) => dir,
-        Err(_) => return Ok(()),
-    };
+    let config = load_config()?;
 
-    for root in project_skill_roots() {
+    for root in project_skill_roots(&config) {
         let label = root
-            .strip_prefix(&cwd)
-            .unwrap_or(&root)
-            .to_string_lossy()
-            .replace('\\', "/");
-        scan_directory(
-            &root,
-            &format!("project:{}", label),
-            map,
-            false,
-            0,
-            &mut std::collections::HashSet::new(),
-            hash_cache,
-            None,
-        )?;
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| "Project".to_string());
+        for relative in [".codex/skills", ".agents/skills", "skills"] {
+            let skill_root = root.join(relative);
+            if !skill_root.exists() || !skill_root.is_dir() {
+                continue;
+            }
+
+            scan_directory(
+                &skill_root,
+                &format!("project:{}", label),
+                map,
+                false,
+                0,
+                &mut std::collections::HashSet::new(),
+                hash_cache,
+                None,
+            )?;
+        }
     }
     Ok(())
 }

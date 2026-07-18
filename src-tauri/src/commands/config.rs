@@ -21,6 +21,7 @@ pub fn update_config(
     locale: Option<String>,
     sync_mode_default: Option<String>,
     max_history: Option<u32>,
+    project_roots: Option<Vec<String>>,
 ) -> Result<Config, VibeError> {
     let mut config = load_config()?;
 
@@ -35,6 +36,9 @@ pub fn update_config(
     }
     if let Some(m) = max_history {
         config.history.max_entries = m;
+    }
+    if let Some(roots) = project_roots {
+        config.project_roots = roots;
     }
 
     save_config(&config)?;
