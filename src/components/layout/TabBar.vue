@@ -13,8 +13,8 @@ const emit = defineEmits<{
 }>();
 
 const tabs: { id: TabId; icon: string; labelKey: string }[] = [
-  { id: "manage", icon: "🔗", labelKey: "tabs.manage" },
-  { id: "history", icon: "🕐", labelKey: "tabs.history" },
+  { id: "manage", icon: "Link2", labelKey: "tabs.manage" },
+  { id: "history", icon: "History", labelKey: "tabs.history" },
 ];
 
 function selectTab(tab: TabId) {
@@ -24,8 +24,7 @@ function selectTab(tab: TabId) {
 
 <template>
   <div
-    class="flex items-center gap-0.5 px-4 py-1.5 border-b shrink-0 mb-5"
-    style="border-color: var(--c-border); background: var(--c-surface);"
+    class="flex items-center gap-1"
   >
     <button
       v-for="tab in tabs"
@@ -37,7 +36,7 @@ function selectTab(tab: TabId) {
       }"
       @click="selectTab(tab.id)"
     >
-      <span class="text-sm">{{ tab.icon }}</span>
+      <component :is="tab.icon" :size="14" />
       <span>{{ t(tab.labelKey) }}</span>
     </button>
   </div>

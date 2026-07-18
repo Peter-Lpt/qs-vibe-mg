@@ -9,48 +9,50 @@ const appStore = useAppStore();
 <template>
   <div class="flex flex-col h-screen overflow-hidden" style="background: var(--c-bg);">
     <header
-      class="flex items-center px-5 py-3 border-b shrink-0"
+      class="flex items-center gap-4 px-5 py-3 border-b shrink-0"
       style="border-color: var(--c-border); background: var(--c-surface);"
     >
       <div class="flex items-center gap-2.5">
         <div
-          class="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold"
+          class="w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-bold tracking-wide"
           style="background: var(--c-primary); color: white;"
         >
-          V
+          QS
         </div>
-        <h1 class="text-sm font-semibold" style="color: var(--c-text);">
-          {{ t('app.title') }}
-        </h1>
-        <span
-          class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-          style="background: var(--c-primary-light); color: var(--c-primary);"
-        >
-          {{ t('app.version') }}
-        </span>
+        <div class="min-w-0">
+          <h1 class="text-sm font-semibold leading-tight" style="color: var(--c-text);">
+            {{ t('app.title') }}
+          </h1>
+          <p class="text-[10px] leading-tight" style="color: var(--c-text-secondary);">
+            {{ t('app.subtitle') }}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex-1 min-w-0">
+        <slot name="tabs" />
       </div>
 
       <div class="ml-auto flex items-center gap-1">
         <button
-          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer bg-transparent text-[var(--c-text-secondary)] hover:bg-[var(--c-surface-hover)]"
+          class="w-8 h-8 flex items-center justify-center rounded-md cursor-pointer bg-transparent text-[var(--c-text-secondary)] hover:bg-[var(--c-surface-hover)]"
           @click="appStore.setTheme(appStore.resolvedTheme === 'dark' ? 'light' : 'dark')"
+          :title="t('settings.theme')"
         >
-          {{ appStore.resolvedTheme === 'dark' ? '☀️' : '🌙' }}
+          <Sun v-if="appStore.resolvedTheme === 'dark'" :size="16" />
+          <Moon v-else :size="16" />
         </button>
         <button
-          class="w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer bg-transparent text-[var(--c-text-secondary)] hover:bg-[var(--c-surface-hover)]"
+          class="w-8 h-8 flex items-center justify-center rounded-md cursor-pointer bg-transparent text-[var(--c-text-secondary)] hover:bg-[var(--c-surface-hover)]"
           @click="appStore.showSettings = true"
           :title="t('app.settings')"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
+          <Settings :size="16" />
         </button>
       </div>
     </header>
 
-    <div class="flex-1 overflow-y-auto p-6" style="background: var(--c-bg);">
+    <div class="flex-1 overflow-y-auto px-5 py-4" style="background: var(--c-bg);">
       <slot />
     </div>
   </div>

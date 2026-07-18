@@ -5,6 +5,7 @@
   },
   "app": {
     "title": "QS-Vibe 管理",
+    "subtitle": "Agent Skills Library",
     "settings": "设置",
     "loading": "加载中...",
     "version": "v0.2"
@@ -300,6 +301,9 @@
   "errors": {},
   "settings": {
     "title": "设置",
+    "version_info": "版本信息",
+    "check_updates": "检查更新",
+    "update_check_unavailable": "当前版本暂未配置自动更新源，请通过发布渠道获取新版。",
     "theme": "主题",
     "theme_system": "跟随系统",
     "theme_light": "亮色",

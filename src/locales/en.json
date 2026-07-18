@@ -5,6 +5,7 @@
   },
   "app": {
     "title": "QS-Vibe Manager",
+    "subtitle": "Agent Skills Library",
     "settings": "Settings",
     "loading": "Loading...",
     "version": "v0.2"
@@ -300,6 +301,9 @@
   "errors": {},
   "settings": {
     "title": "Settings",
+    "version_info": "Version",
+    "check_updates": "Check Updates",
+    "update_check_unavailable": "No automatic update source is configured yet. Please install newer versions from the release channel.",
     "theme": "Theme",
     "theme_system": "System",
     "theme_light": "Light",

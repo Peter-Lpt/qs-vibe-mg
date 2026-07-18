@@ -92,7 +92,9 @@ onUnmounted(() => {
 
 <template>
   <AppLayout>
-    <TabBar v-model="appStore.activeTab" />
+    <template #tabs>
+      <TabBar v-model="appStore.activeTab" />
+    </template>
 
     <KeepAlive>
       <ManageTab v-if="appStore.activeTab === 'manage'" />

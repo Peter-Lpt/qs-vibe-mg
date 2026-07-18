@@ -49,6 +49,10 @@ function handleLocaleChange(loc: Locale) {
   appStore.setLocale(loc);
 }
 
+function handleCheckUpdate() {
+  toast.show(t("settings.update_check_unavailable"), "info");
+}
+
 function parseProjectRoots(text: string) {
   return Array.from(
     new Set(
@@ -208,6 +212,26 @@ onMounted(() => {
       </div>
 
       <div class="p-4 space-y-4">
+        <section class="rounded-md border p-3" style="border-color: var(--c-border); background: var(--c-bg);">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="text-xs font-medium" style="color: var(--c-text);">
+                {{ t('settings.version_info') }}
+              </div>
+              <div class="text-[11px] mt-1" style="color: var(--c-text-secondary);">
+                {{ t('app.version') }}
+              </div>
+            </div>
+            <button
+              class="text-[11px] px-3 py-1.5 rounded-md cursor-pointer transition-colors"
+              style="background: var(--c-surface); color: var(--c-text); border: 1px solid var(--c-border);"
+              @click="handleCheckUpdate"
+            >
+              {{ t('settings.check_updates') }}
+            </button>
+          </div>
+        </section>
+
         <div>
           <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">
             {{ t('settings.theme') }}
