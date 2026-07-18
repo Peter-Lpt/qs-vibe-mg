@@ -8,20 +8,23 @@ use crate::errors::VibeError;
 use crate::models::dashboard::{
     DashboardAgent, DashboardData, DashboardSkill, DashboardStats, SharedSkillInfo,
 };
+use crate::models::history::HistoryAction;
 use crate::models::skill::{ConflictType, Skill, SkillIssue, SkillSource};
 use crate::parsers::skill_md::parse_skill_md_full;
-use crate::utils::config::{build_agents_from_config, load_agents, load_config, project_skill_roots};
+use crate::utils::config::{
+    build_agents_from_config, load_agents, load_config, project_skill_roots,
+};
 use crate::utils::datetime;
 use crate::utils::fs as vibe_fs;
 use crate::utils::fs::copy_dir_all;
 use crate::utils::history::record_action;
-use crate::utils::origin::{build_install_origin, read_skill_origin, write_skill_origin};
+use crate::utils::origin::{
+    build_install_origin, read_skill_origin, trust_level_for, update_status_for, write_skill_origin,
+};
 use crate::utils::path::vibe_skills_dir;
-use crate::models::history::HistoryAction;
 
 /// 递归扫描最大深度，超出后截断（P4 环路/深度保护）
 const MAX_SCAN_DEPTH: usize = 12;
-
 
 #[tauri::command]
 pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
@@ -62,10 +65,7 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
         )?;
     }
 
-    scan_project_sources(
-        &mut map,
-        &mut hash_cache,
-    )?;
+    scan_project_sources(&mut map, &mut hash_cache)?;
 
     crate::utils::hash::save_hash_cache(&vibe_dir, &hash_cache);
 
@@ -97,11 +97,8 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
             });
 
             // 检测重复：同文件夹名但 SKILL.md name 不同
-            let unique_names: std::collections::HashSet<&str> = entry
-                .sources
-                .iter()
-                .map(|s| s.name.as_str())
-                .collect();
+            let unique_names: std::collections::HashSet<&str> =
+                entry.sources.iter().map(|s| s.name.as_str()).collect();
             let is_duplicate = unique_names.len() > 1;
 
             // 检测 name 是否为空
@@ -183,10 +180,7 @@ pub fn detect_issues() -> Result<Vec<SkillIssue>, VibeError> {
             issues.push(SkillIssue {
                 skill_id: skill.id.clone(),
                 issue_type: ConflictType::SameNameDiffContent,
-                description: format!(
-                    "同名 skill 有不同内容: {}",
-                    source_names.join(", ")
-                ),
+                description: format!("同名 skill 有不同内容: {}", source_names.join(", ")),
             });
         }
 
@@ -201,10 +195,7 @@ pub fn detect_issues() -> Result<Vec<SkillIssue>, VibeError> {
             issues.push(SkillIssue {
                 skill_id: skill.id.clone(),
                 issue_type: ConflictType::DanglingLink,
-                description: format!(
-                    "断链指向已删除路径: {}",
-                    broken_sources.join(", ")
-                ),
+                description: format!("断链指向已删除路径: {}", broken_sources.join(", ")),
             });
         }
     }
@@ -232,7 +223,16 @@ pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
         }
 
         let mut skills = Vec::new();
-        collect_skills_recursive(skills_dir, &mut skills, &mut all_skill_agents, &agent.id, &vibe_dir, 0, &mut std::collections::HashSet::new(), &mut truncated);
+        collect_skills_recursive(
+            skills_dir,
+            &mut skills,
+            &mut all_skill_agents,
+            &agent.id,
+            &vibe_dir,
+            0,
+            &mut std::collections::HashSet::new(),
+            &mut truncated,
+        );
 
         agent_skills.insert(agent.id.clone(), skills);
     }
@@ -273,12 +273,7 @@ pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
                     total_skills.insert(skill_id.clone());
                     let shared_with: Vec<String> = all_skill_agents
                         .get(skill_id)
-                        .map(|ids| {
-                            ids.iter()
-                                .filter(|id| *id != &agent.id)
-                                .cloned()
-                                .collect()
-                        })
+                        .map(|ids| ids.iter().filter(|id| *id != &agent.id).cloned().collect())
                         .unwrap_or_default();
 
                     DashboardSkill {
@@ -290,8 +285,11 @@ pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
                 .collect();
 
             dashboard_skills.sort_by(|a, b| {
-                b.shared_with.len().cmp(&a.shared_with.len())
-                    .then(a.skill_name.to_lowercase().cmp(&b.skill_name.to_lowercase()))
+                b.shared_with.len().cmp(&a.shared_with.len()).then(
+                    a.skill_name
+                        .to_lowercase()
+                        .cmp(&b.skill_name.to_lowercase()),
+                )
             });
 
             DashboardAgent {
@@ -306,7 +304,15 @@ pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
     let mut vibe_skills = Vec::new();
     let mut vibe_truncated = false;
     if vibe_dir.exists() {
-        collect_vibe_skills(&vibe_dir, &mut vibe_skills, &all_skill_agents, &mut total_skills, 0, &mut std::collections::HashSet::new(), &mut vibe_truncated);
+        collect_vibe_skills(
+            &vibe_dir,
+            &mut vibe_skills,
+            &all_skill_agents,
+            &mut total_skills,
+            0,
+            &mut std::collections::HashSet::new(),
+            &mut vibe_truncated,
+        );
     }
 
     let mut all_agents = dashboard_agents;
@@ -386,7 +392,16 @@ fn collect_skills_recursive(
                     .push(agent_id.to_string());
                 skills.push((id, skill_name));
             } else {
-                collect_skills_recursive(&path, skills, all_skill_agents, agent_id, vibe_dir, depth + 1, visited, truncated);
+                collect_skills_recursive(
+                    &path,
+                    skills,
+                    all_skill_agents,
+                    agent_id,
+                    vibe_dir,
+                    depth + 1,
+                    visited,
+                    truncated,
+                );
             }
         }
     }
@@ -438,7 +453,15 @@ fn collect_vibe_skills(
                     shared_with,
                 });
             } else {
-                collect_vibe_skills(&path, vibe_skills, all_skill_agents, total_skills, depth + 1, visited, truncated);
+                collect_vibe_skills(
+                    &path,
+                    vibe_skills,
+                    all_skill_agents,
+                    total_skills,
+                    depth + 1,
+                    visited,
+                    truncated,
+                );
             }
         }
     }
@@ -457,11 +480,18 @@ pub fn preview_skill(skill_id: String) -> Result<String, VibeError> {
         if !agent.detected {
             continue;
         }
-        let agent_path = Path::new(&agent.skills_dir).join(&skill_id).join("SKILL.md");
+        let agent_path = Path::new(&agent.skills_dir)
+            .join(&skill_id)
+            .join("SKILL.md");
         if agent_path.exists() {
             return fs::read_to_string(&agent_path).map_err(VibeError::Io);
         }
-        if let Ok(content) = find_skill_md_recursive(&Path::new(&agent.skills_dir), &skill_id, 0, &mut std::collections::HashSet::new()) {
+        if let Ok(content) = find_skill_md_recursive(
+            &Path::new(&agent.skills_dir),
+            &skill_id,
+            0,
+            &mut std::collections::HashSet::new(),
+        ) {
             return Ok(content);
         }
     }
@@ -579,7 +609,10 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
     }
 
     let modified_at = get_modified_at(&dest);
-    let hash = crate::utils::hash::dir_hash_into(&mut crate::utils::hash::load_hash_cache(&vibe_dir), &dest);
+    let hash = crate::utils::hash::dir_hash_into(
+        &mut crate::utils::hash::load_hash_cache(&vibe_dir),
+        &dest,
+    );
 
     Ok(Skill {
         id: name.clone(),
@@ -587,18 +620,20 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
         description,
         path: dest.to_string_lossy().to_string(),
         linked_agents: Vec::new(),
-            sources: vec![SkillSource {
-                from: "vibe-lib".to_string(),
-                source_kind: "library".to_string(),
-                path: dest.to_string_lossy().to_string(),
-                name,
-                description: String::new(),
-                is_symlink: false,
-                symlink_target: None,
-                content_hash: hash,
-                modified_at: modified_at.clone(),
-                origin: Some(origin),
-            }],
+        sources: vec![SkillSource {
+            from: "vibe-lib".to_string(),
+            source_kind: "library".to_string(),
+            path: dest.to_string_lossy().to_string(),
+            name,
+            description: String::new(),
+            is_symlink: false,
+            symlink_target: None,
+            content_hash: hash,
+            modified_at: modified_at.clone(),
+            trust_level: trust_level_for(Some(&origin)),
+            update_status: update_status_for(Some(&origin)),
+            origin: Some(origin),
+        }],
         license,
         compatibility,
         metadata,
@@ -715,7 +750,13 @@ fn scan_project_sources(
 
     for root in project_skill_roots(&config) {
         let root_id = format!("project:{}", root.to_string_lossy().replace('\\', "/"));
-        for relative in [".claude/skills", ".agents/skills", ".codex/skills", ".github/skills", "skills"] {
+        for relative in [
+            ".claude/skills",
+            ".agents/skills",
+            ".codex/skills",
+            ".github/skills",
+            "skills",
+        ] {
             let skill_root = root.join(relative);
             if !skill_root.exists() || !skill_root.is_dir() {
                 continue;
@@ -805,6 +846,7 @@ fn scan_directory(
 
         if is_broken_link {
             let modified_at = get_modified_at(&path);
+            let origin = read_skill_origin(&path);
             let source = SkillSource {
                 from: source_id.to_string(),
                 source_kind: source_kind_for(source_id),
@@ -815,7 +857,9 @@ fn scan_directory(
                 symlink_target,
                 content_hash: String::new(),
                 modified_at: modified_at.clone(),
-                origin: read_skill_origin(&path),
+                trust_level: trust_level_for(origin.as_ref()),
+                update_status: update_status_for(origin.as_ref()),
+                origin,
             };
 
             map.entry(id.clone())
@@ -846,12 +890,14 @@ fn scan_directory(
             }
 
             let (name, description, license, compatibility, metadata, _body) =
-                parse_skill_md_full(&skill_md_path)
-                    .unwrap_or_else(|_| (id.clone(), String::new(), None, None, None, String::new()));
+                parse_skill_md_full(&skill_md_path).unwrap_or_else(|_| {
+                    (id.clone(), String::new(), None, None, None, String::new())
+                });
 
             // P1：哈希缓存——三元组未变时复用真哈希，避免重复读文件
             let hash = crate::utils::hash::dir_hash_into(hash_cache, &path);
             let modified_at = get_modified_at(&path);
+            let origin = read_skill_origin(&path);
 
             let source = SkillSource {
                 from: source_id.to_string(),
@@ -863,7 +909,9 @@ fn scan_directory(
                 symlink_target,
                 content_hash: hash,
                 modified_at: modified_at.clone(),
-                origin: read_skill_origin(&path),
+                trust_level: trust_level_for(origin.as_ref()),
+                update_status: update_status_for(origin.as_ref()),
+                origin,
             };
 
             map.entry(id.clone())
@@ -908,7 +956,8 @@ fn find_linked_agents(skill_id: &str, agents: &[crate::models::agent::Agent]) ->
             continue;
         }
         // P2：统一复用 scan_linked_skills，避免 Windows junction 归一化分歧
-        let linked_for_agent = crate::utils::config::scan_linked_skills(Path::new(&agent.skills_dir));
+        let linked_for_agent =
+            crate::utils::config::scan_linked_skills(Path::new(&agent.skills_dir));
         if linked_for_agent.iter().any(|id| id == skill_id) {
             linked.push(agent.id.clone());
         }

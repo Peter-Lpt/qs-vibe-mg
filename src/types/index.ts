@@ -9,6 +9,8 @@ export interface SkillSource {
   content_hash: string;
   modified_at?: string;
   origin?: SkillOrigin;
+  trust_level?: "explicit" | "inferred" | "unknown" | string;
+  update_status?: "auto_update" | "best_effort" | "unknown" | string;
 }
 
 export interface SkillOrigin {

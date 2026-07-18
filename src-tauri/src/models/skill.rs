@@ -65,10 +65,24 @@ pub struct SkillSource {
     /// 该来源的安装/导入来源记录
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin: Option<SkillOrigin>,
+    /// 来源可信度：explicit / inferred / unknown
+    #[serde(default = "default_trust_level")]
+    pub trust_level: String,
+    /// 更新状态：auto_update / best_effort / unknown
+    #[serde(default = "default_update_status")]
+    pub update_status: String,
 }
 
 fn default_source_kind() -> String {
     "agent".to_string()
+}
+
+fn default_trust_level() -> String {
+    "unknown".to_string()
+}
+
+fn default_update_status() -> String {
+    "unknown".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

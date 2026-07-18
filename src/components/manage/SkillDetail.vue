@@ -204,6 +204,12 @@ function formatSourceTime(source: SkillSource): string {
   }
 }
 
+function updateStatusLabel(status?: string): string {
+  if (status === "auto_update") return t("manage.source_update_auto");
+  if (status === "best_effort") return t("manage.source_update_best_effort");
+  return t("manage.source_update_unknown");
+}
+
 const sourceRows = computed(() =>
   props.skill.sources.map((source) => {
     const metadataUrl = props.skill.metadata?.repository || props.skill.metadata?.source || props.skill.metadata?.homepage;
@@ -235,6 +241,7 @@ const sourceRows = computed(() =>
       kind: source.source_kind || (source.from === "vibe-lib" ? "library" : source.from.startsWith("project:") ? "project" : "agent"),
       confidence,
       originTitle,
+      updateLabel: updateStatusLabel(source.update_status),
       dangling: source.is_symlink && (!source.symlink_target || source.content_hash === ""),
       isLatest: source.path === latestSourcePath.value,
       sameCount: sameContentCount(source),
@@ -575,6 +582,9 @@ function getAgentNameFromPath(path: string): string {
           </span>
           <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="row.originTitle || row.confidence">
             {{ row.confidence }}
+          </span>
+          <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="t('manage.source_update_hint')">
+            {{ row.updateLabel }}
           </span>
           <button
             v-if="row.dangling && !isProjectSource(row.source)"
