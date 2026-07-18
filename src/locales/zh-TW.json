@@ -230,6 +230,8 @@
     "unlinked": "已取消關聯 {agent}",
     "select_folder": "選擇 Skill 目錄",
     "install_hint": "目錄必須包含 SKILL.md 文件",
+    "install_reference": "引用安裝（保持指向源目錄）",
+    "install_reference_hint": "適合 Git 倉庫或希望單點修改、所有位置同步的技能。引用安裝會在技能庫中保留軟連結。",
     "source_path_required": "請輸入來源路徑",
     "source_path_placeholder": "/path/to/skill-directory"
   },

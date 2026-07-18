@@ -117,11 +117,16 @@ fn sync_to_vibe_impl(
 
     let vibe_dir = vibe_skills_dir()?;
     let vibe_path = vibe_dir.join(skill_id);
+    let vibe_real_path = if vibe_fs::is_link(&vibe_path) {
+        vibe_fs::read_link_target(&vibe_path)?
+    } else {
+        vibe_path.clone()
+    };
 
     // 如果技能库已有此 skill，检查内容是否一致
     if vibe_path.exists() {
         let source_hash = dir_hash(&real_source);
-        let vibe_hash = dir_hash(&vibe_path);
+        let vibe_hash = dir_hash(&vibe_real_path);
 
         if source_hash != vibe_hash {
             if !force {
@@ -135,8 +140,8 @@ fn sync_to_vibe_impl(
                 "sync_to_vibe_impl: force overwriting vibe library copy of {}",
                 skill_id
             );
-            fs::remove_dir_all(&vibe_path)?;
-            vibe_fs::copy_skill_dir_all(&real_source, &vibe_path)?;
+            vibe_fs::clear_skill_dir_contents(&vibe_real_path)?;
+            vibe_fs::copy_skill_dir_all(&real_source, &vibe_real_path)?;
         }
 
         // 内容一致（或已强制覆盖），只需创建 symlink
@@ -152,7 +157,7 @@ fn sync_to_vibe_impl(
     }
 
     // 技能库没有此 skill，复制过去
-    vibe_fs::copy_skill_dir_all(&real_source, &vibe_path)?;
+    vibe_fs::copy_skill_dir_all(&real_source, &vibe_real_path)?;
 
     // 如果源是 symlink，删除旧 symlink；如果是独立副本，删除副本
     if vibe_fs::is_link(&source_path) {

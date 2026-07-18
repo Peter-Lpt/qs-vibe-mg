@@ -70,6 +70,32 @@ pub fn copy_skill_dir_all(src: &Path, dst: &Path) -> Result<(), VibeError> {
     Ok(())
 }
 
+/// 清空 skill 目录内容，但保留 Git 元数据和 provenance 侧边车。
+pub fn clear_skill_dir_contents(dir: &Path) -> Result<(), VibeError> {
+    if !dir.exists() {
+        fs::create_dir_all(dir)?;
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name == ".git" || name == ".vibe-origin.json" || name == ".vibe-origin" {
+            continue;
+        }
+
+        if is_link(&path) {
+            remove_symlink(&path)?;
+        } else if path.is_dir() {
+            fs::remove_dir_all(&path)?;
+        } else {
+            fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
+}
+
 /// 创建 symlink
 /// Windows: 使用 junction（目录链接，无需管理员权限）
 /// macOS/Linux: 使用 symlink

@@ -105,8 +105,8 @@ export const useSkillsStore = defineStore("skills", () => {
     useAgentsStore().fetchAgents();
   }
 
-  async function installSkill(sourcePath: string): Promise<Skill> {
-    const skill = await invoke<Skill>("install_skill", { sourcePath });
+  async function installSkill(sourcePath: string, reference = false): Promise<Skill> {
+    const skill = await invoke<Skill>("install_skill", { sourcePath, reference });
     // P3：install_skill 已返回最新 Skill，本地原地更新而非整表重取
     const i = skills.value.findIndex((s) => s.id === skill.id);
     if (i >= 0) skills.value[i] = skill;

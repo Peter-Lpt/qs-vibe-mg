@@ -7,6 +7,7 @@ use crate::models::origin::SkillOrigin;
 use crate::utils::datetime::chrono_now;
 
 const ORIGIN_FILE: &str = ".vibe-origin.json";
+const ORIGIN_SIDECAR_DIR: &str = ".vibe-origin";
 pub const SOURCE_METHOD_LOCAL_FOLDER: &str = "local-folder";
 pub const SOURCE_METHOD_GIT: &str = "git";
 pub const SOURCE_METHOD_NPM: &str = "npm";
@@ -25,6 +26,12 @@ pub struct GitProbe {
 
 pub fn origin_file_path(skill_dir: &Path) -> PathBuf {
     skill_dir.join(ORIGIN_FILE)
+}
+
+pub fn origin_sidecar_file_path(skill_dir: &Path) -> Option<PathBuf> {
+    let parent = skill_dir.parent()?;
+    let name = skill_dir.file_name()?.to_string_lossy().to_string();
+    Some(parent.join(ORIGIN_SIDECAR_DIR).join(format!("{}.json", name)))
 }
 
 pub fn build_install_origin(source_path: &Path) -> SkillOrigin {
@@ -211,6 +218,38 @@ pub fn git_pull_ff_only(path: &Path) -> Result<(), VibeError> {
     )))
 }
 
+pub fn run_update_command(command: &str, cwd: Option<&Path>) -> Result<(), VibeError> {
+    let mut cmd = if cfg!(windows) {
+        let mut c = Command::new("cmd");
+        c.arg("/C").arg(command);
+        c
+    } else {
+        let mut c = Command::new("sh");
+        c.arg("-lc").arg(command);
+        c
+    };
+
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+
+    let output = cmd.output().map_err(VibeError::Io)?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(VibeError::Path(format!(
+        "更新命令执行失败：{}。{}",
+        command,
+        if stderr.is_empty() {
+            "请检查命令可用性、权限或来源配置".to_string()
+        } else {
+            stderr
+        }
+    )))
+}
+
 pub fn refresh_git_origin(origin: &mut SkillOrigin, probe: &GitProbe) {
     origin.method = SOURCE_METHOD_GIT.to_string();
     origin.provider = infer_provider_from_url(&probe.remote_url).or_else(|| origin.provider.clone());
@@ -246,17 +285,58 @@ fn run_git<const N: usize>(path: &Path, args: [&str; N]) -> Option<String> {
 }
 
 pub fn read_skill_origin(skill_dir: &Path) -> Option<SkillOrigin> {
-    let origin_path = origin_file_path(skill_dir);
-    let content = fs::read_to_string(origin_path).ok()?;
-    serde_json::from_str::<SkillOrigin>(&content).ok()
+    if let Some(origin) = read_skill_origin_direct_or_sidecar(skill_dir) {
+        return Some(origin);
+    }
+
+    if let Ok(target) = crate::utils::fs::read_link_target(skill_dir) {
+        if let Some(origin) = read_skill_origin_direct_or_sidecar(&target) {
+            return Some(origin);
+        }
+    }
+
+    None
 }
 
 pub fn write_skill_origin(skill_dir: &Path, origin: &SkillOrigin) -> Result<(), VibeError> {
-    let origin_path = origin_file_path(skill_dir);
+    write_skill_origin_to_path(&origin_file_path(skill_dir), origin)
+}
+
+pub fn write_skill_origin_sidecar(skill_dir: &Path, origin: &SkillOrigin) -> Result<(), VibeError> {
+    let path = origin_sidecar_file_path(skill_dir).ok_or_else(|| {
+        VibeError::Path(format!(
+            "无法为 {} 生成 provenance 侧边车路径",
+            skill_dir.display()
+        ))
+    })?;
+    write_skill_origin_to_path(&path, origin)
+}
+
+fn write_skill_origin_to_path(path: &Path, origin: &SkillOrigin) -> Result<(), VibeError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     let content =
         serde_json::to_string_pretty(origin).map_err(|e| VibeError::Config(e.to_string()))?;
-    fs::write(origin_path, content)?;
+    fs::write(path, content)?;
     Ok(())
+}
+
+fn read_skill_origin_from_path(path: &Path) -> Option<SkillOrigin> {
+    let content = fs::read_to_string(path).ok()?;
+    serde_json::from_str::<SkillOrigin>(&content).ok()
+}
+
+fn read_skill_origin_direct_or_sidecar(skill_dir: &Path) -> Option<SkillOrigin> {
+    if let Some(origin) = read_skill_origin_from_path(&origin_file_path(skill_dir)) {
+        return Some(origin);
+    }
+    if let Some(sidecar_path) = origin_sidecar_file_path(skill_dir) {
+        if let Some(origin) = read_skill_origin_from_path(&sidecar_path) {
+            return Some(origin);
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -308,5 +388,28 @@ mod tests {
         assert_eq!(origin.commit.as_deref(), Some("abc123"));
         assert_eq!(origin.branch.as_deref(), Some("main"));
         assert_eq!(origin.update_command.as_deref(), Some("git pull --ff-only"));
+    }
+
+    #[test]
+    fn write_and_read_sidecar_origin() {
+        let dir = std::env::temp_dir().join(format!(
+            "vibe_origin_sidecar_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let skill_dir = dir.join("skill");
+        fs::create_dir_all(&skill_dir).unwrap();
+
+        let mut origin = build_install_origin(Path::new("F:/skill-source"));
+        origin.method = SOURCE_METHOD_GIT.to_string();
+        write_skill_origin_sidecar(&skill_dir, &origin).unwrap();
+
+        let loaded = read_skill_origin(&skill_dir).unwrap();
+        assert_eq!(loaded.method, SOURCE_METHOD_GIT);
+        assert_eq!(loaded.source_path.as_deref(), Some("F:/skill-source"));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

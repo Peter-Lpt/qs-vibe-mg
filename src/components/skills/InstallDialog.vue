@@ -15,6 +15,7 @@ const emit = defineEmits<{
 useEscapeKey(() => emit("close"));
 
 const sourcePath = ref("");
+const referenceInstall = ref(false);
 const installing = ref(false);
 const installError = ref<string | null>(null);
 
@@ -43,7 +44,7 @@ async function handleInstall() {
   installError.value = null;
 
   try {
-    await skillsStore.installSkill(sourcePath.value.trim());
+    await skillsStore.installSkill(sourcePath.value.trim(), referenceInstall.value);
     emit("close");
   } catch (e: unknown) {
     installError.value = String(e);
@@ -91,6 +92,21 @@ async function handleInstall() {
             {{ t('skills.install_hint') }}
           </p>
         </div>
+
+        <label class="flex items-center gap-2 mb-3 text-xs" style="color: var(--c-text-secondary);">
+          <input
+            v-model="referenceInstall"
+            type="checkbox"
+            class="w-3.5 h-3.5 rounded cursor-pointer"
+            style="accent-color: var(--c-primary);"
+          />
+          <span>
+            {{ t('skills.install_reference') }}
+          </span>
+        </label>
+        <p class="text-[11px] mb-3" style="color: var(--c-text-secondary);">
+          {{ t('skills.install_reference_hint') }}
+        </p>
 
         <div v-if="installError" class="text-xs mb-3" style="color: var(--c-danger);">
           {{ installError }}

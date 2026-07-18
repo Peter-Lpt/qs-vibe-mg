@@ -230,6 +230,8 @@
     "unlinked": "Unlinked from {agent}",
     "select_folder": "Select Skill Folder",
     "install_hint": "Directory must contain a SKILL.md file",
+    "install_reference": "Reference install (keep source link)",
+    "install_reference_hint": "Best for Git repositories or skills that should update from one source. Reference install keeps a link in the library.",
     "source_path_required": "Please enter a source path",
     "source_path_placeholder": "/path/to/skill-directory"
   },

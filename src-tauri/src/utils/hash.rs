@@ -25,16 +25,18 @@ fn hash_dir_recursive(dir: &Path, hasher: &mut Sha256) {
     for entry in sorted {
         let path = entry.path();
         let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if is_hash_ignored_name(&name_str) {
+            continue;
+        }
 
         if path.is_dir() {
             hasher.update(b"dir:");
-            let name_str = name.to_string_lossy();
             hasher.update(name_str.as_bytes());
             hasher.update(b"\n");
             hash_dir_recursive(&path, hasher);
         } else if let Ok(content) = fs::read(&path) {
             hasher.update(b"file:");
-            let name_str = name.to_string_lossy();
             hasher.update(name_str.as_bytes());
             hasher.update(b":");
             hasher.update(&content);
@@ -93,6 +95,11 @@ fn dir_meta(dir: &Path) -> (u64, u64, u64) {
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let p = entry.path();
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if is_hash_ignored_name(&name_str) {
+                    continue;
+                }
                 if let Ok(m) = entry.metadata() {
                     if m.is_dir() {
                         walk(&p, mtime_ns, size, count);
@@ -135,13 +142,27 @@ pub fn dir_hash_into(cache: &mut HashCache, dir: &Path) -> String {
     hash
 }
 
+fn is_hash_ignored_name(name: &str) -> bool {
+    matches!(
+        name,
+        ".git" | ".vibe-origin.json" | ".vibe-origin" | ".vibe-hash-cache.json"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Write;
 
     fn make_dir() -> std::path::PathBuf {
-        let base = std::env::temp_dir().join(format!("qs_hash_test_{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!(
+            "qs_hash_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&base).unwrap();
         let f = base.join("SKILL.md");
@@ -169,6 +190,20 @@ mod tests {
         assert_ne!(h1, h3);
         assert_eq!(cache.entries.len(), 1);
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hash_ignores_git_metadata() {
+        let dir = make_dir();
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        std::fs::write(dir.join(".git").join("HEAD"), b"ref: refs/heads/main").unwrap();
+
+        let h1 = dir_hash(&dir);
+        std::fs::write(dir.join(".git").join("HEAD"), b"ref: refs/heads/dev").unwrap();
+        let h2 = dir_hash(&dir);
+
+        assert_eq!(h1, h2);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
