@@ -46,6 +46,7 @@ const previewLoading = ref(false);
 const showPreview = ref(false);
 const showDeleteConfirm = ref(false);
 const showAgentLegend = ref(false);
+const hasLibrarySource = computed(() => props.skill.sources.some((s) => s.from === "vibe-lib"));
 
 async function toggleExpand() {
   isExpanded.value = !isExpanded.value;
@@ -205,10 +206,11 @@ function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
           <Eye :size="14" />
         </button>
         <button
+          v-if="hasLibrarySource"
           class="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--c-danger-light)]"
           style="color: var(--c-danger);"
           @click.stop="showDeleteConfirm = true"
-          :title="t('skills.delete')"
+          :title="t('skills.delete_library')"
         >
           <Trash2 :size="14" />
         </button>
@@ -234,9 +236,9 @@ function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
 
     <ConfirmDialog
       v-if="showDeleteConfirm"
-      :title="t('skills.delete')"
-      :message="t('skills.delete_confirm', { name: skill.name })"
-      :confirm-text="t('skills.delete')"
+      :title="t('skills.delete_library')"
+      :message="t('skills.delete_library_confirm', { name: skill.name })"
+      :confirm-text="t('skills.delete_library')"
       :danger="true"
       @confirm="handleDelete"
       @cancel="showDeleteConfirm = false"

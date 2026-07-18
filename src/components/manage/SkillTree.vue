@@ -104,7 +104,7 @@ async function confirmDelete() {
   if (!showDelete.value) return;
   try {
     await skillsStore.deleteSkill(showDelete.value.node.id);
-    toast.show(t("skills.delete"), "success");
+    toast.show(t("skills.deleted_from_library", { skill: showDelete.value.node.name || showDelete.value.node.id }), "success");
   } catch (e: unknown) {
     toast.show(String(e), "error");
   } finally {
@@ -288,7 +288,7 @@ const highlighted = computed(() => {
               <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('skills.preview')" @click.stop="togglePreview(node)"><Eye :size="14" /></button>
               <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('manage.reveal')" @click.stop="reveal(node)"><FolderOpen :size="14" /></button>
               <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('manage.copy_path')" @click.stop="copyPath(node)"><Copy :size="14" /></button>
-              <button v-if="root.kind !== 'project'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-danger);" :title="t('skills.delete')" @click.stop="showDelete = { node }"><Trash2 :size="14" /></button>
+              <button v-if="root.kind === 'library'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-danger);" :title="t('skills.delete_library')" @click.stop="showDelete = { node }"><Trash2 :size="14" /></button>
             </div>
           </div>
 
@@ -317,9 +317,9 @@ const highlighted = computed(() => {
     <!-- 删除确认 -->
     <ConfirmDialog
       v-if="showDelete"
-      :title="t('skills.delete_confirm_title')"
-      :message="t('skills.delete_confirm', { name: showDelete.node.name })"
-      :confirm-text="t('skills.delete')"
+      :title="t('skills.delete_library')"
+      :message="t('skills.delete_library_confirm', { name: showDelete.node.name })"
+      :confirm-text="t('skills.delete_library')"
       :danger="true"
       @confirm="confirmDelete"
       @cancel="showDelete = null"

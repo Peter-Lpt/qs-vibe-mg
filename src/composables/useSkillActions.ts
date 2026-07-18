@@ -52,7 +52,7 @@ export function useSkillActions(t: (key: string, params?: Record<string, unknown
 
   async function deleteLibrarySkill(skill: Skill) {
     await skillsStore.deleteSkill(skill.id);
-    toast.show(t("skills.delete"), "success");
+    toast.show(t("skills.deleted_from_library", { skill: skill.name || skill.id }), "success");
   }
 
   async function link(skill: Skill, agentId: string) {

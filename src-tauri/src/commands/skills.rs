@@ -682,7 +682,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
 }
 
 #[tauri::command]
-pub fn delete_skill(skill_id: String) -> Result<(), VibeError> {
+pub fn delete_library_skill(skill_id: String) -> Result<(), VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let skill_path = vibe_dir.join(&skill_id);
 
@@ -711,6 +711,11 @@ pub fn delete_skill(skill_id: String) -> Result<(), VibeError> {
     }
 
     Ok(())
+}
+
+#[tauri::command]
+pub fn delete_skill(skill_id: String) -> Result<(), VibeError> {
+    delete_library_skill(skill_id)
 }
 
 /// Restore a deleted skill from trash snapshot

@@ -62,6 +62,8 @@ const primaryAgentName = computed(() => {
   return status?.agent.name ?? "";
 });
 
+const hasLibrarySource = computed(() => props.skill.sources.some((s) => s.from === "vibe-lib"));
+
 async function handlePrimaryAction() {
   const status = allAgentStatuses.value.find(
     (s) => s.action === summary.value.primaryAction
@@ -83,7 +85,7 @@ async function handleDelete() {
   try {
     await skillsStore.deleteSkill(props.skill.id);
     showDeleteConfirm.value = false;
-    toast.show(t("skills.delete"), "success");
+    toast.show(t("skills.deleted_from_library", { skill: props.skill.name || props.skill.id }), "success");
   } catch (e: unknown) {
     toast.show(String(e), "error");
   }
@@ -134,10 +136,11 @@ async function handleDelete() {
 
         <!-- 小删除图标（与列表行一致，不占用按钮） -->
         <button
+          v-if="hasLibrarySource"
           class="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--c-danger-light)] shrink-0"
           style="color: var(--c-danger);"
           @click.stop="showDeleteConfirm = true"
-          :title="t('skills.delete')"
+          :title="t('skills.delete_library')"
         >
           <Trash2 :size="14" />
         </button>
@@ -190,12 +193,13 @@ async function handleDelete() {
           {{ primaryActionLabel }}
         </button>
         <button
+          v-if="hasLibrarySource"
           class="text-[11px] px-2.5 py-1.5 rounded-md cursor-pointer transition-colors shrink-0 hover:bg-[var(--c-danger-light)]"
           style="color: var(--c-danger); border: 1px solid var(--c-border);"
-          :title="t('skills.delete')"
+          :title="t('skills.delete_library')"
           @click="showDeleteConfirm = true"
         >
-          {{ t("skills.delete") }}
+          {{ t("skills.delete_library") }}
         </button>
       </div>
     </div>
@@ -207,9 +211,9 @@ async function handleDelete() {
 
     <ConfirmDialog
       v-if="showDeleteConfirm"
-      :title="t('skills.delete')"
-      :message="t('skills.delete_confirm', { name: skill.name })"
-      :confirm-text="t('skills.delete')"
+      :title="t('skills.delete_library')"
+      :message="t('skills.delete_library_confirm', { name: skill.name })"
+      :confirm-text="t('skills.delete_library')"
       :danger="true"
       @confirm="handleDelete"
       @cancel="showDeleteConfirm = false"

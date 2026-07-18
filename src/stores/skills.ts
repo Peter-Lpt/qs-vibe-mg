@@ -115,7 +115,7 @@ export const useSkillsStore = defineStore("skills", () => {
   }
 
   async function deleteSkill(skillId: string) {
-    await invoke("delete_skill", { skillId });
+    await invoke("delete_library_skill", { skillId });
     refreshSkills();
     useAgentsStore().fetchAgents();
   }
