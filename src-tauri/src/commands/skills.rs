@@ -19,7 +19,8 @@ use crate::utils::fs as vibe_fs;
 use crate::utils::fs::copy_dir_all;
 use crate::utils::history::record_action;
 use crate::utils::origin::{
-    build_install_origin, read_skill_origin, trust_level_for, update_status_for, write_skill_origin,
+    build_git_origin, build_install_origin, probe_git_origin, read_skill_origin, trust_level_for,
+    update_status_for, write_skill_origin,
 };
 use crate::utils::path::vibe_skills_dir;
 
@@ -634,8 +635,12 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
 
     copy_dir_all(source, &dest)?;
 
-    let origin = build_install_origin(source);
+    let origin = probe_git_origin(source)
+        .map(|probe| build_git_origin(source, &probe))
+        .unwrap_or_else(|| build_install_origin(source));
     write_skill_origin(&dest, &origin)?;
+    let trust_level = trust_level_for(Some(&origin));
+    let update_status = update_status_for(Some(&origin), Some(&dest));
 
     if let Err(e) = record_action(HistoryAction::Install, &name, None, None) {
         warn!("Failed to record Install action: {}", e);
@@ -663,8 +668,8 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
             symlink_target: None,
             content_hash: hash,
             modified_at: modified_at.clone(),
-            trust_level: trust_level_for(Some(&origin)),
-            update_status: update_status_for(Some(&origin)),
+            trust_level,
+            update_status,
             origin: Some(origin),
         }],
         license,
@@ -895,6 +900,8 @@ fn scan_directory(
         if is_broken_link {
             let modified_at = get_modified_at(&path);
             let origin = read_skill_origin(&path);
+            let trust_level = trust_level_for(origin.as_ref());
+            let update_status = update_status_for(origin.as_ref(), Some(&path));
             let source = SkillSource {
                 from: source_id.to_string(),
                 source_kind: source_kind_for(source_id),
@@ -905,8 +912,8 @@ fn scan_directory(
                 symlink_target,
                 content_hash: String::new(),
                 modified_at: modified_at.clone(),
-                trust_level: trust_level_for(origin.as_ref()),
-                update_status: update_status_for(origin.as_ref()),
+                trust_level,
+                update_status,
                 origin,
             };
 
@@ -946,6 +953,8 @@ fn scan_directory(
             let hash = crate::utils::hash::dir_hash_into(hash_cache, &path);
             let modified_at = get_modified_at(&path);
             let origin = read_skill_origin(&path);
+            let trust_level = trust_level_for(origin.as_ref());
+            let update_status = update_status_for(origin.as_ref(), Some(&path));
 
             let source = SkillSource {
                 from: source_id.to_string(),
@@ -957,8 +966,8 @@ fn scan_directory(
                 symlink_target,
                 content_hash: hash,
                 modified_at: modified_at.clone(),
-                trust_level: trust_level_for(origin.as_ref()),
-                update_status: update_status_for(origin.as_ref()),
+                trust_level,
+                update_status,
                 origin,
             };
 

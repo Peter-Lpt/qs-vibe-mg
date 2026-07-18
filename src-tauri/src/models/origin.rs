@@ -9,6 +9,8 @@ pub struct SkillOrigin {
     pub url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub commit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
     pub installed_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub installed_by: Option<String>,

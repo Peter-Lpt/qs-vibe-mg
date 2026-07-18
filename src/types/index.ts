@@ -18,6 +18,7 @@ export interface SkillOrigin {
   provider?: string;
   url?: string;
   commit?: string;
+  branch?: string;
   installed_at: string;
   installed_by?: string;
   trust_level?: string;

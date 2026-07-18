@@ -1,28 +1,66 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use crate::errors::VibeError;
 use crate::models::origin::SkillOrigin;
 use crate::utils::datetime::chrono_now;
 
 const ORIGIN_FILE: &str = ".vibe-origin.json";
+pub const SOURCE_METHOD_LOCAL_FOLDER: &str = "local-folder";
+pub const SOURCE_METHOD_GIT: &str = "git";
+pub const SOURCE_METHOD_NPM: &str = "npm";
+pub const SOURCE_METHOD_NPX: &str = "npx";
+pub const SOURCE_METHOD_MARKETPLACE: &str = "marketplace";
+pub const UPDATE_STATUS_AUTO: &str = "auto_update";
+pub const UPDATE_STATUS_BEST_EFFORT: &str = "best_effort";
+pub const UPDATE_STATUS_UNKNOWN: &str = "unknown";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitProbe {
+    pub remote_url: String,
+    pub commit: String,
+    pub branch: Option<String>,
+}
 
 pub fn origin_file_path(skill_dir: &Path) -> PathBuf {
     skill_dir.join(ORIGIN_FILE)
 }
 
 pub fn build_install_origin(source_path: &Path) -> SkillOrigin {
+    if let Some(probe) = probe_git_origin(source_path) {
+        return build_git_origin(source_path, &probe);
+    }
+
     SkillOrigin {
-        method: "local-folder".to_string(),
+        method: SOURCE_METHOD_LOCAL_FOLDER.to_string(),
         provider: None,
         url: None,
         commit: None,
+        branch: None,
         installed_at: chrono_now(),
         installed_by: Some("qs-vibe".to_string()),
         trust_level: "explicit".to_string(),
         source_path: Some(source_path.to_string_lossy().to_string()),
         command: Some(format!("local-folder {}", source_path.to_string_lossy())),
         update_command: None,
+        last_checked_at: None,
+    }
+}
+
+pub fn build_git_origin(source_path: &Path, probe: &GitProbe) -> SkillOrigin {
+    SkillOrigin {
+        method: SOURCE_METHOD_GIT.to_string(),
+        provider: infer_provider_from_url(&probe.remote_url),
+        url: Some(probe.remote_url.clone()),
+        commit: Some(probe.commit.clone()),
+        branch: probe.branch.clone(),
+        installed_at: chrono_now(),
+        installed_by: Some("qs-vibe".to_string()),
+        trust_level: "explicit".to_string(),
+        source_path: Some(source_path.to_string_lossy().to_string()),
+        command: Some(format!("git-source {}", source_path.to_string_lossy())),
+        update_command: Some("git pull --ff-only".to_string()),
         last_checked_at: None,
     }
 }
@@ -39,9 +77,16 @@ pub fn trust_level_for(origin: Option<&SkillOrigin>) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-pub fn update_status_for(origin: Option<&SkillOrigin>) -> String {
+#[allow(dead_code)]
+pub fn source_method_for(origin: Option<&SkillOrigin>) -> String {
+    origin
+        .map(|o| normalize_source_method(&o.method))
+        .unwrap_or_else(|| UPDATE_STATUS_UNKNOWN.to_string())
+}
+
+pub fn update_status_for(origin: Option<&SkillOrigin>, skill_dir: Option<&Path>) -> String {
     let Some(origin) = origin else {
-        return "unknown".to_string();
+        return UPDATE_STATUS_UNKNOWN.to_string();
     };
 
     if origin
@@ -49,21 +94,100 @@ pub fn update_status_for(origin: Option<&SkillOrigin>) -> String {
         .as_ref()
         .is_some_and(|cmd| !cmd.trim().is_empty())
     {
-        return "auto_update".to_string();
+        return UPDATE_STATUS_AUTO.to_string();
+    }
+
+    let method = normalize_source_method(&origin.method);
+
+    if method == SOURCE_METHOD_GIT {
+        if origin
+            .url
+            .as_ref()
+            .is_some_and(|url| !url.trim().is_empty())
+            || skill_dir.and_then(probe_git_origin).is_some()
+        {
+            return UPDATE_STATUS_AUTO.to_string();
+        }
+        return UPDATE_STATUS_BEST_EFFORT.to_string();
     }
 
     if matches!(
-        origin.method.as_str(),
-        "git" | "github" | "gitee" | "gitlab"
-    ) && origin
-        .url
-        .as_ref()
-        .is_some_and(|url| !url.trim().is_empty())
-    {
-        return "auto_update".to_string();
+        method.as_str(),
+        SOURCE_METHOD_NPM | SOURCE_METHOD_NPX | SOURCE_METHOD_MARKETPLACE
+    ) {
+        return UPDATE_STATUS_BEST_EFFORT.to_string();
     }
 
-    "best_effort".to_string()
+    if method == SOURCE_METHOD_LOCAL_FOLDER {
+        if skill_dir.and_then(probe_git_origin).is_some() {
+            return UPDATE_STATUS_AUTO.to_string();
+        }
+        return UPDATE_STATUS_BEST_EFFORT.to_string();
+    }
+
+    UPDATE_STATUS_UNKNOWN.to_string()
+}
+
+pub fn normalize_source_method(method: &str) -> String {
+    match method.trim().to_ascii_lowercase().as_str() {
+        "local-folder" | "local_folder" | "folder" | "local" => SOURCE_METHOD_LOCAL_FOLDER.to_string(),
+        "git" | "github" | "gitee" | "gitlab" => SOURCE_METHOD_GIT.to_string(),
+        "npm" => SOURCE_METHOD_NPM.to_string(),
+        "npx" => SOURCE_METHOD_NPX.to_string(),
+        "marketplace" | "market" => SOURCE_METHOD_MARKETPLACE.to_string(),
+        other if other.is_empty() => UPDATE_STATUS_UNKNOWN.to_string(),
+        other => other.to_string(),
+    }
+}
+
+pub fn infer_provider_from_url(url: &str) -> Option<String> {
+    let lower = url.to_ascii_lowercase();
+    if lower.contains("github.com") {
+        Some("github".to_string())
+    } else if lower.contains("gitee.com") {
+        Some("gitee".to_string())
+    } else if lower.contains("gitlab.com") {
+        Some("gitlab".to_string())
+    } else {
+        None
+    }
+}
+
+pub fn probe_git_origin(path: &Path) -> Option<GitProbe> {
+    if !path.exists() {
+        return None;
+    }
+
+    let remote_url = run_git(path, ["remote", "get-url", "origin"])?;
+    let commit = run_git(path, ["rev-parse", "HEAD"])?;
+    let branch = run_git(path, ["rev-parse", "--abbrev-ref", "HEAD"]);
+
+    Some(GitProbe {
+        remote_url,
+        commit,
+        branch,
+    })
+}
+
+fn run_git<const N: usize>(path: &Path, args: [&str; N]) -> Option<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(args)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let text = String::from_utf8(output.stdout).ok()?;
+    let trimmed = text.trim().to_string();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
 }
 
 pub fn read_skill_origin(skill_dir: &Path) -> Option<SkillOrigin> {
@@ -87,21 +211,47 @@ mod tests {
     #[test]
     fn build_install_origin_sets_explicit_trust() {
         let origin = build_install_origin(Path::new("F:/skill-source"));
-        assert_eq!(origin.method, "local-folder");
+        assert_eq!(origin.method, SOURCE_METHOD_LOCAL_FOLDER);
         assert_eq!(origin.trust_level, "explicit");
         assert_eq!(origin.installed_by.as_deref(), Some("qs-vibe"));
-        assert_eq!(update_status_for(Some(&origin)), "best_effort");
+        assert_eq!(update_status_for(Some(&origin), None), UPDATE_STATUS_BEST_EFFORT);
     }
 
     #[test]
     fn update_status_requires_origin_for_unknown() {
-        assert_eq!(update_status_for(None), "unknown");
+        assert_eq!(update_status_for(None, None), UPDATE_STATUS_UNKNOWN);
     }
 
     #[test]
     fn update_status_allows_explicit_update_command() {
         let mut origin = build_install_origin(Path::new("F:/skill-source"));
         origin.update_command = Some("git pull".to_string());
-        assert_eq!(update_status_for(Some(&origin)), "auto_update");
+        assert_eq!(update_status_for(Some(&origin), None), UPDATE_STATUS_AUTO);
+    }
+
+    #[test]
+    fn normalize_source_method_maps_aliases() {
+        assert_eq!(normalize_source_method("github"), SOURCE_METHOD_GIT);
+        assert_eq!(normalize_source_method("npx"), SOURCE_METHOD_NPX);
+        assert_eq!(normalize_source_method("market"), SOURCE_METHOD_MARKETPLACE);
+    }
+
+    #[test]
+    fn build_git_origin_uses_git_method() {
+        let probe = GitProbe {
+            remote_url: "https://github.com/example/skill.git".to_string(),
+            commit: "abc123".to_string(),
+            branch: Some("main".to_string()),
+        };
+        let origin = build_git_origin(Path::new("F:/skill-source"), &probe);
+        assert_eq!(origin.method, SOURCE_METHOD_GIT);
+        assert_eq!(origin.provider.as_deref(), Some("github"));
+        assert_eq!(
+            origin.url.as_deref(),
+            Some("https://github.com/example/skill.git")
+        );
+        assert_eq!(origin.commit.as_deref(), Some("abc123"));
+        assert_eq!(origin.branch.as_deref(), Some("main"));
+        assert_eq!(origin.update_command.as_deref(), Some("git pull --ff-only"));
     }
 }

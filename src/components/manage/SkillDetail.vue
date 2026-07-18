@@ -203,6 +203,16 @@ function updateStatusLabel(status?: string): string {
   return t("manage.source_update_unknown");
 }
 
+function sourceMethodLabel(method?: string): string {
+  if (!method) return t("manage.source_method_unknown");
+  if (method === "local-folder") return t("manage.source_method_local_folder");
+  if (method === "git") return t("manage.source_method_git");
+  if (method === "npm") return t("manage.source_method_npm");
+  if (method === "npx") return t("manage.source_method_npx");
+  if (method === "marketplace") return t("manage.source_method_marketplace");
+  return t("manage.source_method_unknown");
+}
+
 const sourceRows = computed(() =>
   props.skill.sources.map((source) => {
     const metadataUrl = props.skill.metadata?.repository || props.skill.metadata?.source || props.skill.metadata?.homepage;
@@ -223,6 +233,9 @@ const sourceRows = computed(() =>
           source.origin.method ? `method: ${source.origin.method}` : "",
           source.origin.provider ? `provider: ${source.origin.provider}` : "",
           source.origin.source_path ? `path: ${source.origin.source_path}` : "",
+          source.origin.branch ? `branch: ${source.origin.branch}` : "",
+          source.origin.command ? `command: ${source.origin.command}` : "",
+          source.origin.update_command ? `update: ${source.origin.update_command}` : "",
           source.origin.commit ? `commit: ${source.origin.commit}` : "",
           source.origin.installed_at ? `installed_at: ${source.origin.installed_at}` : "",
           source.origin.trust_level ? `trust: ${source.origin.trust_level}` : "",
@@ -232,6 +245,7 @@ const sourceRows = computed(() =>
       source,
       label: sourceLabel(source),
       kind: source.source_kind || (source.from === "vibe-lib" ? "library" : source.from.startsWith("project:") ? "project" : "agent"),
+      methodLabel: sourceMethodLabel(source.origin?.method),
       confidence,
       originTitle,
       updateLabel: updateStatusLabel(source.update_status),
@@ -527,6 +541,14 @@ function getAgentNameFromPath(path: string): string {
           </span>
           <span class="text-[9px] px-1.5 py-0.5 rounded shrink-0" style="background: var(--c-surface-hover); color: var(--c-text-secondary);">
             {{ sourceKindLabel(row.kind) }}
+          </span>
+          <span
+            v-if="row.source.origin"
+            class="text-[9px] px-1.5 py-0.5 rounded shrink-0"
+            style="background: var(--c-primary-light); color: var(--c-primary);"
+            :title="row.originTitle || row.methodLabel"
+          >
+            {{ row.methodLabel }}
           </span>
           <span
             v-if="row.isLatest"
