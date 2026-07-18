@@ -16,11 +16,13 @@ use crate::utils::config::{
 };
 use crate::utils::datetime;
 use crate::utils::fs as vibe_fs;
-use crate::utils::fs::copy_dir_all;
+use crate::utils::fs::{copy_dir_all, copy_skill_dir_all};
 use crate::utils::history::record_action;
 use crate::utils::origin::{
-    build_git_origin, build_install_origin, probe_git_origin, read_skill_origin, trust_level_for,
-    update_status_for, write_skill_origin,
+    build_git_origin, build_install_origin, git_pull_ff_only, git_status_clean, normalize_source_method,
+    probe_git_origin, read_skill_origin, refresh_git_origin, trust_level_for, update_status_for,
+    write_skill_origin, SOURCE_METHOD_GIT, SOURCE_METHOD_LOCAL_FOLDER, SOURCE_METHOD_MARKETPLACE,
+    SOURCE_METHOD_NPM, SOURCE_METHOD_NPX,
 };
 use crate::utils::path::vibe_skills_dir;
 
@@ -633,7 +635,7 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
         return Err(VibeError::SkillAlreadyExists { skill_id: name });
     }
 
-    copy_dir_all(source, &dest)?;
+    copy_skill_dir_all(source, &dest)?;
 
     let origin = probe_git_origin(source)
         .map(|probe| build_git_origin(source, &probe))
@@ -684,6 +686,123 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
         is_duplicate: false,
         missing_name: false,
     })
+}
+
+#[tauri::command]
+pub fn update_skill(skill_id: String, force: bool) -> Result<Skill, VibeError> {
+    let vibe_dir = vibe_skills_dir()?;
+    let skill_path = vibe_dir.join(&skill_id);
+    if !skill_path.exists() && !vibe_fs::is_link(&skill_path) {
+        return Err(VibeError::SkillNotFound { skill_id });
+    }
+
+    let mut origin = read_skill_origin(&skill_path).ok_or_else(|| {
+        VibeError::Path(format!(
+            "Skill {} 缺少来源记录，无法自动更新",
+            skill_path.display()
+        ))
+    })?;
+
+    let method = normalize_source_method(&origin.method);
+    match method.as_str() {
+        SOURCE_METHOD_GIT => update_from_git_source(&skill_path, &skill_id, &mut origin, force)?,
+        SOURCE_METHOD_LOCAL_FOLDER => {
+            let Some(source_path) = origin.source_path.clone() else {
+                return Err(VibeError::Path(format!(
+                    "Skill {} 缺少 source_path，无法自动更新",
+                    skill_id
+                )));
+            };
+            let source_path = Path::new(&source_path);
+            if probe_git_origin(source_path).is_some() {
+                update_from_git_source(&skill_path, &skill_id, &mut origin, force)?;
+            } else {
+                return Err(VibeError::Path(format!(
+                    "Skill {} 是本地目录安装，当前只能手动重新安装或切换到 Git 来源",
+                    skill_id
+                )));
+            }
+        }
+        SOURCE_METHOD_NPM | SOURCE_METHOD_NPX | SOURCE_METHOD_MARKETPLACE => {
+            return Err(VibeError::Path(format!(
+                "Skill {} 当前来源为 {}，暂不支持自动更新，请重新安装或重装来源包",
+                skill_id, method
+            )));
+        }
+        _ => {
+            return Err(VibeError::Path(format!(
+                "Skill {} 来源未知，无法自动更新",
+                skill_id
+            )));
+        }
+    }
+
+    list_skills()?
+        .into_iter()
+        .find(|skill| skill.id == skill_id)
+        .ok_or(VibeError::SkillNotFound { skill_id })
+}
+
+fn update_from_git_source(
+    skill_path: &Path,
+    skill_id: &str,
+    origin: &mut crate::models::origin::SkillOrigin,
+    force: bool,
+) -> Result<(), VibeError> {
+    let Some(source_path) = origin.source_path.clone() else {
+        return Err(VibeError::Path(format!(
+            "Skill {} 缺少 Git 源路径，无法更新",
+            skill_id
+        )));
+    };
+    let source_path = Path::new(&source_path);
+    if !source_path.exists() {
+        return Err(VibeError::Path(format!(
+            "Git 源路径不存在：{}",
+            source_path.display()
+        )));
+    }
+    if vibe_fs::normalize_path(source_path) == vibe_fs::normalize_path(skill_path) {
+        return Err(VibeError::Path(format!(
+            "Git 源路径与中心库路径相同：{}",
+            source_path.display()
+        )));
+    }
+
+    if !force && !git_status_clean(source_path)? {
+        return Err(VibeError::Conflict {
+            skill_id: skill_id.to_string(),
+            details: "Git 源仓库存在未提交修改，请先处理本地变更或传入 force".to_string(),
+        });
+    }
+
+    git_pull_ff_only(source_path)?;
+    let probe = probe_git_origin(source_path).ok_or_else(|| {
+        VibeError::Path(format!("无法读取 Git 源信息：{}", source_path.display()))
+    })?;
+
+    let temp_dir = skill_path.with_file_name(format!(".{}.update-tmp", skill_id));
+    if temp_dir.exists() {
+        if vibe_fs::is_link(&temp_dir) {
+            vibe_fs::remove_symlink(&temp_dir)?;
+        } else if temp_dir.is_dir() {
+            fs::remove_dir_all(&temp_dir)?;
+        } else {
+            fs::remove_file(&temp_dir)?;
+        }
+    }
+
+    copy_skill_dir_all(source_path, &temp_dir)?;
+    if vibe_fs::is_link(skill_path) {
+        vibe_fs::remove_symlink(skill_path)?;
+    } else if skill_path.exists() {
+        fs::remove_dir_all(skill_path)?;
+    }
+    fs::rename(&temp_dir, skill_path)?;
+
+    refresh_git_origin(origin, &probe);
+    write_skill_origin(skill_path, origin)?;
+    Ok(())
 }
 
 #[tauri::command]

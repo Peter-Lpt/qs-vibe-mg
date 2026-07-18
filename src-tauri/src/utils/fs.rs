@@ -49,6 +49,27 @@ pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), VibeError> {
     Ok(())
 }
 
+/// 递归复制 skill 目录，但跳过仓库元数据和来源记录文件。
+pub fn copy_skill_dir_all(src: &Path, dst: &Path) -> Result<(), VibeError> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name == ".git" || name == ".vibe-origin.json" {
+            continue;
+        }
+        let ty = entry.file_type()?;
+        let dest = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_skill_dir_all(&entry.path(), &dest)?;
+        } else {
+            fs::copy(entry.path(), &dest)?;
+        }
+    }
+    Ok(())
+}
+
 /// 创建 symlink
 /// Windows: 使用 junction（目录链接，无需管理员权限）
 /// macOS/Linux: 使用 symlink

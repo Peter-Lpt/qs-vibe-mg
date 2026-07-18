@@ -357,3 +357,19 @@
 5. 复制 / 引用安装切换
 6. 再补 `git`、`npx`、`marketplace` 的专用更新路径
 
+## 当前实现状态
+
+已完成：
+
+- `SkillOrigin` 增加 `branch`，并能区分 `git / local-folder / npm / npx / marketplace`。
+- 安装时会优先探测 Git 来源并写入 provenance。
+- 中心库与同步链路改为 skill 内容复制，跳过 `.git` 和 `.vibe-origin.json`。
+- 详情页补了来源方法徽标和 Git 更新按钮。
+- 后端已接入 Git 更新执行器，包含干净工作区检查、`git pull --ff-only`、临时目录替换和 provenance 刷新。
+
+仍待继续：
+
+- `npx / npm` 更新执行器。
+- `marketplace` 重新安装 / 刷新执行器。
+- 引用安装模式的 UI 与后端分流。
+- 更细的更新预览、dry-run 和回滚提示。

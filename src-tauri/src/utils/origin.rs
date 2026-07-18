@@ -169,6 +169,61 @@ pub fn probe_git_origin(path: &Path) -> Option<GitProbe> {
     })
 }
 
+pub fn git_status_clean(path: &Path) -> Result<bool, VibeError> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["status", "--porcelain"])
+        .output()
+        .map_err(VibeError::Io)?;
+
+    if !output.status.success() {
+        return Err(VibeError::Path(format!(
+            "无法检查 Git 工作区状态：{}",
+            path.display()
+        )));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().is_empty())
+}
+
+pub fn git_pull_ff_only(path: &Path) -> Result<(), VibeError> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["pull", "--ff-only"])
+        .output()
+        .map_err(VibeError::Io)?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    Err(VibeError::Path(format!(
+        "Git 拉取失败：{}。{}",
+        path.display(),
+        if stderr.is_empty() {
+            "请检查远端、权限或本地冲突".to_string()
+        } else {
+            stderr
+        }
+    )))
+}
+
+pub fn refresh_git_origin(origin: &mut SkillOrigin, probe: &GitProbe) {
+    origin.method = SOURCE_METHOD_GIT.to_string();
+    origin.provider = infer_provider_from_url(&probe.remote_url).or_else(|| origin.provider.clone());
+    origin.url = Some(probe.remote_url.clone());
+    origin.commit = Some(probe.commit.clone());
+    origin.branch = probe.branch.clone();
+    origin.update_command = Some("git pull --ff-only".to_string());
+    origin.last_checked_at = Some(chrono_now());
+    if origin.trust_level.trim().is_empty() {
+        origin.trust_level = "explicit".to_string();
+    }
+}
+
 fn run_git<const N: usize>(path: &Path, args: [&str; N]) -> Option<String> {
     let output = Command::new("git")
         .arg("-C")

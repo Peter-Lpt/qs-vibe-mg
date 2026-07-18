@@ -42,6 +42,7 @@ const pendingPlanOverwrite = ref(false);
 const selectedConflictPath = ref<string>("");
 const resolvingPlan = ref(false);
 const cleaningDanglingPath = ref<string | null>(null);
+const updatingSkill = ref(false);
 
 interface ConflictItem {
   source: SkillSource;
@@ -203,6 +204,14 @@ function updateStatusLabel(status?: string): string {
   return t("manage.source_update_unknown");
 }
 
+function canUpdateSource(source: SkillSource): boolean {
+  return (
+    source.from === "vibe-lib" &&
+    source.origin !== undefined &&
+    source.origin.method === "git"
+  );
+}
+
 function sourceMethodLabel(method?: string): string {
   if (!method) return t("manage.source_method_unknown");
   if (method === "local-folder") return t("manage.source_method_local_folder");
@@ -249,6 +258,7 @@ const sourceRows = computed(() =>
       confidence,
       originTitle,
       updateLabel: updateStatusLabel(source.update_status),
+      canUpdate: canUpdateSource(source),
       dangling: source.is_symlink && (!source.symlink_target || source.content_hash === ""),
       isLatest: source.path === latestSourcePath.value,
       sameCount: sameContentCount(source),
@@ -353,6 +363,19 @@ async function cleanDanglingSource(source: SkillSource) {
     toast.show(String(e), "error");
   } finally {
     cleaningDanglingPath.value = null;
+  }
+}
+
+async function handleUpdateSkill() {
+  if (updatingSkill.value) return;
+  updatingSkill.value = true;
+  try {
+    await skillsStore.updateSkill(props.skill.id);
+    toast.show(t("manage.skill_updated", { skill: props.skill.name || props.skill.id }), "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  } finally {
+    updatingSkill.value = false;
   }
 }
 
@@ -580,6 +603,16 @@ function getAgentNameFromPath(path: string): string {
           <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="t('manage.source_update_hint')">
             {{ row.updateLabel }}
           </span>
+          <button
+            v-if="row.canUpdate"
+            class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer"
+            style="color: var(--c-primary);"
+            :disabled="updatingSkill"
+            :title="updatingSkill ? t('manage.updating_skill') : t('manage.update_skill')"
+            @click.stop="handleUpdateSkill"
+          >
+            <RefreshCw :size="12" :class="{ 'animate-spin': updatingSkill }" />
+          </button>
           <button
             v-if="row.dangling && !isProjectSource(row.source)"
             class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer"

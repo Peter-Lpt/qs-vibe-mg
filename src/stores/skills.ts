@@ -114,6 +114,14 @@ export const useSkillsStore = defineStore("skills", () => {
     return skill;
   }
 
+  async function updateSkill(skillId: string, force = false): Promise<Skill> {
+    const skill = await invoke<Skill>("update_skill", { skillId, force });
+    const i = skills.value.findIndex((s) => s.id === skill.id);
+    if (i >= 0) skills.value[i] = skill;
+    else skills.value.push(skill);
+    return skill;
+  }
+
   async function deleteSkill(skillId: string) {
     await invoke("delete_library_skill", { skillId });
     refreshSkills();
@@ -190,6 +198,7 @@ export const useSkillsStore = defineStore("skills", () => {
     removeLink,
     removeAgentSkillCopy,
     installSkill,
+    updateSkill,
     deleteSkill,
     previewSkill,
     previewSkillAtPath,

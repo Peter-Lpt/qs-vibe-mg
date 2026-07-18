@@ -136,7 +136,7 @@ fn sync_to_vibe_impl(
                 skill_id
             );
             fs::remove_dir_all(&vibe_path)?;
-            vibe_fs::copy_dir_all(&real_source, &vibe_path)?;
+            vibe_fs::copy_skill_dir_all(&real_source, &vibe_path)?;
         }
 
         // 内容一致（或已强制覆盖），只需创建 symlink
@@ -152,7 +152,7 @@ fn sync_to_vibe_impl(
     }
 
     // 技能库没有此 skill，复制过去
-    vibe_fs::copy_dir_all(&real_source, &vibe_path)?;
+    vibe_fs::copy_skill_dir_all(&real_source, &vibe_path)?;
 
     // 如果源是 symlink，删除旧 symlink；如果是独立副本，删除副本
     if vibe_fs::is_link(&source_path) {
@@ -192,7 +192,7 @@ fn relink_impl(
             })?
         };
 
-        vibe_fs::copy_dir_all(&real_source, &vibe_path)?;
+        vibe_fs::copy_skill_dir_all(&real_source, &vibe_path)?;
     }
 
     // 删除旧的 symlink（如果存在）
