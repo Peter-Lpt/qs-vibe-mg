@@ -71,6 +71,7 @@ pub fn run() {
             commands::history::redo_by_id,
             commands::history::clear_history,
             commands::config::get_config,
+            commands::config::suggest_project_roots,
             commands::config::update_config,
             commands::config::set_vibe_skills_path,
             commands::config::export_data,

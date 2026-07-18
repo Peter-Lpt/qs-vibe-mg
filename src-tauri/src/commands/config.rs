@@ -3,7 +3,15 @@ use std::fs;
 use serde::{Deserialize, Serialize};
 
 use crate::errors::VibeError;
-use crate::utils::config::{invalidate_agents_cache, load_config, save_config, Config};
+use crate::utils::config::{
+    invalidate_agents_cache,
+    load_config,
+    normalize_project_roots,
+    save_config,
+    suggest_project_roots as build_project_root_suggestions,
+    Config,
+    ProjectRootSuggestion,
+};
 use crate::utils::fs::copy_dir_all;
 use crate::utils::history::load_history;
 use crate::utils::path::{expand_tilde, vibe_skills_dir};
@@ -12,6 +20,11 @@ use crate::utils::path::{expand_tilde, vibe_skills_dir};
 #[tauri::command]
 pub fn get_config() -> Result<Config, VibeError> {
     load_config()
+}
+
+#[tauri::command]
+pub fn suggest_project_roots() -> Result<Vec<ProjectRootSuggestion>, VibeError> {
+    Ok(build_project_root_suggestions())
 }
 
 /// 更新配置
@@ -38,7 +51,7 @@ pub fn update_config(
         config.history.max_entries = m;
     }
     if let Some(roots) = project_roots {
-        config.project_roots = roots;
+        config.project_roots = normalize_project_roots(roots);
     }
 
     save_config(&config)?;

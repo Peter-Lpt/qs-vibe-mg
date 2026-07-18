@@ -301,6 +301,17 @@
     "project_roots_count": "{count} 個根目錄",
     "save_project_roots": "儲存根目錄",
     "project_roots_loading": "正在載入專案根目錄…",
-    "project_roots_saved": "專案根目錄已儲存"
+    "project_roots_saved": "專案根目錄已儲存",
+    "project_roots_pick": "選擇根目錄",
+    "project_roots_remove": "移除根目錄",
+    "project_roots_empty": "目前還沒有專案根目錄，新增後才會掃描 project source。",
+    "project_roots_suggestions": "建議的根目錄",
+    "project_roots_add": "新增",
+    "project_roots_current": "目前專案",
+    "project_roots_added": "已設定根目錄",
+    "project_roots_suggestion_hint": "根據目前目錄與專案慣例自動建議",
+    "project_roots_advanced_show": "進階",
+    "project_roots_advanced_hide": "基礎",
+    "project_roots_advanced_title": "原始編輯"
   }
 }

@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import type { AppConfig, TabId } from "../types";
+import type { AppConfig, ProjectRootSuggestion, TabId } from "../types";
 
 export type ThemeMode = "system" | "light" | "dark";
 export type Locale = "zh" | "en" | "zh-TW";
@@ -16,6 +16,7 @@ export const useAppStore = defineStore("app", () => {
   const showSettings = ref(false);
   const resolvedTheme = ref<"light" | "dark">("light");
   const config = ref<AppConfig | null>(null);
+  const projectRootSuggestions = ref<ProjectRootSuggestion[]>([]);
 
   // 兼容旧值：将旧 tab id 映射到新 id
   const storedTab = localStorage.getItem("vibe-active-tab") as TabId | null;
@@ -96,10 +97,15 @@ export const useAppStore = defineStore("app", () => {
     config.value = await invoke<AppConfig>("get_config");
   }
 
+  async function fetchProjectRootSuggestions() {
+    projectRootSuggestions.value = await invoke<ProjectRootSuggestion[]>("suggest_project_roots");
+  }
+
   async function updateProjectRoots(projectRoots: string[]) {
     config.value = await invoke<AppConfig>("update_config", {
       projectRoots,
     });
+    await fetchProjectRootSuggestions();
   }
 
   return {
@@ -108,6 +114,7 @@ export const useAppStore = defineStore("app", () => {
     showSettings,
     resolvedTheme,
     config,
+    projectRootSuggestions,
     activeTab,
     setTheme,
     setLocale,
@@ -118,6 +125,7 @@ export const useAppStore = defineStore("app", () => {
     writeFileToPath,
     importData,
     fetchConfig,
+    fetchProjectRootSuggestions,
     updateProjectRoots,
   };
 });

@@ -709,12 +709,8 @@ fn scan_project_sources(
     let config = load_config()?;
 
     for root in project_skill_roots(&config) {
-        let label = root
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .filter(|name| !name.is_empty())
-            .unwrap_or_else(|| "Project".to_string());
-        for relative in [".codex/skills", ".agents/skills", "skills"] {
+        let root_id = format!("project:{}", root.to_string_lossy().replace('\\', "/"));
+        for relative in [".claude/skills", ".agents/skills", ".codex/skills", ".github/skills", "skills"] {
             let skill_root = root.join(relative);
             if !skill_root.exists() || !skill_root.is_dir() {
                 continue;
@@ -722,7 +718,7 @@ fn scan_project_sources(
 
             scan_directory(
                 &skill_root,
-                &format!("project:{}", label),
+                &root_id,
                 map,
                 false,
                 0,

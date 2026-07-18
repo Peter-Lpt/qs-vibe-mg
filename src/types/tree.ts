@@ -79,6 +79,12 @@ function deriveLinkState(
   return "linked_elsewhere";
 }
 
+function projectRootLabel(rootId: string): string {
+  const raw = rootId.replace(/^project:/, "");
+  const parts = raw.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || "Project";
+}
+
 /**
  * 由 Skill[] 纯前端派生来源树，无需改后端。
  * @param skills 已按筛选/排序处理后的展示列表
@@ -127,7 +133,7 @@ export function buildSkillTree(skills: Skill[], agents: Agent[]): TreeRoot[] {
   for (const skill of skills) {
     for (const source of skill.sources.filter((x) => x.from.startsWith("project:") || x.source_kind === "project")) {
       const rootId = source.from;
-      const label = source.from.replace(/^project:/, "") || "Project";
+      const label = projectRootLabel(source.from);
       const vibeSource = skill.sources.find((x) => x.from === "vibe-lib");
       if (!projectSources.has(rootId)) {
         projectSources.set(rootId, { label, children: [] });

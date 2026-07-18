@@ -78,6 +78,12 @@ export interface AgentConfig {
   auto_detected: boolean;
 }
 
+export interface ProjectRootSuggestion {
+  path: string;
+  is_current: boolean;
+  matched_dirs: string[];
+}
+
 export type TabId = "manage" | "history";
 
 export type ConflictType = "SameNameDiffContent" | "DanglingLink";

@@ -301,6 +301,17 @@
     "project_roots_count": "{count} 个根目录",
     "save_project_roots": "保存根目录",
     "project_roots_loading": "正在加载项目根目录…",
-    "project_roots_saved": "项目根目录已保存"
+    "project_roots_saved": "项目根目录已保存",
+    "project_roots_pick": "选择根目录",
+    "project_roots_remove": "移除根目录",
+    "project_roots_empty": "当前还没有项目根目录，添加后才会扫描 project source。",
+    "project_roots_suggestions": "建议的根目录",
+    "project_roots_add": "添加",
+    "project_roots_current": "当前项目",
+    "project_roots_added": "已配置根目录",
+    "project_roots_suggestion_hint": "根据当前目录和项目约定自动建议",
+    "project_roots_advanced_show": "高级",
+    "project_roots_advanced_hide": "基础",
+    "project_roots_advanced_title": "原始编辑"
   }
 }

@@ -301,6 +301,17 @@
     "project_roots_count": "{count} roots",
     "save_project_roots": "Save roots",
     "project_roots_loading": "Loading project roots...",
-    "project_roots_saved": "Project roots saved"
+    "project_roots_saved": "Project roots saved",
+    "project_roots_pick": "Browse root",
+    "project_roots_remove": "Remove root",
+    "project_roots_empty": "No project roots yet. Add one to enable project source scanning.",
+    "project_roots_suggestions": "Suggested roots",
+    "project_roots_add": "Add",
+    "project_roots_current": "Current project",
+    "project_roots_added": "Configured root",
+    "project_roots_suggestion_hint": "Detected by current folder and project conventions",
+    "project_roots_advanced_show": "Advanced",
+    "project_roots_advanced_hide": "Basic",
+    "project_roots_advanced_title": "Raw editor"
   }
 }

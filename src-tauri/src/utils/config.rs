@@ -107,6 +107,31 @@ fn default_project_roots() -> Vec<String> {
     Vec::new()
 }
 
+pub fn normalize_project_roots(roots: Vec<String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut normalized = Vec::new();
+
+    for root in roots {
+        let trimmed = root.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let value = trimmed.replace('\\', "/");
+        if seen.insert(value.clone()) {
+            normalized.push(value);
+        }
+    }
+
+    normalized
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectRootSuggestion {
+    pub path: String,
+    pub is_current: bool,
+    pub matched_dirs: Vec<String>,
+}
+
 fn normalize_agent_kind(id: &str, kind: &str) -> String {
     if id == "agents-shared" || id == "agents-common" {
         "common".to_string()
@@ -317,14 +342,6 @@ pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VibeError
 
 pub fn project_skill_roots(config: &Config) -> Vec<std::path::PathBuf> {
     let mut roots = Vec::new();
-
-    if config.project_roots.is_empty() {
-        if let Ok(cwd) = std::env::current_dir() {
-            roots.push(cwd);
-        }
-        return roots;
-    }
-
     for root in &config.project_roots {
         if let Ok(expanded) = expand_tilde(root) {
             if expanded.exists() && expanded.is_dir() {
@@ -334,6 +351,64 @@ pub fn project_skill_roots(config: &Config) -> Vec<std::path::PathBuf> {
     }
 
     roots
+}
+
+pub fn suggest_project_roots() -> Vec<ProjectRootSuggestion> {
+    let cwd = match std::env::current_dir() {
+        Ok(dir) => dir,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut suggestions = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut current = Some(cwd.as_path());
+
+    while let Some(dir) = current {
+        let normalized = dir.to_string_lossy().replace('\\', "/");
+        if !seen.insert(normalized.clone()) {
+            break;
+        }
+
+        let mut matched_dirs = Vec::new();
+        for relative in [".claude/skills", ".agents/skills", ".codex/skills", ".github/skills", "skills"] {
+            if dir.join(relative).is_dir() {
+                matched_dirs.push(relative.to_string());
+            }
+        }
+
+        let has_git = dir.join(".git").exists();
+        if dir == cwd.as_path() || has_git || !matched_dirs.is_empty() {
+            suggestions.push(ProjectRootSuggestion {
+                path: normalized,
+                is_current: dir == cwd.as_path(),
+                matched_dirs,
+            });
+        }
+
+        current = dir.parent();
+    }
+
+    suggestions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_project_roots_trims_and_deduplicates() {
+        let roots = normalize_project_roots(vec![
+            "  F:\\workspace\\demo\\repo  ".to_string(),
+            "F:/workspace/demo/repo".to_string(),
+            "".to_string(),
+            "D:\\workspace\\other".to_string(),
+        ]);
+
+        assert_eq!(roots, vec![
+            "F:/workspace/demo/repo".to_string(),
+            "D:/workspace/other".to_string(),
+        ]);
+    }
 }
 
 /// 扫描 agent skills 目录中的 symlink，返回关联的 skill id 列表（P2 亦供 skills 命令统一调用）

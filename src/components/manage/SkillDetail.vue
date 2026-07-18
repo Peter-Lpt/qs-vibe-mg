@@ -316,6 +316,11 @@ async function confirmOverwrite() {
 
 function sourceLabel(source: SkillSource): string {
   if (source.from === "vibe-lib") return t("manage.library");
+  if (source.from.startsWith("project:")) {
+    const raw = source.from.replace(/^project:/, "");
+    const parts = raw.split(/[\\/]/).filter(Boolean);
+    return `Project · ${parts[parts.length - 1] || "Project"}`;
+  }
   return props.agents.find((a) => a.id === source.from)?.name ?? source.from;
 }
 
