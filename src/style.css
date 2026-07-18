@@ -180,6 +180,24 @@ body {
   color: white;
 }
 
+.settings-dialog {
+  max-height: min(80vh, 720px);
+}
+
+.settings-scroll-body {
+  scrollbar-gutter: stable;
+  padding-right: 18px;
+}
+
+.settings-scroll-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.settings-scroll-body::-webkit-scrollbar-thumb {
+  border: 2px solid var(--c-surface);
+  background: color-mix(in srgb, var(--c-text-tertiary) 60%, transparent);
+}
+
 .segmented-nav {
   padding: 3px;
   border-radius: 10px;

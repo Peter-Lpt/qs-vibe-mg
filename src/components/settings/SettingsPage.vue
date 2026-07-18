@@ -195,10 +195,10 @@ onMounted(() => {
     @click.self="appStore.showSettings = false"
   >
     <div
-      class="rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto"
+      class="settings-dialog rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col"
       style="background: var(--c-surface); border: 1px solid var(--c-border);"
     >
-      <div class="flex items-center justify-between p-4 border-b" style="border-color: var(--c-border);">
+      <div class="flex items-center justify-between p-4 border-b shrink-0" style="border-color: var(--c-border);">
         <h2 class="text-sm font-semibold" style="color: var(--c-text);">
           {{ t('settings.title') }}
         </h2>
@@ -211,7 +211,7 @@ onMounted(() => {
         </button>
       </div>
 
-      <div class="p-4 space-y-4">
+      <div class="settings-scroll-body p-4 space-y-4 overflow-y-auto">
         <section class="rounded-md border p-3" style="border-color: var(--c-border); background: var(--c-bg);">
           <div class="flex items-center justify-between gap-3">
             <div>
