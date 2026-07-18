@@ -378,27 +378,33 @@ const chipGroups = computed(() => {
 </script>
 
 <template>
-  <div>
+  <div class="space-y-4">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="text-base font-semibold" style="color: var(--c-text);">
-        {{ t("manage.title") || "软连接管理" }}
-        <span class="text-sm font-normal ml-1.5" style="color: var(--c-text-secondary);">
-          ({{ displaySkills.length }}/{{ totalSkills }})
-        </span>
-      </h2>
-      <div class="flex items-center gap-2">
+    <section class="workspace-hero">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-semibold" style="color: var(--c-text-strong);">
+              {{ t("manage.title") || "软连接管理" }}
+            </h2>
+            <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--c-primary-light); color: var(--c-primary);">
+              {{ displaySkills.length }}/{{ totalSkills }}
+            </span>
+          </div>
+          <p class="text-xs mt-1" style="color: var(--c-text-secondary);">
+            {{ t("manage.workspace_hint") }}
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
         <button
           v-if="hasActiveFilters"
-          class="text-[10px] px-2 py-1 rounded cursor-pointer"
-          style="border: 1px solid var(--c-border); color: var(--c-text-secondary); background: var(--c-bg);"
+          class="text-[11px] px-3 py-1.5 rounded-md cursor-pointer toolbar-control"
           @click="clearAllFilters"
         >
           {{ t("manage.clear_filters") || "清除筛选" }}
         </button>
         <button
-          class="w-7 h-7 flex items-center justify-center rounded-md border cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          style="border-color: var(--c-border); color: var(--c-text-secondary); background: var(--c-bg);"
+          class="w-8 h-8 flex items-center justify-center rounded-md cursor-pointer toolbar-control disabled:opacity-50 disabled:cursor-not-allowed"
           :title="t('manage.refresh')"
           :disabled="isRefreshing"
           @click="refreshManageData"
@@ -406,14 +412,15 @@ const chipGroups = computed(() => {
           <RefreshCw :size="14" :class="{ 'animate-spin': isRefreshing }" />
         </button>
         <button
-          class="text-xs px-3 py-1.5 rounded-md cursor-pointer btn-primary"
+          class="text-xs px-3.5 py-2 rounded-md cursor-pointer btn-primary inline-flex items-center gap-1.5"
           @click="showInstall = true"
         >
-          + {{ t("skills.install") }}
+          <Plus :size="14" />
+          {{ t("skills.install") }}
         </button>
-        <div class="flex items-center rounded border" style="border-color: var(--c-border);">
+        <div class="segmented-nav inline-flex items-center">
           <button
-            class="px-2 py-1 flex items-center justify-center cursor-pointer transition-colors"
+            class="px-2.5 py-1.5 flex items-center justify-center cursor-pointer rounded-md transition-colors"
             :style="{ background: viewMode === 'list' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'list' ? 'white' : 'var(--c-text-secondary)' }"
             :title="t('manage.view_list') || '列表视图'"
             @click="setViewMode('list')"
@@ -421,7 +428,7 @@ const chipGroups = computed(() => {
             <List :size="14" />
           </button>
           <button
-            class="px-2 py-1 flex items-center justify-center cursor-pointer transition-colors"
+            class="px-2.5 py-1.5 flex items-center justify-center cursor-pointer rounded-md transition-colors"
             :style="{ background: viewMode === 'tree' ? 'var(--c-primary)' : 'transparent', color: viewMode === 'tree' ? 'white' : 'var(--c-text-secondary)' }"
             :title="t('manage.view_tree') || '树视图'"
             @click="setViewMode('tree')"
@@ -430,27 +437,47 @@ const chipGroups = computed(() => {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+
+      <div class="grid gap-3 mt-4" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+        <div class="rounded-lg px-3 py-2" style="background: var(--c-bg); border: 1px solid var(--c-border-subtle);">
+          <div class="text-[10px] uppercase tracking-wide" style="color: var(--c-text-secondary);">{{ t("manage.total_skills") || "共" }}</div>
+          <div class="text-lg font-semibold" style="color: var(--c-text-strong);">{{ totalSkills }}</div>
+        </div>
+        <div class="rounded-lg px-3 py-2" style="background: var(--c-primary-light); border: 1px solid color-mix(in srgb, var(--c-primary) 22%, transparent);">
+          <div class="text-[10px] uppercase tracking-wide" style="color: var(--c-primary);">{{ t("manage.linked_count") || "共享" }}</div>
+          <div class="text-lg font-semibold" style="color: var(--c-primary);">{{ sharedSkills.length }}</div>
+        </div>
+        <div class="rounded-lg px-3 py-2" style="background: var(--c-bg); border: 1px solid var(--c-border-subtle);">
+          <div class="text-[10px] uppercase tracking-wide" style="color: var(--c-text-secondary);">{{ t("manage.status_unlinked") || "独立" }}</div>
+          <div class="text-lg font-semibold" style="color: var(--c-text);">{{ uniqueSkills.length }}</div>
+        </div>
+        <div class="rounded-lg px-3 py-2" style="background: var(--c-warning-light); border: 1px solid color-mix(in srgb, var(--c-warning) 22%, transparent);">
+          <div class="text-[10px] uppercase tracking-wide" style="color: var(--c-warning);">{{ t("manage.conflict_count") || "异常" }}</div>
+          <div class="text-lg font-semibold" style="color: var(--c-warning);">{{ issueSkills.length }}</div>
+        </div>
+      </div>
+    </section>
 
     <!-- Agent 概览（= Agent 筛选入口） -->
-    <div class="mb-3" v-if="detectedAgents.length > 0">
+    <section class="workspace-panel" v-if="detectedAgents.length > 0">
       <div
-        class="flex items-center gap-2 cursor-pointer mb-2 select-none"
+        class="flex items-center gap-2 cursor-pointer select-none"
         @click="agentOverviewExpanded = !agentOverviewExpanded"
       >
         <ChevronRight class="text-xs transition-transform" :size="14" :style="{ transform: agentOverviewExpanded ? 'rotate(90deg)' : 'rotate(0deg)', color: 'var(--c-text-secondary)' }" />
-        <span class="text-xs font-semibold" style="color: var(--c-text);">
+        <span class="text-xs font-semibold" style="color: var(--c-text-strong);">
           {{ t("manage.agent_overview") || "Agent 概览" }}
         </span>
         <span v-if="selectedAgentFilter.size > 0" class="text-[10px] ml-1" style="color: var(--c-primary);">
           {{ selectedAgentFilter.size }} {{ t("manage.agent_selected") || "个已选" }}
         </span>
       </div>
-      <div v-if="agentOverviewExpanded" class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));">
+      <div v-if="agentOverviewExpanded" class="grid gap-2 mt-3" style="grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));">
         <div
           v-for="overview in agentOverviews"
           :key="overview.agent.id"
-          class="rounded-lg border p-2.5 cursor-pointer transition-all hover:shadow-sm"
+          class="agent-overview-card p-3 cursor-pointer transition-all hover:shadow-sm"
           :style="{
             background: selectedAgentFilter.has(overview.agent.id)
               ? (agentFilterMode === 'include' ? 'var(--c-primary-light)' : 'var(--c-danger-light)')
@@ -486,10 +513,10 @@ const chipGroups = computed(() => {
           {{ agentFilterMode === "include" ? t("manage.filter_include") : t("manage.filter_exclude") }}
         </button>
       </div>
-    </div>
+    </section>
 
     <!-- 状态筛选 chips（分组 + 计数） -->
-    <div class="mb-2">
+    <section class="workspace-panel">
       <div v-for="(group, gIdx) in chipGroups" :key="group.label" class="flex gap-1.5 mb-1.5 flex-wrap items-center">
         <span v-if="gIdx > 0" class="w-px h-3 mx-1" style="background: var(--c-border);" />
         <span class="text-[9px] mr-0.5 shrink-0 uppercase tracking-wider" style="color: var(--c-text-secondary);">
@@ -498,13 +525,13 @@ const chipGroups = computed(() => {
         <button
           v-for="chip in group.chips"
           :key="chip.id"
-          class="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors"
+          class="filter-chip inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full cursor-pointer transition-colors"
           :style="
             (chip.id === 'duplicate' && !hasAnyDuplicate) || chipCounts[chip.id] === 0
-              ? 'opacity: 0.35; pointer-events: none; background: var(--c-bg); color: var(--c-text-secondary); border: 1px solid var(--c-border);'
+              ? 'opacity: 0.35; pointer-events: none;'
               : activeStatusFilters.has(chip.id)
                 ? `background: ${chip.color}; color: white;`
-                : 'background: var(--c-bg); color: var(--c-text-secondary); border: 1px solid var(--c-border);'
+                : ''
           "
           @click="toggleStatusFilter(chip.id)"
         >
@@ -513,14 +540,13 @@ const chipGroups = computed(() => {
           <span class="text-[9px] opacity-70">({{ chipCounts[chip.id] }})</span>
         </button>
       </div>
-    </div>
 
     <!-- 工具行：排序 + 搜索 -->
-    <div class="flex gap-2 mb-3 items-center">
+    <div class="flex gap-2 mt-3 items-center">
       <select
         v-model="sortBy"
-        class="appearance-none px-2 py-1 pr-6 text-[10px] rounded-md border outline-none cursor-pointer"
-        style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text-secondary); min-width: 90px;"
+        class="toolbar-control appearance-none px-3 py-2 pr-6 text-[11px] rounded-md outline-none cursor-pointer"
+        style="min-width: 116px;"
       >
         <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
@@ -528,23 +554,10 @@ const chipGroups = computed(() => {
         ref="searchInput"
         v-model="searchQuery"
         :placeholder="t('skills.search') + ' (Ctrl+K)'"
-        class="flex-1 px-3 py-1.5 text-xs rounded-md border outline-none transition-colors min-w-[140px]"
-        style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text);"
+        class="toolbar-control flex-1 px-3 py-2 text-xs rounded-md outline-none transition-colors min-w-[140px]"
       />
     </div>
-
-    <!-- Stats bar -->
-    <div class="flex items-center gap-4 mb-3 px-3 py-2 rounded-lg text-[11px]" style="background: var(--c-surface); border: 1px solid var(--c-border);">
-      <span style="color: var(--c-text);">{{ t("manage.total_skills") || "共" }} {{ totalSkills }}</span>
-      <span style="color: var(--c-text-secondary);">|</span>
-      <span style="color: var(--c-primary);">{{ sharedSkills.length }} {{ t("manage.linked_count") || "共享" }}</span>
-      <span style="color: var(--c-text-secondary);">|</span>
-      <span style="color: var(--c-text-secondary);">{{ uniqueSkills.length }} {{ t("manage.status_unlinked") || "独立" }}</span>
-      <template v-if="issueSkills.length > 0">
-        <span style="color: var(--c-text-secondary);">|</span>
-        <span style="color: var(--c-warning);">{{ issueSkills.length }} {{ t("manage.conflict_count") || "异常" }}</span>
-      </template>
-    </div>
+    </section>
 
     <IssueRepairPanel
       :skills="skillsStore.skills"

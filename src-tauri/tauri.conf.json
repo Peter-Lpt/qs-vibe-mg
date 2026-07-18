@@ -12,11 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "QS-Vibe 管理",
+        "title": "QS-Vibe",
         "width": 1100,
         "height": 720,
         "resizable": true,
-        "center": true
+        "center": true,
+        "decorations": false
       }
     ],
     "security": {

@@ -1,32 +1,34 @@
 @import "tailwindcss";
 
 :root {
-  --c-bg: #fafafa;
+  --c-bg: #f5f7fb;
   --c-surface: #ffffff;
-  --c-surface-hover: #f5f5f5;
-  --c-surface-active: #eeeeee;
-  --c-border: #e5e5e5;
-  --c-border-subtle: #f0f0f0;
-  --c-text: #171717;
-  --c-text-secondary: #737373;
-  --c-text-tertiary: #a3a3a3;
-  --c-primary: #2563eb;
-  --c-primary-hover: #1d4ed8;
-  --c-primary-light: rgba(37, 99, 235, 0.08);
-  --c-success: #16a34a;
-  --c-success-light: rgba(22, 163, 74, 0.08);
-  --c-warning: #d97706;
-  --c-warning-light: rgba(217, 119, 6, 0.08);
-  --c-danger: #dc2626;
+  --c-surface-raised: #ffffff;
+  --c-surface-hover: #eef3fb;
+  --c-surface-active: #e4ebf7;
+  --c-border: #dfe6f0;
+  --c-border-subtle: #edf2f8;
+  --c-text-strong: #111827;
+  --c-text: #1f2937;
+  --c-text-secondary: #64748b;
+  --c-text-tertiary: #94a3b8;
+  --c-primary: #2457d6;
+  --c-primary-hover: #1d46b2;
+  --c-primary-light: rgba(36, 87, 214, 0.1);
+  --c-success: #15985f;
+  --c-success-light: rgba(21, 152, 95, 0.1);
+  --c-warning: #c47a07;
+  --c-warning-light: rgba(196, 122, 7, 0.11);
+  --c-danger: #d43f3a;
   --c-danger-hover: #b91c1c;
-  --c-danger-light: rgba(220, 38, 38, 0.08);
-  --c-symlink: #7c3aed;
-  --c-junction: #0891b2;
-  --c-copy: #ea580c;
-  --c-info: #3b82f6;
-  --c-info-light: rgba(59, 130, 246, 0.08);
-  --c-purple: #7c3aed;
-  --c-purple-light: rgba(124, 58, 237, 0.08);
+  --c-danger-light: rgba(212, 63, 58, 0.1);
+  --c-symlink: #6d5bd7;
+  --c-junction: #0b8fa3;
+  --c-copy: #db6e2e;
+  --c-info: #2d73c7;
+  --c-info-light: rgba(45, 115, 199, 0.1);
+  --c-purple: #6d5bd7;
+  --c-purple-light: rgba(109, 91, 215, 0.1);
   --c-amber: #d97706;
   --c-amber-light: rgba(217, 119, 6, 0.08);
   --c-cyan: #0891b2;
@@ -42,26 +44,28 @@
   --dot-6: #06b6d4;
   --dot-7: #ec4899;
   --dot-8: #14b8a6;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 20px 55px rgba(15, 23, 42, 0.12);
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
 }
 
 .dark {
-  --c-bg: #0a0a0a;
-  --c-surface: #171717;
-  --c-surface-hover: #262626;
-  --c-surface-active: #333333;
-  --c-border: #262626;
-  --c-border-subtle: #1f1f1f;
-  --c-text: #f5f5f5;
-  --c-text-secondary: #a3a3a3;
-  --c-text-tertiary: #525252;
-  --c-primary: #3b82f6;
-  --c-primary-hover: #60a5fa;
+  --c-bg: #0e141f;
+  --c-surface: #151d2a;
+  --c-surface-raised: #1b2636;
+  --c-surface-hover: #223047;
+  --c-surface-active: #293a55;
+  --c-border: #2a3850;
+  --c-border-subtle: #202c3f;
+  --c-text-strong: #f8fafc;
+  --c-text: #e5edf7;
+  --c-text-secondary: #9aa8bd;
+  --c-text-tertiary: #65758d;
+  --c-primary: #6aa0ff;
+  --c-primary-hover: #8db7ff;
   --c-primary-light: rgba(59, 130, 246, 0.12);
   --c-success: #22c55e;
   --c-success-light: rgba(34, 197, 94, 0.12);
@@ -106,6 +110,134 @@ body {
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.app-shell-header {
+  min-height: 58px;
+  user-select: none;
+  background: color-mix(in srgb, var(--c-surface) 94%, var(--c-bg));
+  border-bottom: 1px solid var(--c-border);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background: linear-gradient(145deg, #2457d6 0%, #2c77df 58%, #19a6a6 100%);
+  box-shadow: 0 8px 18px rgba(36, 87, 214, 0.22);
+}
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--c-text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.icon-button:hover {
+  background: var(--c-surface-hover);
+  color: var(--c-text);
+}
+
+.titlebar-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--c-border);
+}
+
+.window-button {
+  width: 36px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--c-text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.window-button:hover {
+  background: var(--c-surface-hover);
+  color: var(--c-text);
+}
+.window-button-close:hover {
+  background: var(--c-danger);
+  color: white;
+}
+
+.segmented-nav {
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--c-bg);
+  border: 1px solid var(--c-border-subtle);
+}
+.segmented-nav-item:hover {
+  background: var(--c-surface-hover) !important;
+}
+
+.workspace-hero,
+.workspace-panel,
+.skill-row-shell {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspace-hero {
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.workspace-panel {
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.agent-overview-card {
+  border-radius: 10px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface-raised);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset;
+}
+
+.filter-chip {
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-secondary);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+}
+
+.toolbar-control {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  color: var(--c-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.skill-row-shell {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.skill-row-shell:hover {
+  border-color: color-mix(in srgb, var(--c-primary) 42%, var(--c-border));
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 * {

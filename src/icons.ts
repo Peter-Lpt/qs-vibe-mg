@@ -39,6 +39,12 @@ import {
   Share2,
   ArrowLeftRight,
   GitMerge,
+  History,
+  Moon,
+  Settings,
+  Square,
+  Sun,
+  Wrench,
 } from "@lucide/vue";
 
 const icons = {
@@ -79,6 +85,12 @@ const icons = {
   Share2,
   ArrowLeftRight,
   GitMerge,
+  History,
+  Moon,
+  Settings,
+  Square,
+  Sun,
+  Wrench,
 };
 
 export function registerIcons(app: App) {

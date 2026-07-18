@@ -92,10 +92,10 @@ const groups = computed(() => {
 </script>
 
 <template>
-  <div v-if="groups.length > 0" class="mb-3 rounded-lg border p-3" style="background: var(--c-surface); border-color: var(--c-border);">
+  <div v-if="groups.length > 0" class="workspace-panel">
     <div class="flex items-center gap-2 mb-2">
       <CircleAlert :size="14" style="color: var(--c-warning);" />
-      <span class="text-xs font-semibold" style="color: var(--c-text);">
+      <span class="text-xs font-semibold" style="color: var(--c-text-strong);">
         {{ t("manage.repair_title") }}
       </span>
       <span class="text-[10px]" style="color: var(--c-text-secondary);">
@@ -106,8 +106,7 @@ const groups = computed(() => {
       <button
         v-for="group in groups"
         :key="group.id"
-        class="rounded-md border px-2.5 py-2 text-left cursor-pointer transition-colors hover:bg-[var(--c-surface-hover)]"
-        style="border-color: var(--c-border); background: var(--c-bg);"
+        class="agent-overview-card px-3 py-2.5 text-left cursor-pointer transition-colors hover:bg-[var(--c-surface-hover)]"
         @click="emit('select-group', group.skills.map((skill) => skill.id), group.batch, group.id)"
       >
         <div class="flex items-center gap-2">

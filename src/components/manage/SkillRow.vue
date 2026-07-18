@@ -80,9 +80,8 @@ function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
 
 <template>
   <div
-    class="rounded-lg border transition-all"
+    class="skill-row-shell"
     :style="{
-      background: selected ? 'var(--c-primary-light)' : 'var(--c-surface)',
       borderColor: skill.has_conflict
         ? 'var(--c-warning)'
         : skill.has_dangling
@@ -98,7 +97,7 @@ function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
   >
     <!-- Collapsed header -->
     <div
-      class="flex items-center gap-3 px-3 py-2.5 cursor-pointer select-none"
+      class="flex items-center gap-3 px-3.5 py-3 cursor-pointer select-none"
       @click="toggleExpand"
     >
       <input
@@ -118,7 +117,7 @@ function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
       <CircleX v-else-if="skill.has_dangling" class="shrink-0" :size="14" style="color: var(--c-danger);" />
       <Copy v-else-if="skill.is_duplicate" class="shrink-0" :size="14" style="color: var(--c-info);" />
 
-      <span class="text-sm font-medium truncate" style="color: var(--c-text);">
+      <span class="text-sm font-semibold truncate" style="color: var(--c-text-strong);">
         {{ skill.name || skill.id }}
       </span>
 
@@ -139,8 +138,8 @@ function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
         <span
           v-for="item in allAgentStatuses"
           :key="item.agent.id"
-          class="w-3.5 h-3.5 rounded-full shrink-0 inline-flex items-center justify-center text-[8px] font-medium cursor-help"
-          :style="{ background: item.statusColor, color: item.status === 'unlinked' ? 'var(--c-text-secondary)' : 'white', border: item.status === 'unlinked' ? '1px solid var(--c-border)' : '0' }"
+          class="w-3 h-3 rounded-full shrink-0 inline-flex items-center justify-center text-[8px] font-medium cursor-help"
+          :style="{ background: item.statusColor, color: item.status === 'unlinked' ? 'var(--c-text-secondary)' : 'white', border: item.status === 'unlinked' ? '1px solid var(--c-border)' : '0', boxShadow: item.status === 'unlinked' ? 'none' : '0 0 0 2px var(--c-surface)' }"
           :title="statusTip(item)"
           @mouseenter="showAgentLegend = true"
         />
@@ -157,7 +156,7 @@ function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
         <div
           v-if="showAgentLegend"
           class="absolute right-0 top-6 z-20 w-64 rounded-md border p-2 shadow-lg"
-          style="background: var(--c-surface); border-color: var(--c-border);"
+          style="background: var(--c-surface-raised); border-color: var(--c-border);"
           @mouseenter="showAgentLegend = true"
           @mouseleave="showAgentLegend = false"
         >

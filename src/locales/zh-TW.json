@@ -5,10 +5,14 @@
   },
   "app": {
     "title": "QS-Vibe 管理",
+    "workspace_title": "技能庫工作台",
     "subtitle": "Agent Skills Library",
     "settings": "設定",
     "loading": "載入中...",
-    "version": "v0.2"
+    "version": "v0.2",
+    "window_minimize": "最小化",
+    "window_maximize": "最大化",
+    "window_close": "關閉"
   },
   "tabs": {
     "manage": "管理",
@@ -16,6 +20,7 @@
   },
   "manage": {
     "title": "軟連結管理",
+    "workspace_hint": "集中查看來源、連結狀態與需要修復的技能分布。",
     "status_all": "全部",
     "view_list": "Skill 工作台",
     "view_tree": "來源/目錄",

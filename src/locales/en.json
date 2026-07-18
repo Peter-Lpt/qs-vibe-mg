@@ -5,10 +5,14 @@
   },
   "app": {
     "title": "QS-Vibe Manager",
+    "workspace_title": "Skills Workspace",
     "subtitle": "Agent Skills Library",
     "settings": "Settings",
     "loading": "Loading...",
-    "version": "v0.2"
+    "version": "v0.2",
+    "window_minimize": "Minimize",
+    "window_maximize": "Maximize",
+    "window_close": "Close"
   },
   "tabs": {
     "manage": "Manage",
@@ -16,6 +20,7 @@
   },
   "manage": {
     "title": "Symlink Management",
+    "workspace_hint": "Review sources, link states, and skills that need repair in one workspace.",
     "status_all": "All",
     "view_list": "Skill Workbench",
     "view_tree": "Sources/Directories",

@@ -1,30 +1,44 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAppStore } from "../../stores/app";
 
 const { t } = useI18n();
 const appStore = useAppStore();
+const appWindow = getCurrentWindow();
+
+async function minimizeWindow() {
+  await appWindow.minimize();
+}
+
+async function toggleMaximizeWindow() {
+  await appWindow.toggleMaximize();
+}
+
+async function closeWindow() {
+  await appWindow.close();
+}
 </script>
 
 <template>
   <div class="flex flex-col h-screen overflow-hidden" style="background: var(--c-bg);">
     <header
-      class="flex items-center gap-4 px-5 py-3 border-b shrink-0"
-      style="border-color: var(--c-border); background: var(--c-surface);"
+      class="app-shell-header flex items-center gap-5 px-5 py-3 shrink-0"
+      data-tauri-drag-region
     >
-      <div class="flex items-center gap-2.5">
+      <div class="flex items-center gap-2.5 shrink-0" data-tauri-drag-region>
         <div
-          class="w-8 h-8 rounded-md flex items-center justify-center text-[11px] font-bold tracking-wide"
-          style="background: var(--c-primary); color: white;"
+          class="brand-mark"
+          data-tauri-drag-region
         >
           QS
         </div>
-        <div class="min-w-0">
-          <h1 class="text-sm font-semibold leading-tight" style="color: var(--c-text);">
-            {{ t('app.title') }}
+        <div class="min-w-0" data-tauri-drag-region>
+          <h1 class="text-sm font-semibold leading-tight" style="color: var(--c-text-strong);">
+            {{ t('app.workspace_title') }}
           </h1>
           <p class="text-[10px] leading-tight" style="color: var(--c-text-secondary);">
-            {{ t('app.subtitle') }}
+            {{ t('app.title') }}
           </p>
         </div>
       </div>
@@ -35,7 +49,7 @@ const appStore = useAppStore();
 
       <div class="ml-auto flex items-center gap-1">
         <button
-          class="w-8 h-8 flex items-center justify-center rounded-md cursor-pointer bg-transparent text-[var(--c-text-secondary)] hover:bg-[var(--c-surface-hover)]"
+          class="icon-button"
           @click="appStore.setTheme(appStore.resolvedTheme === 'dark' ? 'light' : 'dark')"
           :title="t('settings.theme')"
         >
@@ -43,11 +57,21 @@ const appStore = useAppStore();
           <Moon v-else :size="16" />
         </button>
         <button
-          class="w-8 h-8 flex items-center justify-center rounded-md cursor-pointer bg-transparent text-[var(--c-text-secondary)] hover:bg-[var(--c-surface-hover)]"
+          class="icon-button"
           @click="appStore.showSettings = true"
           :title="t('app.settings')"
         >
           <Settings :size="16" />
+        </button>
+        <div class="titlebar-divider" />
+        <button class="window-button" :title="t('app.window_minimize')" @click="minimizeWindow">
+          <Minus :size="14" />
+        </button>
+        <button class="window-button" :title="t('app.window_maximize')" @click="toggleMaximizeWindow">
+          <Square :size="12" />
+        </button>
+        <button class="window-button window-button-close" :title="t('app.window_close')" @click="closeWindow">
+          <X :size="15" />
         </button>
       </div>
     </header>

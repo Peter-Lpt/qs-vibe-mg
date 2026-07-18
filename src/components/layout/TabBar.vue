@@ -24,12 +24,12 @@ function selectTab(tab: TabId) {
 
 <template>
   <div
-    class="flex items-center gap-1"
+    class="segmented-nav inline-flex items-center gap-1"
   >
     <button
       v-for="tab in tabs"
       :key="tab.id"
-      class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-all"
+      class="segmented-nav-item flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md cursor-pointer transition-all"
       :style="{
         background: modelValue === tab.id ? 'var(--c-primary-light)' : 'transparent',
         color: modelValue === tab.id ? 'var(--c-primary)' : 'var(--c-text-secondary)',
