@@ -10,6 +10,7 @@ import {
   type AgentStatus,
   type AgentAction,
 } from "../../composables/useSkillAgentStatus";
+import { actionColor } from "../../composables/skillActionRegistry";
 import type { Skill, Agent } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 
@@ -96,16 +97,6 @@ watch(
 watch(mode, () => {
   selectedCells.value = defaultSelection();
 });
-
-const ACTION_COLOR: Record<AgentAction, string> = {
-  none: "var(--c-text-secondary)",
-  link: "var(--c-primary)",
-  unlink: "var(--c-text-secondary)",
-  sync_to_vibe: "var(--c-primary)",
-  replace_with_link: "var(--c-text)",
-  relink: "var(--c-warning)",
-  remove_dangling: "var(--c-danger)",
-};
 
 function hasVibe(skill: Skill): boolean {
   return skill.sources.some((s) => s.from === "vibe-lib");
@@ -207,7 +198,7 @@ function cellOf(row: Row, agent: Agent): CellView {
     else label = t("manage.batch_panel_none");
   } else {
     label = actionLabel(t, sw.effectiveAction) || st.statusLabel;
-    color = ACTION_COLOR[sw.effectiveAction];
+    color = actionColor(sw.effectiveAction);
   }
   return {
     skillId: row.skill.id,

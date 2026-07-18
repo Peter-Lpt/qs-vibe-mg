@@ -3,7 +3,8 @@ import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
-import { useSkillAgentStatus } from "../../composables/useSkillAgentStatus";
+import { useSkillAgentStatus, cellBtnLabel } from "../../composables/useSkillAgentStatus";
+import { useSkillActions } from "../../composables/useSkillActions";
 import type { Skill, Agent } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 import SkillDetail from "./SkillDetail.vue";
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const toast = useToast();
+const actions = useSkillActions((k, p) => t(k, p as Record<string, unknown>));
 
 const agentsRef = computed(() => props.agents);
 const skillRef = computed(() => props.skill);
@@ -49,7 +51,7 @@ const cardBorderColor = computed(() => {
 
 const primaryActionLabel = computed(() =>
   summary.value.primaryAction !== "none"
-    ? t(`manage.btn_${summary.value.primaryAction === "sync_to_vibe" ? "sync_from" : summary.value.primaryAction === "replace_with_link" ? "replace" : summary.value.primaryAction === "remove_dangling" ? "clean" : summary.value.primaryAction}`, { agent: primaryAgentName.value })
+    ? cellBtnLabel((k, p) => t(k, p as Record<string, unknown>), summary.value.primaryAction, primaryAgentName.value)
     : ""
 );
 
@@ -71,32 +73,7 @@ async function handlePrimaryAction() {
     return;
   }
   try {
-    switch (status.action) {
-      case "link":
-        await skillsStore.createLink(props.skill.id, status.agent.id);
-        toast.show(t("skills.linked", { agent: status.agent.name }), "success");
-        break;
-      case "unlink":
-        await skillsStore.removeLink(props.skill.id, status.agent.id, status.source?.path);
-        toast.show(t("skills.unlinked", { agent: status.agent.name }), "success");
-        break;
-      case "sync_to_vibe":
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id, true, status.source?.path);
-        toast.show(t("manage.synced_to_vibe", { agent: status.agent.name }), "success");
-        break;
-      case "replace_with_link":
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id, false, status.source?.path);
-        toast.show(t("manage.replaced_with_link", { agent: status.agent.name }), "success");
-        break;
-      case "relink":
-        await skillsStore.relink(props.skill.id, status.agent.id, status.source?.path);
-        toast.show(t("manage.relinked", { agent: status.agent.name }), "success");
-        break;
-      case "remove_dangling":
-        await skillsStore.removeLink(props.skill.id, status.agent.id, status.source?.path);
-        toast.show(t("manage.dangling_removed", { agent: status.agent.name }), "success");
-        break;
-    }
+    await actions.runAgentAction(props.skill, status);
   } catch (e: unknown) {
     toast.show(String(e), "error");
   }

@@ -1,5 +1,9 @@
 import { computed, type Ref } from "vue";
 import type { Skill, Agent, SkillSource } from "../types";
+import { ACTION_PRIORITY } from "./skillActionRegistry";
+export type { AgentAction, TFunc } from "./skillActionRegistry";
+export { actionLabel, actionStyle, cellBtnLabel } from "./skillActionRegistry";
+import type { AgentAction, TFunc } from "./skillActionRegistry";
 
 export type AgentStatusType =
   | "origin"
@@ -8,15 +12,6 @@ export type AgentStatusType =
   | "independent"
   | "dangling"
   | "unlinked";
-
-export type AgentAction =
-  | "none"
-  | "sync_to_vibe"
-  | "replace_with_link"
-  | "relink"
-  | "remove_dangling"
-  | "link"
-  | "unlink";
 
 export interface AgentStatus {
   agent: Agent;
@@ -27,8 +22,6 @@ export interface AgentStatus {
   statusColor: string;
   statusIcon: string;
 }
-
-export type TFunc = (key: string, params?: Record<string, unknown>) => string;
 
 const STATUS_META: Record<
   AgentStatusType,
@@ -65,18 +58,6 @@ const STATUS_META: Record<
     icon: "○",
   },
 };
-
-// Priority for the single "primary action" shown on a card: which action to
-// surface when collapsing a skill into one button.
-const ACTION_PRIORITY: AgentAction[] = [
-  "sync_to_vibe",
-  "relink",
-  "link",
-  "replace_with_link",
-  "remove_dangling",
-  "unlink",
-  "none",
-];
 
 export function useSkillAgentStatus(
   skill: Ref<Skill>,
@@ -287,50 +268,4 @@ export function samePath(a: string, b: string): boolean {
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "");
-}
-
-export function actionLabel(t: TFunc, action: AgentAction): string {
-  switch (action) {
-    case "link":
-      return t("manage.btn_link");
-    case "unlink":
-      return t("manage.btn_unlink");
-    case "sync_to_vibe":
-      return t("manage.btn_sync");
-    case "replace_with_link":
-      return t("manage.btn_replace");
-    case "relink":
-      return t("manage.btn_relink");
-    case "remove_dangling":
-      return t("manage.btn_clean");
-    default:
-      return "";
-  }
-}
-
-export function actionStyle(action: AgentAction): string {
-  switch (action) {
-    case "link":
-      return "background: var(--c-primary); color: white;";
-    case "sync_to_vibe":
-      return "background: var(--c-primary); color: white;";
-    case "replace_with_link":
-      return "background: var(--c-surface-hover); color: var(--c-text); border: 1px solid var(--c-border);";
-    case "relink":
-      return "background: var(--c-warning); color: white;";
-    case "remove_dangling":
-      return "background: var(--c-danger); color: white;";
-    case "unlink":
-      return "background: var(--c-surface-hover); color: var(--c-text-secondary); border: 1px solid var(--c-border);";
-    default:
-      return "";
-  }
-}
-
-/** Per-agent action button label — sync_to_vibe 改为 "从 {agent} 同步" */
-export function cellBtnLabel(t: TFunc, action: AgentAction, agentName: string): string {
-  if (action === "sync_to_vibe") {
-    return t("manage.btn_sync_from", { agent: agentName });
-  }
-  return actionLabel(t, action);
 }

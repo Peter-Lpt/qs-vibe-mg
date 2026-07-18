@@ -8,10 +8,11 @@ import { useSkillActions } from "../../composables/useSkillActions";
 import { marked } from "marked";
 import {
   useSkillAgentStatus,
-  actionLabel,
   actionStyle,
+  cellBtnLabel as registryCellBtnLabel,
   type AgentStatus,
 } from "../../composables/useSkillAgentStatus";
+import { ACTION_PRIORITY, actionColor } from "../../composables/skillActionRegistry";
 import type { Skill, Agent, SkillSource } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 
@@ -150,22 +151,14 @@ const batchAvailableActions = computed(() => {
   );
   if (selected.length === 0) return [];
 
-  const actions: { action: string; label: string; color: string }[] = [];
-  const hasLink = selected.some((s) => s.action === "link");
-  const hasSync = selected.some((s) => s.action === "sync_to_vibe");
-  const hasReplace = selected.some((s) => s.action === "replace_with_link");
-  const hasRelink = selected.some((s) => s.action === "relink");
-  const hasUnlink = selected.some((s) => s.action === "unlink");
-  const hasClean = selected.some((s) => s.action === "remove_dangling");
-
-  if (hasLink) actions.push({ action: "link", label: t("manage.btn_link"), color: "var(--c-primary)" });
-  if (hasSync && !props.skill.has_conflict) actions.push({ action: "sync_to_vibe", label: t("manage.btn_sync_from", { agent: "" }), color: "var(--c-primary)" });
-  if (hasReplace) actions.push({ action: "replace_with_link", label: t("manage.btn_replace"), color: "var(--c-text)" });
-  if (hasRelink) actions.push({ action: "relink", label: t("manage.btn_relink"), color: "var(--c-warning)" });
-  if (hasUnlink) actions.push({ action: "unlink", label: t("manage.btn_unlink"), color: "var(--c-text-secondary)" });
-  if (hasClean) actions.push({ action: "remove_dangling", label: t("manage.btn_clean"), color: "var(--c-danger)" });
-
-  return actions;
+  return ACTION_PRIORITY.filter((action) => action !== "none")
+    .filter((action) => selected.some((s) => s.action === action))
+    .filter((action) => action !== "sync_to_vibe" || !props.skill.has_conflict)
+    .map((action) => ({
+      action,
+      label: registryCellBtnLabel((k, p) => t(k, p as Record<string, unknown>), action, ""),
+      color: actionColor(action),
+    }));
 });
 
 const comparableSources = computed(() =>
@@ -251,10 +244,8 @@ const sourceRows = computed(() =>
   })
 );
 
-// 逐 agent 按钮文案：sync 显示「从 {agent} 同步」，其余复用 actionLabel
 function cellBtnLabel(action: string, agentName: string): string {
-  if (action === "sync_to_vibe") return t("manage.btn_sync_from", { agent: agentName });
-  return actionLabel(t, action as never);
+  return registryCellBtnLabel((k, p) => t(k, p as Record<string, unknown>), action as AgentStatus["action"], agentName);
 }
 
 function toggleAgentSelect(agentId: string) {
@@ -291,35 +282,9 @@ async function handleAction(status: ReturnType<typeof useSkillAgentStatus>["allA
 }
 
 async function runAction(status: AgentStatus) {
-
   try {
-    switch (status.action) {
-      case "link":
-        await skillsStore.createLink(props.skill.id, status.agent.id);
-        toast.show(t("skills.linked", { agent: status.agent.name }), "success");
-        break;
-      case "unlink":
-        await skillsStore.removeLink(props.skill.id, status.agent.id, status.source?.path);
-        toast.show(t("skills.unlinked", { agent: status.agent.name }), "success");
-        break;
-      case "sync_to_vibe":
-        resolvingConflict.value = status.agent.id;
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id, true, status.source?.path);
-        toast.show(t("manage.synced_to_vibe", { agent: status.agent.name }), "success");
-        break;
-      case "replace_with_link":
-        await skillsStore.syncToVibe(props.skill.id, status.agent.id, false, status.source?.path);
-        toast.show(t("manage.replaced_with_link", { agent: status.agent.name }), "success");
-        break;
-      case "relink":
-        await skillsStore.relink(props.skill.id, status.agent.id, status.source?.path);
-        toast.show(t("manage.relinked", { agent: status.agent.name }), "success");
-        break;
-      case "remove_dangling":
-        await skillsStore.removeLink(props.skill.id, status.agent.id, status.source?.path);
-        toast.show(t("manage.dangling_removed", { agent: status.agent.name }), "success");
-        break;
-    }
+    if (status.action === "sync_to_vibe") resolvingConflict.value = status.agent.id;
+    await actions.runAgentAction(props.skill, status);
   } catch (e: unknown) {
     toast.show(String(e), "error");
   } finally {

@@ -4,6 +4,8 @@ import { marked } from "marked";
 import { useSkillsStore } from "../stores/skills";
 import { useToast } from "./useToast";
 import type { Skill, SkillSource } from "../types";
+import type { AgentStatus } from "./useSkillAgentStatus";
+import { actionSuccessLabel } from "./skillActionRegistry";
 
 export type SkillActionSource =
   | Pick<SkillSource, "path" | "from" | "is_symlink" | "symlink_target">
@@ -69,6 +71,33 @@ export function useSkillActions(t: (key: string, params?: Record<string, unknown
     await skillsStore.relink(skill.id, agentId, source?.path);
   }
 
+  async function runAgentAction(skill: Skill, status: AgentStatus) {
+    switch (status.action) {
+      case "link":
+        await skillsStore.createLink(skill.id, status.agent.id);
+        break;
+      case "unlink":
+        await skillsStore.removeLink(skill.id, status.agent.id, status.source?.path);
+        break;
+      case "sync_to_vibe":
+        await skillsStore.syncToVibe(skill.id, status.agent.id, true, status.source?.path);
+        break;
+      case "replace_with_link":
+        await skillsStore.syncToVibe(skill.id, status.agent.id, false, status.source?.path);
+        break;
+      case "relink":
+        await skillsStore.relink(skill.id, status.agent.id, status.source?.path);
+        break;
+      case "remove_dangling":
+        await skillsStore.removeLink(skill.id, status.agent.id, status.source?.path);
+        break;
+      default:
+        return;
+    }
+    const message = actionSuccessLabel(t, status.action, status.agent.name);
+    if (message) toast.show(message, "success");
+  }
+
   return {
     previewContent,
     previewLoading,
@@ -80,5 +109,6 @@ export function useSkillActions(t: (key: string, params?: Record<string, unknown
     unlink,
     syncToLibrary,
     relink,
+    runAgentAction,
   };
 }
