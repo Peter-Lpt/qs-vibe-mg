@@ -211,7 +211,7 @@ onMounted(() => {
         </button>
       </div>
 
-      <div class="settings-scroll-body p-4 space-y-4 overflow-y-auto">
+      <div class="settings-scroll-body space-y-4 overflow-y-auto">
         <section class="rounded-md border p-3" style="border-color: var(--c-border); background: var(--c-bg);">
           <div class="flex items-center justify-between gap-3">
             <div>

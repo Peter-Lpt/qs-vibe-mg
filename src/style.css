@@ -185,16 +185,18 @@ body {
 }
 
 .settings-scroll-body {
+  margin-right: 8px;
+  padding: 16px 8px 16px 16px;
   scrollbar-gutter: stable;
-  padding-right: 18px;
 }
 
 .settings-scroll-body::-webkit-scrollbar {
-  width: 8px;
+  width: 7px;
 }
 
 .settings-scroll-body::-webkit-scrollbar-thumb {
-  border: 2px solid var(--c-surface);
+  border: 2px solid transparent;
+  background-clip: content-box;
   background: color-mix(in srgb, var(--c-text-tertiary) 60%, transparent);
 }
 
