@@ -15,6 +15,7 @@ use crate::utils::datetime;
 use crate::utils::fs as vibe_fs;
 use crate::utils::fs::copy_dir_all;
 use crate::utils::history::record_action;
+use crate::utils::origin::{build_install_origin, read_skill_origin, write_skill_origin};
 use crate::utils::path::vibe_skills_dir;
 use crate::models::history::HistoryAction;
 
@@ -570,6 +571,9 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
 
     copy_dir_all(source, &dest)?;
 
+    let origin = build_install_origin(source);
+    write_skill_origin(&dest, &origin)?;
+
     if let Err(e) = record_action(HistoryAction::Install, &name, None, None) {
         warn!("Failed to record Install action: {}", e);
     }
@@ -583,17 +587,18 @@ pub fn install_skill(source_path: String) -> Result<Skill, VibeError> {
         description,
         path: dest.to_string_lossy().to_string(),
         linked_agents: Vec::new(),
-        sources: vec![SkillSource {
-            from: "vibe-lib".to_string(),
-            source_kind: "library".to_string(),
-            path: dest.to_string_lossy().to_string(),
-            name,
-            description: String::new(),
-            is_symlink: false,
-            symlink_target: None,
-            content_hash: hash,
-            modified_at: modified_at.clone(),
-        }],
+            sources: vec![SkillSource {
+                from: "vibe-lib".to_string(),
+                source_kind: "library".to_string(),
+                path: dest.to_string_lossy().to_string(),
+                name,
+                description: String::new(),
+                is_symlink: false,
+                symlink_target: None,
+                content_hash: hash,
+                modified_at: modified_at.clone(),
+                origin: Some(origin),
+            }],
         license,
         compatibility,
         metadata,
@@ -810,6 +815,7 @@ fn scan_directory(
                 symlink_target,
                 content_hash: String::new(),
                 modified_at: modified_at.clone(),
+                origin: read_skill_origin(&path),
             };
 
             map.entry(id.clone())
@@ -857,6 +863,7 @@ fn scan_directory(
                 symlink_target,
                 content_hash: hash,
                 modified_at: modified_at.clone(),
+                origin: read_skill_origin(&path),
             };
 
             map.entry(id.clone())

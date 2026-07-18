@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::models::origin::SkillOrigin;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Skill {
     /// 文件夹名，作为唯一标识
@@ -60,6 +62,9 @@ pub struct SkillSource {
     /// 该来源目录最后修改时间
     #[serde(default)]
     pub modified_at: String,
+    /// 该来源的安装/导入来源记录
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<SkillOrigin>,
 }
 
 fn default_source_kind() -> String {

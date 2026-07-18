@@ -8,6 +8,21 @@ export interface SkillSource {
   symlink_target?: string;
   content_hash: string;
   modified_at?: string;
+  origin?: SkillOrigin;
+}
+
+export interface SkillOrigin {
+  method: string;
+  provider?: string;
+  url?: string;
+  commit?: string;
+  installed_at: string;
+  installed_by?: string;
+  trust_level?: string;
+  source_path?: string;
+  command?: string;
+  update_command?: string;
+  last_checked_at?: string;
 }
 
 export interface Skill {

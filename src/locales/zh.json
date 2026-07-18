@@ -62,6 +62,7 @@
     "source_kind_project": "Project",
     "source_kind_external": "External",
     "source_confidence_explicit": "{provider}",
+    "source_confidence_recorded": "已记录来源",
     "source_confidence_inferred": "可能来自 {provider}",
     "source_confidence_unknown": "未知来源",
     "library": "技能库",

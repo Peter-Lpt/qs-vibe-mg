@@ -214,14 +214,27 @@ const sourceRows = computed(() =>
         : /gitlab/i.test(`${metadataUrl || ""} ${source.path}`)
           ? "GitLab"
           : "";
-    const confidence = inferredProvider
+    const confidence = source.origin
+      ? t("manage.source_confidence_recorded")
+      : inferredProvider
         ? t("manage.source_confidence_inferred", { provider: inferredProvider })
         : t("manage.source_confidence_unknown");
+    const originTitle = source.origin
+      ? [
+          source.origin.method ? `method: ${source.origin.method}` : "",
+          source.origin.provider ? `provider: ${source.origin.provider}` : "",
+          source.origin.source_path ? `path: ${source.origin.source_path}` : "",
+          source.origin.commit ? `commit: ${source.origin.commit}` : "",
+          source.origin.installed_at ? `installed_at: ${source.origin.installed_at}` : "",
+          source.origin.trust_level ? `trust: ${source.origin.trust_level}` : "",
+        ].filter(Boolean).join("\n")
+      : "";
     return {
       source,
       label: sourceLabel(source),
       kind: source.source_kind || (source.from === "vibe-lib" ? "library" : source.from.startsWith("project:") ? "project" : "agent"),
       confidence,
+      originTitle,
       dangling: source.is_symlink && (!source.symlink_target || source.content_hash === ""),
       isLatest: source.path === latestSourcePath.value,
       sameCount: sameContentCount(source),
@@ -560,7 +573,7 @@ function getAgentNameFromPath(path: string): string {
           <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);">
             {{ shortHash(row.source) }}
           </span>
-          <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="row.confidence">
+          <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="row.originTitle || row.confidence">
             {{ row.confidence }}
           </span>
           <button
