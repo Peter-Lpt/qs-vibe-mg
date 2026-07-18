@@ -12,3 +12,4 @@ This folder collects the v0.2 product and implementation notes.
 | 04 | [v0.2 Task Audit](./04-v0.2-task-audit.md) | Audit of the plan, validation criteria, phases, and residual risks |
 | 05 | [Agent Source Optimization](./05-agent-source-optimization.md) | Common source naming, custom agent config, and reference insights |
 | 06 | [Project Source Registry](./06-project-source-registry.md) | Project source scope, suggested roots, and conservative discovery rules |
+| 07 | [Feature Backlog](./07-feature-backlog.md) | Consolidated follow-up tasks from prior audits and reference reviews |
