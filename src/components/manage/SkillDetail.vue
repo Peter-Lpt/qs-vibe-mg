@@ -507,6 +507,8 @@ async function handleBatchAction(action: string) {
 
     if (result.errors.length > 0) {
       toast.show(t("manage.batch_result", { success: result.synced_count, error: result.errors.length }), "info");
+    } else if (result.warnings.length > 0) {
+      toast.show(t("manage.batch_panel_result_warning", { success: result.synced_count, warning: result.warnings.length }), "warning");
     } else {
       toast.show(t("manage.batch_success", { count: result.synced_count }), "success");
     }

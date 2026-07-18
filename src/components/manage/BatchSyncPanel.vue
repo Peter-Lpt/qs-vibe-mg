@@ -53,6 +53,7 @@ interface BatchResult {
   synced: number;
   success: DryRunItem[];
   failed: { item: DryRunItem | null; skillId: string; agentId: string; message: string }[];
+  warnings: { skillId: string; message: string }[];
   skipped: DryRunItem[];
   conflicts: DryRunItem[];
   blocked: DryRunItem[];
@@ -412,10 +413,14 @@ async function runExecute(cells: { skillId: string; agentId: string; action: Age
 
   let totalSynced = 0;
   const errors: { skillId: string; agentId: string; message: string }[] = [];
+  const warnings: { skillId: string; message: string }[] = [];
   for (const g of groups.values()) {
     try {
       const res = await skillsStore.batchSkillAction(g.skillId, g.agentIds, g.action, true);
       totalSynced += res.synced_count;
+      for (const warning of res.warnings) {
+        warnings.push({ skillId: g.skillId, message: warning });
+      }
       for (const e of res.errors) {
         const ci = e.indexOf(": ");
         const agentId = ci >= 0 ? e.slice(0, ci) : "";
@@ -442,13 +447,16 @@ async function runExecute(cells: { skillId: string; agentId: string; action: Age
       item: plan.find((item) => item.key === `${e.skillId}::${e.agentId}`) ?? null,
       ...e,
     })),
+    warnings,
     skipped: plan.filter((item) => item.category === "skip"),
     conflicts: plan.filter((item) => item.category === "conflict"),
     blocked: plan.filter((item) => item.category === "blocked"),
   };
 
-  if (errors.length === 0) {
+  if (errors.length === 0 && warnings.length === 0) {
     toast.show(t("manage.batch_panel_result_success", { count: totalSynced }), "success");
+  } else if (errors.length === 0) {
+    toast.show(t("manage.batch_panel_result_warning", { success: totalSynced, warning: warnings.length }), "warning");
   } else {
     toast.show(
       t("manage.batch_panel_result_error", { success: totalSynced, error: errors.length }),
@@ -474,6 +482,20 @@ function actionName(action: DryRunItem["action"]): string {
   if (action === "needs_import") return t("manage.batch_panel_needs_import");
   if (action === "skipped") return t("manage.batch_result_skipped");
   return actionLabel(t, action) || action;
+}
+
+function resultEntryText(entry: DryRunItem | BatchResult["failed"][number] | BatchResult["warnings"][number]): string {
+  if ("item" in entry) {
+    if (entry.item) return `${entry.item.skillName} @ ${entry.item.agentName}: ${entry.message}`;
+    const skillName = skillsStore.skills.find((s) => s.id === entry.skillId)?.name || entry.skillId;
+    const agentName = agentsStore.agents.find((a) => a.id === entry.agentId)?.name || entry.agentId || "?";
+    return `${skillName} @ ${agentName}: ${entry.message}`;
+  }
+  if ("message" in entry) {
+    const skillName = skillsStore.skills.find((s) => s.id === entry.skillId)?.name || entry.skillId;
+    return `${skillName}: ${entry.message}`;
+  }
+  return `${entry.skillName} @ ${entry.agentName} · ${entry.reason}`;
 }
 </script>
 
@@ -701,6 +723,7 @@ function actionName(action: DryRunItem["action"]): string {
             {{ t("manage.batch_result_counts", {
               success: result.success.length,
               failed: result.failed.length,
+              warning: result.warnings.length,
               skipped: result.skipped.length,
               conflict: result.conflicts.length,
               blocked: result.blocked.length,
@@ -712,6 +735,7 @@ function actionName(action: DryRunItem["action"]): string {
             v-for="group in [
               { key: 'success', label: t('manage.batch_result_success_group'), color: 'var(--c-success)', items: result.success },
               { key: 'failed', label: t('manage.batch_result_failed_group'), color: 'var(--c-danger)', items: result.failed },
+              { key: 'warnings', label: t('manage.batch_result_warning_group'), color: 'var(--c-warning)', items: result.warnings },
               { key: 'skipped', label: t('manage.batch_result_skipped_group'), color: 'var(--c-text-secondary)', items: result.skipped },
               { key: 'conflicts', label: t('manage.batch_result_conflict_group'), color: 'var(--c-warning)', items: result.conflicts },
               { key: 'blocked', label: t('manage.batch_result_blocked_group'), color: 'var(--c-danger)', items: result.blocked },
@@ -724,16 +748,7 @@ function actionName(action: DryRunItem["action"]): string {
               {{ group.label }} ({{ group.items.length }})
             </div>
             <div v-for="(entry, i) in group.items.slice(0, 20)" :key="i" class="text-[10px] truncate py-0.5" style="color: var(--c-text-secondary);">
-              <template v-if="'item' in entry && entry.item">
-                {{ entry.item.skillName }} @ {{ entry.item.agentName }}: {{ entry.message }}
-              </template>
-              <template v-else-if="'item' in entry">
-                {{ skillsStore.skills.find((s) => s.id === entry.skillId)?.name || entry.skillId }}
-                @ {{ agentsStore.agents.find((a) => a.id === entry.agentId)?.name || entry.agentId || "?" }}: {{ entry.message }}
-              </template>
-              <template v-else>
-                {{ entry.skillName }} @ {{ entry.agentName }} · {{ entry.reason }}
-              </template>
+              {{ resultEntryText(entry) }}
             </div>
           </div>
         </div>

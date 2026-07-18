@@ -3,6 +3,12 @@ use std::path::{Path, PathBuf};
 
 use crate::errors::VibeError;
 
+#[derive(Debug, Clone)]
+pub struct LinkCreationReport {
+    pub mode: String,
+    pub warning: Option<String>,
+}
+
 /// 规范化路径：去除 Windows `\\?\` 前缀，转为绝对路径
 pub fn normalize_path(path: &Path) -> PathBuf {
     // 先尝试 canonicalize 获取绝对路径
@@ -47,20 +53,44 @@ pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), VibeError> {
 /// Windows: 使用 junction（目录链接，无需管理员权限）
 /// macOS/Linux: 使用 symlink
 pub fn create_symlink(original: &Path, link: &Path) -> Result<(), VibeError> {
+    create_symlink_with_report(original, link).map(|_| ())
+}
+
+/// 创建链接并返回实际采用的链接模式。
+///
+/// Windows 下先尝试 symlink；目录 symlink 失败时再显式 fallback 到 junction，
+/// 调用方必须把 warning 展示或写入结果，避免静默降级。
+pub fn create_symlink_with_report(
+    original: &Path,
+    link: &Path,
+) -> Result<LinkCreationReport, VibeError> {
     // 确保 link 的父目录存在
     if let Some(parent) = link.parent() {
         if !parent.exists() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).map_err(|e| {
+                VibeError::Path(format!(
+                    "无法创建链接父目录：{}。原因：{}",
+                    parent.display(),
+                    classify_io_error(&e)
+                ))
+            })?;
         }
     }
 
     // 如果 link 已存在，检查是否指向同一目标
-    if link.exists() || is_symlink(link) {
+    if link.exists() || is_link(link) {
         let meta = link.symlink_metadata().map_err(VibeError::Io)?;
-        if meta.file_type().is_symlink() {
-            if let Ok(target) = fs::read_link(link) {
+        if meta.file_type().is_symlink() || is_link(link) {
+            if let Ok(target) = read_link_target(link) {
                 if normalize_path(&target) == normalize_path(original) {
-                    return Ok(());
+                    return Ok(LinkCreationReport {
+                        mode: if is_junction(link) {
+                            "junction".to_string()
+                        } else {
+                            "symlink".to_string()
+                        },
+                        warning: None,
+                    });
                 }
             }
         }
@@ -77,22 +107,86 @@ pub fn create_symlink(original: &Path, link: &Path) -> Result<(), VibeError> {
         });
     }
 
-    #[cfg(windows)]
-    {
-        // Windows: 使用 junction（目录链接，无需管理员权限）
-        if original.is_dir() {
-            std::os::windows::fs::symlink_dir(original, link)?;
-        } else {
-            std::os::windows::fs::symlink_file(original, link)?;
+    create_platform_link(original, link)
+}
+
+#[cfg(windows)]
+fn create_platform_link(original: &Path, link: &Path) -> Result<LinkCreationReport, VibeError> {
+    let symlink_result = if original.is_dir() {
+        std::os::windows::fs::symlink_dir(original, link)
+    } else {
+        std::os::windows::fs::symlink_file(original, link)
+    };
+
+    match symlink_result {
+        Ok(()) => Ok(LinkCreationReport {
+            mode: "symlink".to_string(),
+            warning: None,
+        }),
+        Err(symlink_error) if original.is_dir() => {
+            let junction_result = std::process::Command::new("cmd")
+                .arg("/C")
+                .arg("mklink")
+                .arg("/J")
+                .arg(link)
+                .arg(original)
+                .output();
+
+            match junction_result {
+                Ok(output) if output.status.success() => Ok(LinkCreationReport {
+                    mode: "junction".to_string(),
+                    warning: Some(format!(
+                        "Windows symlink 创建失败，已 fallback 为 junction。symlink 失败原因：{}",
+                        classify_io_error(&symlink_error)
+                    )),
+                }),
+                Ok(output) => Err(VibeError::Path(format!(
+                    "无法创建链接。symlink 失败原因：{}；junction fallback 也失败：{}",
+                    classify_io_error(&symlink_error),
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ))),
+                Err(junction_error) => Err(VibeError::Path(format!(
+                    "无法创建链接。symlink 失败原因：{}；junction fallback 启动失败：{}",
+                    classify_io_error(&symlink_error),
+                    classify_io_error(&junction_error)
+                ))),
+            }
         }
+        Err(e) => Err(VibeError::Path(format!(
+            "无法创建 symlink：{} -> {}。原因：{}",
+            link.display(),
+            original.display(),
+            classify_io_error(&e)
+        ))),
     }
+}
 
-    #[cfg(not(windows))]
-    {
-        std::os::unix::fs::symlink(original, link)?;
+#[cfg(not(windows))]
+fn create_platform_link(original: &Path, link: &Path) -> Result<LinkCreationReport, VibeError> {
+    std::os::unix::fs::symlink(original, link).map_err(|e| {
+        VibeError::Path(format!(
+            "无法创建 symlink：{} -> {}。原因：{}",
+            link.display(),
+            original.display(),
+            classify_io_error(&e)
+        ))
+    })?;
+    Ok(LinkCreationReport {
+        mode: "symlink".to_string(),
+        warning: None,
+    })
+}
+
+pub fn classify_io_error(error: &std::io::Error) -> String {
+    match error.kind() {
+        std::io::ErrorKind::PermissionDenied => {
+            "权限不足。Windows 下请启用开发者模式，或使用管理员权限运行；也可以允许 junction fallback。".to_string()
+        }
+        std::io::ErrorKind::AlreadyExists => "目标路径已存在。".to_string(),
+        std::io::ErrorKind::NotFound => "源路径或目标父目录不存在。".to_string(),
+        std::io::ErrorKind::InvalidInput => "路径格式无效。".to_string(),
+        kind => format!("{} ({})", error, kind),
     }
-
-    Ok(())
 }
 
 /// 删除 symlink（不删除源文件）

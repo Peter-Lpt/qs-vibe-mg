@@ -4,6 +4,12 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Skill, DashboardData, SkillIssue } from "../types";
 import { useAgentsStore } from "./agents";
 
+export interface SyncActionResult {
+  synced_count: number;
+  errors: string[];
+  warnings: string[];
+}
+
 export const useSkillsStore = defineStore("skills", () => {
   const skills = ref<Skill[]>([]);
   const loading = ref(false);
@@ -80,10 +86,11 @@ export const useSkillsStore = defineStore("skills", () => {
     }
   }
 
-  async function createLink(skillId: string, agentId: string) {
-    await invoke("create_link", { skillId, agentId });
+  async function createLink(skillId: string, agentId: string): Promise<string> {
+    const result = await invoke<string>("create_link", { skillId, agentId });
     refreshSkills();
     useAgentsStore().fetchAgents();
+    return result;
   }
 
   async function removeLink(skillId: string, agentId: string, sourcePath?: string) {
@@ -126,22 +133,25 @@ export const useSkillsStore = defineStore("skills", () => {
     agentId: string,
     force = false,
     sourcePath?: string
-  ) {
-    await invoke("sync_to_vibe", { skillId, agentId, force, sourcePath: sourcePath ?? null });
+  ): Promise<string> {
+    const result = await invoke<string>("sync_to_vibe", { skillId, agentId, force, sourcePath: sourcePath ?? null });
     refreshSkills();
     useAgentsStore().fetchAgents();
+    return result;
   }
 
-  async function relink(skillId: string, agentId: string, sourcePath?: string) {
-    await invoke("relink", { skillId, agentId, sourcePath: sourcePath ?? null });
+  async function relink(skillId: string, agentId: string, sourcePath?: string): Promise<string> {
+    const result = await invoke<string>("relink", { skillId, agentId, sourcePath: sourcePath ?? null });
     refreshSkills();
     useAgentsStore().fetchAgents();
+    return result;
   }
 
-  async function replaceWithLibrary(skillId: string, agentId: string, sourcePath?: string) {
-    await invoke("replace_with_library", { skillId, agentId, sourcePath: sourcePath ?? null });
+  async function replaceWithLibrary(skillId: string, agentId: string, sourcePath?: string): Promise<string> {
+    const result = await invoke<string>("replace_with_library", { skillId, agentId, sourcePath: sourcePath ?? null });
     refreshSkills();
     useAgentsStore().fetchAgents();
+    return result;
   }
 
   async function batchSkillAction(
@@ -149,8 +159,8 @@ export const useSkillsStore = defineStore("skills", () => {
     agentIds: string[],
     action: string,
     silent = false
-  ): Promise<{ synced_count: number; errors: string[] }> {
-    const result = await invoke<{ synced_count: number; errors: string[] }>(
+  ): Promise<SyncActionResult> {
+    const result = await invoke<SyncActionResult>(
       "batch_skill_action",
       { skillId, agentIds, action }
     );
