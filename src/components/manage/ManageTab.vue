@@ -69,11 +69,12 @@ const sharedSkills = computed(() => skillsStore.skills.filter((skill) => skill.s
 const uniqueSkills = computed(() => skillsStore.skills.filter((skill) => skill.sources.filter((source) => source.from !== "vibe-lib").length === 1));
 const issueSkills = computed(() => skillsStore.skills.filter((skill) => skill.has_conflict || skill.has_dangling));
 const sortOptions = computed(() => [
-  { value: "status", label: t("manage.sort_by_status_priority") || "操作优先" },
-  { value: "name", label: t("manage.sort_by_name") || "名称" },
-  { value: "sources", label: t("manage.sort_by_sources") || "来源数" },
-]);
-const currentSortLabel = computed(() => sortOptions.value.find((option) => option.value === filterModel.sort.value)?.label || "排序");
+  { value: "status", label: t("manage.sort_by_status_priority") || "需处理优先" },
+  { value: "updated", label: t("manage.sort_by_updated") || "最近更新" },
+  { value: "name", label: t("manage.sort_by_name") || "名称 A-Z" },
+  { value: "linked_agents", label: t("manage.sort_by_linked_agents") || "关联 Agent 数" },
+].filter((option) => option.value !== "linked_agents" || detectedAgents.value.length > 1));
+const currentSortLabel = computed(() => sortOptions.value.find((option) => option.value === filterModel.sort.value)?.label || t("manage.sort_label") || "显示顺序");
 
 function clearAllFilters() {
   filterModel.clearFilters();
@@ -93,7 +94,7 @@ function deselectAllSkills() {
   selectionModel.clearSelection();
 }
 
-function chooseSort(value: "status" | "name" | "sources") {
+function chooseSort(value: "status" | "updated" | "name" | "linked_agents") {
   filterModel.sort.value = value;
   sortMenuOpen.value = false;
 }
@@ -336,7 +337,7 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
               type="button"
               aria-haspopup="listbox"
               :aria-expanded="sortMenuOpen"
-              :aria-label="t('manage.sort_label') || '排序方式'"
+              :aria-label="t('manage.sort_label') || '显示顺序'"
               @click.stop="sortMenuOpen = !sortMenuOpen"
             >
               <span class="truncate">{{ currentSortLabel }}</span>
@@ -356,7 +357,7 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
                 type="button"
                 role="option"
                 :aria-selected="option.value === filterModel.sort.value"
-                @click="chooseSort(option.value as 'status' | 'name' | 'sources')"
+                @click="chooseSort(option.value as 'status' | 'updated' | 'name' | 'linked_agents')"
               >
                 <span>{{ option.label }}</span>
                 <Check v-if="option.value === filterModel.sort.value" :size="13" />

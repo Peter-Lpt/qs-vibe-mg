@@ -174,7 +174,6 @@ export function useSkillAgentStatus(
 
     const needsAction = allAgentStatuses.value.filter(
       (s) =>
-        s.status === "independent" ||
         s.status === "dangling" ||
         s.status === "linked_elsewhere"
     );
@@ -185,6 +184,16 @@ export function useSkillAgentStatus(
         color: "var(--c-warning)",
       });
     }
+
+    const optionalSync = allAgentStatuses.value.filter((s) => s.status === "independent");
+    if (optionalSync.length > 0) {
+      groups.push({
+        label: t("manage.group_optional_sync"),
+        items: optionalSync,
+        color: "var(--c-text-secondary)",
+      });
+    }
+
 
     const normal = allAgentStatuses.value.filter(
       (s) => s.status === "origin" || s.status === "synced"
@@ -224,7 +233,6 @@ export function useSkillAgentStatus(
     const statuses = allAgentStatuses.value;
     const needsAction = statuses.filter(
       (s) =>
-        s.status === "independent" ||
         s.status === "dangling" ||
         s.status === "linked_elsewhere"
     );

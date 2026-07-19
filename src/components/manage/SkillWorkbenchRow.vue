@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillAgentStatus, type AgentStatus } from "../../composables/useSkillAgentStatus";
 import type { Agent, Skill } from "../../types";
+import { classifySkillSources } from "./manageFilters";
 import SkillDetail from "./SkillDetail.vue";
 
 const props = defineProps<{
@@ -28,11 +29,10 @@ const { allAgentStatuses } = useSkillAgentStatus(skillRef, agentsRef, (key, para
 );
 
 const statusesByAgent = computed(() => new Map(allAgentStatuses.value.map((status) => [status.agent.id, status])));
-const needsAttention = computed(() =>
-  props.skill.has_conflict ||
-  props.skill.has_dangling ||
-  allAgentStatuses.value.some((status) => status.status === "independent" || status.status === "linked_elsewhere")
-);
+const needsAttention = computed(() => {
+  const sourceInfo = classifySkillSources(props.skill, props.agents);
+  return props.skill.has_conflict || props.skill.has_dangling || sourceInfo.hasLinkedElsewhere;
+});
 
 function statusFor(agent: Agent): AgentStatus | undefined {
   return statusesByAgent.value.get(agent.id);

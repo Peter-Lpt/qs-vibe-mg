@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { Agent, Skill } from "../../types";
+import { classifySkillSources } from "./manageFilters";
 import SkillWorkbenchRow from "./SkillWorkbenchRow.vue";
 
 const props = defineProps<{
@@ -31,11 +32,10 @@ const layoutMode = computed<"empty" | "single" | "matrix" | "wide">(() => {
   return "wide";
 });
 
-const attentionSkills = computed(() => props.skills.filter((skill) =>
-  skill.has_conflict ||
-  skill.has_dangling ||
-  skill.sources.some((source) => source.from !== "vibe-lib" && !source.is_symlink)
-));
+const attentionSkills = computed(() => props.skills.filter((skill) => {
+  const sourceInfo = classifySkillSources(skill, detectedAgents.value);
+  return skill.has_conflict || skill.has_dangling || sourceInfo.hasLinkedElsewhere;
+}));
 const normalSkills = computed(() => props.skills.filter((skill) => !attentionSkills.value.includes(skill)));
 const allVisibleSelected = computed(() => props.skills.length > 0 && props.skills.every((skill) => props.selectedIds.has(skill.id)));
 

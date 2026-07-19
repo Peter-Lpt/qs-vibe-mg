@@ -5,7 +5,7 @@ export type StatusPreset = "all" | "needs_attention" | "linked_any" | "unlinked_
 export type IssueFilter = "conflict" | "dangling" | "duplicate";
 export type LibraryScope = "missing_library" | "library_only";
 export type AgentMatch = "any" | "exclude";
-export type SortMode = "status" | "name" | "sources";
+export type SortMode = "status" | "updated" | "name" | "linked_agents";
 
 export interface ManageFilterState {
   query: string;
@@ -24,6 +24,7 @@ export interface SourceClassification {
   hasExternal: boolean;
   hasAgentSymlink: boolean;
   hasIndependentAgentCopy: boolean;
+  hasLinkedElsewhere: boolean;
 }
 
 function sourceKind(source: SkillSource, agentIds: ReadonlySet<string>): "library" | "agent" | "project" | "external" {
@@ -32,6 +33,10 @@ function sourceKind(source: SkillSource, agentIds: ReadonlySet<string>): "librar
   if (source.from.startsWith("project:")) return "project";
   if (agentIds.has(source.from)) return "agent";
   return "external";
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "").toLocaleLowerCase();
 }
 
 export function classifySkillSources(skill: Skill, agents: readonly Agent[] = []): SourceClassification {
@@ -43,6 +48,7 @@ export function classifySkillSources(skill: Skill, agents: readonly Agent[] = []
     hasExternal: false,
     hasAgentSymlink: false,
     hasIndependentAgentCopy: false,
+    hasLinkedElsewhere: false,
   };
 
   for (const source of skill.sources) {
@@ -57,6 +63,12 @@ export function classifySkillSources(skill: Skill, agents: readonly Agent[] = []
     if (kind === "external") classification.hasExternal = true;
   }
 
+  const librarySource = skill.sources.find((source) => sourceKind(source, agentIds) === "library");
+  classification.hasLinkedElsewhere = !!librarySource?.path && skill.sources.some((source) => {
+    if (sourceKind(source, agentIds) !== "agent" || !source.is_symlink || !source.symlink_target) return false;
+    return normalizePath(source.symlink_target) !== normalizePath(librarySource.path);
+  });
+
   return classification;
 }
 
@@ -68,7 +80,7 @@ export function matchesStatusPreset(
   if (preset === "all") return true;
   const sources = classifySkillSources(skill, agents);
   if (preset === "needs_attention") {
-    return skill.has_conflict || skill.has_dangling || sources.hasIndependentAgentCopy;
+    return skill.has_conflict || skill.has_dangling || sources.hasLinkedElsewhere;
   }
   if (preset === "linked_any") return sources.hasAgentSymlink;
   return !sources.hasAgentSymlink;
@@ -121,16 +133,34 @@ export function matchesQuery(skill: Skill, query: string): boolean {
 function statusPriority(skill: Skill, agents: readonly Agent[]): number {
   if (skill.has_conflict) return 0;
   if (skill.has_dangling) return 1;
-  if (matchesStatusPreset(skill, "needs_attention", agents)) return 2;
+  if (classifySkillSources(skill, agents).hasLinkedElsewhere) return 2;
   if (!matchesStatusPreset(skill, "linked_any", agents)) return 3;
   return 4;
 }
 
+function skillName(skill: Skill): string {
+  return skill.name || skill.id;
+}
+
+function modifiedTimestamp(skill: Skill): number {
+  const timestamp = Date.parse(skill.modified_at || "");
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function compareName(left: Skill, right: Skill): number {
+  return skillName(left).localeCompare(skillName(right), undefined, { sensitivity: "base" }) || left.id.localeCompare(right.id);
+}
+
 export function sortSkills(skills: readonly Skill[], sort: SortMode, agents: readonly Agent[]): Skill[] {
   return [...skills].sort((left, right) => {
-    if (sort === "name") return (left.name || left.id).localeCompare(right.name || right.id);
-    if (sort === "sources") return right.sources.length - left.sources.length || left.id.localeCompare(right.id);
-    return statusPriority(left, agents) - statusPriority(right, agents) || (left.name || left.id).localeCompare(right.name || right.id);
+    if (sort === "name") return compareName(left, right);
+    if (sort === "updated") {
+      return modifiedTimestamp(right) - modifiedTimestamp(left) || compareName(left, right);
+    }
+    if (sort === "linked_agents") {
+      return right.linked_agents.length - left.linked_agents.length || compareName(left, right);
+    }
+    return statusPriority(left, agents) - statusPriority(right, agents) || modifiedTimestamp(right) - modifiedTimestamp(left) || compareName(left, right);
   });
 }
 
