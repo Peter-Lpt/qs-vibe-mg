@@ -47,7 +47,15 @@ const pendingPlanOverwrite = ref(false);
 const selectedConflictPath = ref<string>("");
 const resolvingPlan = ref(false);
 const cleaningDanglingPath = ref<string | null>(null);
+const pendingAgentDelete = ref<SkillSource | null>(null);
+const deletingAgentPath = ref<string | null>(null);
 const updatingSkill = ref(false);
+const showMarkdownPreview = ref(false);
+const markdownPreviewContent = ref("");
+const markdownPreviewLoading = ref(false);
+const markdownPreviewError = ref("");
+const checkingUpdate = ref(false);
+const updateCheck = ref<{ available: boolean; error?: string; checked_at: string } | null>(null);
 
 interface ConflictItem {
   source: SkillSource;
@@ -85,11 +93,36 @@ async function loadConflictSources() {
   );
 }
 
-onMounted(loadConflictSources);
+async function checkForUpdate() {
+  const source = props.skill.sources.find((item) => item.from === "vibe-lib");
+  if (!source?.origin || source.origin.method !== "git") {
+    updateCheck.value = null;
+    return;
+  }
+  checkingUpdate.value = true;
+  try {
+    updateCheck.value = await skillsStore.checkSkillUpdate(props.skill.id);
+  } catch (error: unknown) {
+    updateCheck.value = { available: false, error: String(error), checked_at: new Date().toISOString() };
+  } finally {
+    checkingUpdate.value = false;
+  }
+}
+
+onMounted(() => {
+  loadConflictSources();
+  checkForUpdate();
+});
 watch(
   () => props.skill.has_conflict,
   () => loadConflictSources()
 );
+watch(() => props.skill.id, () => {
+  showMarkdownPreview.value = false;
+  markdownPreviewContent.value = "";
+  markdownPreviewError.value = "";
+  checkForUpdate();
+});
 
 const selectedConflictSource = computed(() =>
   props.skill.sources.find((s) => s.path === selectedConflictPath.value)
@@ -331,6 +364,31 @@ async function confirmOverwrite() {
   if (status) await runAction(status);
 }
 
+const markdownPreviewSource = computed(() =>
+  props.skill.sources.find((source) => source.from === "vibe-lib") ??
+  props.skill.sources.find((source) => source.content_hash !== "") ??
+  props.skill.sources[0]
+);
+
+async function toggleMarkdownPreview() {
+  showMarkdownPreview.value = !showMarkdownPreview.value;
+  if (!showMarkdownPreview.value || markdownPreviewContent.value || markdownPreviewLoading.value) return;
+  markdownPreviewLoading.value = true;
+  markdownPreviewError.value = "";
+  try {
+    const source = markdownPreviewSource.value;
+    const markdown = source
+      ? await skillsStore.previewSkillAtPath(source.path)
+      : await skillsStore.previewSkill(props.skill.id);
+    markdownPreviewContent.value = marked.parse(markdown) as string;
+  } catch (error: unknown) {
+    markdownPreviewContent.value = "";
+    markdownPreviewError.value = String(error);
+  } finally {
+    markdownPreviewLoading.value = false;
+  }
+}
+
 function sourceLabel(source: SkillSource): string {
   if (source.from === "vibe-lib") return t("manage.library");
   if (source.from.startsWith("project:")) {
@@ -361,6 +419,28 @@ function isProjectSource(source: SkillSource): boolean {
   return source.source_kind === "project" || source.from.startsWith("project:");
 }
 
+function canDeleteAgentSource(source: SkillSource): boolean {
+  return source.from !== "vibe-lib" && !isProjectSource(source) && props.agents.some((agent) => agent.id === source.from);
+}
+
+function requestDeleteAgentSource(source: SkillSource) {
+  if (canDeleteAgentSource(source)) pendingAgentDelete.value = source;
+}
+
+async function confirmDeleteAgentSource() {
+  const source = pendingAgentDelete.value;
+  if (!source || deletingAgentPath.value) return;
+  deletingAgentPath.value = source.path;
+  try {
+    await skillsStore.removeAgentSkillCopy(props.skill.id, source.from, source.path);
+    toast.show(t("skills.deleted", { skill: sourceLabel(source) }), "success");
+    pendingAgentDelete.value = null;
+  } catch (error: unknown) {
+    toast.show(String(error), "error");
+  } finally {
+    deletingAgentPath.value = null;
+  }
+}
 async function cleanDanglingSource(source: SkillSource) {
   if (source.from === "vibe-lib" || isProjectSource(source) || cleaningDanglingPath.value) return;
   cleaningDanglingPath.value = source.path;
@@ -556,8 +636,21 @@ function getAgentNameFromPath(path: string): string {
 <template>
   <div class="px-3 pb-3">
     <div v-if="!embedded" class="mb-3 rounded-md border p-2" style="background: var(--c-bg); border-color: var(--c-border);">
-      <div class="text-[10px] font-medium uppercase tracking-wide mb-1.5" style="color: var(--c-text-secondary);">
-        {{ t("manage.sources_title") }}
+          <div class="text-[10px] font-medium uppercase tracking-wide mb-1.5" style="color: var(--c-text-secondary);">
+        <div class="flex items-center justify-between gap-2">
+          <span>{{ t("manage.sources_title") }}</span>
+          <button
+            v-if="props.skill.sources.some((source) => canUpdateSource(source))"
+            class="inline-flex items-center gap-1 rounded px-2 py-1 text-[10px] normal-case cursor-pointer"
+            :disabled="checkingUpdate || updatingSkill"
+            style="background: var(--c-primary-light); color: var(--c-primary);"
+            :title="updateCheck?.error || t('manage.check_skill_update')"
+            @click="checkForUpdate"
+          >
+            <CloudDownload :size="11" :class="{ 'animate-spin': checkingUpdate }" />
+            {{ updateCheck?.available ? t('manage.skill_update_available') : t('manage.check_skill_update') }}
+          </button>
+        </div>
       </div>
       <div class="space-y-1">
         <div
@@ -611,6 +704,13 @@ function getAgentNameFromPath(path: string): string {
           <span v-if="row.hasKnownUpdate" class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="t('manage.source_update_hint')">
             {{ row.updateLabel }}
           </span>
+          <span
+            v-if="row.source.from === 'vibe-lib' && updateCheck?.available"
+            class="text-[9px] px-1.5 py-0.5 rounded shrink-0"
+            style="background: var(--c-warning-light); color: var(--c-warning);"
+          >
+            {{ t('manage.skill_update_available') }}
+          </span>
           <button
             v-if="row.canUpdate"
             class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer"
@@ -634,6 +734,16 @@ function getAgentNameFromPath(path: string): string {
           </button>
           <button class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer" style="color: var(--c-text-secondary);" :title="t('manage.reveal')" @click.stop="actions.reveal(row.source)">
             <FolderOpen :size="12" />
+          </button>          <button
+            v-if="canDeleteAgentSource(row.source)"
+            class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer"
+            style="color: var(--c-danger);"
+            :disabled="deletingAgentPath === row.source.path"
+            :title="t('manage.action_delete')"
+            @click.stop="requestDeleteAgentSource(row.source)"
+          >
+            <RefreshCw v-if="deletingAgentPath === row.source.path" :size="12" class="animate-spin" />
+            <Trash2 v-else :size="12" />
           </button>
           <button class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer" style="color: var(--c-text-secondary);" :title="t('manage.copy_path')" @click.stop="actions.copyPath(row.source)">
             <Copy :size="12" />
@@ -643,6 +753,33 @@ function getAgentNameFromPath(path: string): string {
     </div>
 
     <!-- 冲突解决：先选择主版本，再预览影响，最后执行 -->
+    <div v-if="!embedded" class="mb-3 rounded-md border" style="background: var(--c-bg); border-color: var(--c-border);">
+      <button
+        type="button"
+        class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left cursor-pointer"
+        @click.stop="toggleMarkdownPreview"
+      >
+        <span class="inline-flex items-center gap-1.5 text-[11px] font-medium" style="color: var(--c-text);">
+          <Eye :size="13" />
+          {{ showMarkdownPreview ? t("skills.hide_preview") : t("skills.preview") }} SKILL.md
+        </span>
+        <ChevronRight :size="13" :style="{ transform: showMarkdownPreview ? 'rotate(90deg)' : 'rotate(0deg)', color: 'var(--c-text-secondary)' }" />
+      </button>
+      <div v-if="showMarkdownPreview" class="border-t p-3" style="border-color: var(--c-border);">
+        <div v-if="markdownPreviewLoading" class="text-[11px]" style="color: var(--c-text-secondary);">
+          {{ t("app.loading") }}
+        </div>
+        <div v-else-if="markdownPreviewError" class="text-[11px]" style="color: var(--c-danger);">
+          {{ markdownPreviewError }}
+        </div>
+        <div
+          v-else-if="markdownPreviewContent"
+          class="markdown-body max-h-[360px] overflow-y-auto text-[12px]"
+          v-html="markdownPreviewContent"
+        />
+        <div v-else class="text-[11px]" style="color: var(--c-text-secondary);">SKILL.md</div>
+      </div>
+    </div>
     <div v-if="skill.has_conflict" class="mb-3">
       <div class="flex items-center justify-between gap-2 mb-2">
         <div class="text-[10px] font-medium uppercase tracking-wide" style="color: var(--c-warning);">
@@ -819,6 +956,28 @@ function getAgentNameFromPath(path: string): string {
 
     <!-- 逐 agent 分组 -->
     <div
+      v-if="embedded && vibeSource"
+      class="mb-3 flex items-center gap-2 rounded px-2 py-1.5"
+      style="background: var(--c-primary-light);"
+    >
+      <Package :size="13" style="color: var(--c-primary);" />
+      <span class="text-xs font-medium" style="color: var(--c-text);">
+        {{ t("manage.library") }}
+      </span>
+      <span class="text-[10px]" style="color: var(--c-primary);">
+        {{ t("manage.current_library_version") }}
+      </span>
+      <button
+        class="ml-auto w-6 h-6 inline-flex items-center justify-center rounded cursor-pointer"
+        style="color: var(--c-primary);"
+        :title="displayPath(vibeSource.path)"
+        :aria-label="t('manage.reveal')"
+        @click.stop="actions.reveal(vibeSource)"
+      >
+        <FolderOpen :size="12" />
+      </button>
+    </div>
+    <div
       v-for="group in groupedStatuses"
       :key="group.label"
       class="mb-3 last:mb-0"
@@ -882,6 +1041,26 @@ function getAgentNameFromPath(path: string): string {
               → {{ item.source.symlink_target.split(/[/\\]/).pop() }}
             </span>
           </div>
+          <button
+            v-if="item.source"
+            class="w-6 h-6 inline-flex items-center justify-center rounded cursor-pointer shrink-0"
+            style="color: var(--c-text-secondary);"
+            :title="t('manage.reveal')"
+            @click.stop="actions.reveal(item.source)"
+          >
+            <FolderOpen :size="12" />
+          </button>
+          <button
+            v-if="item.source && canDeleteAgentSource(item.source)"
+            class="w-6 h-6 inline-flex items-center justify-center rounded cursor-pointer shrink-0"
+            style="color: var(--c-danger);"
+            :disabled="deletingAgentPath === item.source.path"
+            :title="t('manage.action_delete')"
+            @click.stop="requestDeleteAgentSource(item.source)"
+          >
+            <RefreshCw v-if="deletingAgentPath === item.source.path" :size="12" class="animate-spin" />
+            <Trash2 v-else :size="12" />
+          </button>
 
           <button
             v-if="item.action !== 'none'"
@@ -905,6 +1084,14 @@ function getAgentNameFromPath(path: string): string {
     </div>
 
     <ConfirmDialog
+      v-if="pendingAgentDelete"
+      :title="t('manage.action_delete')"
+      :message="t('skills.delete_confirm', { name: `${skill.name || skill.id} (${sourceLabel(pendingAgentDelete)})` })"
+      :confirm-text="t('skills.delete')"
+      :danger="true"
+      @confirm="confirmDeleteAgentSource"
+      @cancel="pendingAgentDelete = null"
+    />    <ConfirmDialog
       v-if="pendingOverwrite"
       :title="t('manage.overwrite_confirm_title')"
       :message="t('manage.overwrite_confirm_message', {

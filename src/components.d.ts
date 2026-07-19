@@ -22,6 +22,7 @@ import type {
   Plus,
   Minus,
   RefreshCw,
+  CloudDownload,
   Eye,
   Copy,
   CopyPlus,
@@ -66,6 +67,7 @@ declare module "vue" {
     Plus: typeof Plus;
     Minus: typeof Minus;
     RefreshCw: typeof RefreshCw;
+    CloudDownload: typeof CloudDownload;
     Eye: typeof Eye;
     Copy: typeof Copy;
     CopyPlus: typeof CopyPlus;

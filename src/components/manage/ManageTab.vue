@@ -3,7 +3,8 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useAgentsStore } from "../../stores/agents";
-import SkillWorkbench from "./SkillWorkbench.vue";
+import { useToast } from "../../composables/useToast";
+import SkillRow from "./SkillRow.vue";
 import BatchSyncPanel from "./BatchSyncPanel.vue";
 import IssueRepairPanel from "./IssueRepairPanel.vue";
 import InstallDialog from "../skills/InstallDialog.vue";
@@ -21,12 +22,14 @@ import {
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const agentsStore = useAgentsStore();
+const toast = useToast();
 const isRefreshing = ref(false);
+const checkingUpdates = ref(false);
+const availableUpdateCount = computed(() => Object.values(skillsStore.updateChecks).filter((result) => result.available).length);
 const filtersExpanded = ref(false);
 const sortMenuOpen = ref(false);
 const sortMenuRef = ref<HTMLElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
-const workbenchViewport = ref<HTMLElement | null>(null);
 const expandedSkillId = ref<string | null>(null);
 const showAgentManager = ref(false);
 const showAddAgent = ref(false);
@@ -45,7 +48,6 @@ const selectedSkillIds = computed(() => [...selectedSkills.value]);
 const allDisplayedSelected = selectionModel.allVisibleSelected;
 const someDisplayedSelected = selectionModel.partiallyVisibleSelected;
 const hasActiveFilters = filterModel.hasActiveFilters;
-const selectedVisibleCount = selectionModel.selectedVisibleCount;
 const facetCounts = filterModel.facetCounts;
 const activeFilterCount = filterModel.activeFilterCount;
 const activeIssueTokens = computed(() => [...filterModel.issues.value]);
@@ -173,6 +175,25 @@ async function refreshManageData() {
   }
 }
 
+async function checkAllUpdates() {
+  if (checkingUpdates.value) return;
+  checkingUpdates.value = true;
+  try {
+    const results = await skillsStore.checkAllSkillUpdates();
+    const available = results.filter((result) => result.available).length;
+    toast.show(
+      available > 0
+        ? t("manage.updates_found", { count: available })
+        : t("manage.no_updates_found"),
+      available > 0 ? "info" : "success"
+    );
+  } catch (error: unknown) {
+    toast.show(String(error), "error");
+  } finally {
+    checkingUpdates.value = false;
+  }
+}
+
 function openBatchPanel() {
   if (selectedSkillIds.value.length === 0) return;
   batchRepairContext.value = null;
@@ -194,22 +215,7 @@ function resolveConflictFromBatch(skillId: string) {
   showBatch.value = false;
   batchRepairContext.value = "conflict";
   expandedSkillId.value = skillId;
-    setTimeout(() => {
-    const row = document.getElementById(`skill-${skillId}`);
-    const viewport = workbenchViewport.value;
-    if (!row || !viewport) return;
-    const header = viewport.querySelector<HTMLElement>(".workbench-header-row");
-    const headerHeight = header?.offsetHeight ?? 0;
-    const viewportRect = viewport.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
-    const topLimit = viewportRect.top + headerHeight + 8;
-    const bottomLimit = viewportRect.bottom - 8;
-    if (rowRect.top < topLimit) {
-      viewport.scrollBy({ top: rowRect.top - topLimit, behavior: "smooth" });
-    } else if (rowRect.bottom > bottomLimit) {
-      viewport.scrollBy({ top: rowRect.bottom - bottomLimit, behavior: "smooth" });
-    }
-  }, 100);
+
 }
 
 function onBatchApplied() {
@@ -268,6 +274,19 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
             @click="refreshManageData"
           >
             <RefreshCw :size="15" :class="{ 'animate-spin': isRefreshing }" />
+          </button>
+          <button
+            class="action-toolbar-icon relative disabled:opacity-50 disabled:cursor-not-allowed"
+            :title="t('manage.check_all_updates')"
+            :disabled="checkingUpdates || isRefreshing || totalSkills === 0"
+            @click="checkAllUpdates"
+          >
+            <CloudDownload :size="15" :class="{ 'animate-spin': checkingUpdates }" />
+            <span
+              v-if="availableUpdateCount > 0"
+              class="absolute -right-1 -top-1 min-w-3.5 rounded-full px-1 text-[9px] leading-3.5"
+              style="background: var(--c-warning); color: white;"
+            >{{ availableUpdateCount }}</span>
           </button>
           <button
             class="action-toolbar-icon"
@@ -480,22 +499,52 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
     </section>
 
     <div v-else class="manage-workbench-layout">
-      <div ref="workbenchViewport" class="manage-workbench-viewport">
-        <SkillWorkbench
-          :skills="displaySkills"
-          :agents="detectedAgents"
-          :selected-ids="selectedSkills"
-          :expanded-skill-id="expandedSkillId"
-          :all-visible-selected="allDisplayedSelected"
-          :partially-visible-selected="someDisplayedSelected"
+      <div class="flex items-center gap-2 rounded-md border px-3 py-2" style="background: var(--c-surface); border-color: var(--c-border);">
+        <input
+          type="checkbox"
+          :checked="allDisplayedSelected"
+          :indeterminate="someDisplayedSelected"
+          class="h-3.5 w-3.5 cursor-pointer rounded"
+          style="accent-color: var(--c-primary);"
+          :title="t('manage.workbench_select_filtered')"
+          :aria-label="t('manage.workbench_select_filtered')"
+          @change="toggleAllDisplayedSkills"
+        />
+        <span class="text-xs" style="color: var(--c-text-secondary);">
+          {{ t("manage.workbench_select_filtered") }}
+        </span>
+        <span class="ml-auto text-[11px]" style="color: var(--c-text-tertiary);">
+          {{ selectedSkills.size }}/{{ displaySkills.length }}
+        </span>
+      </div>
+      <div class="space-y-2" :style="{ paddingBottom: selectedSkills.size > 0 ? '56px' : '0' }">
+        <SkillRow
+          v-for="skill in displaySkills"
+          :key="skill.id"
+          :id="`skill-${skill.id}`"
+          :skill="skill"
+          :agents="agentsStore.agents"
+          :selected="selectedSkills.has(skill.id)"
+          :expanded="expandedSkillId === skill.id"
           @toggle:select="toggleSkillSelect"
-          @toggle:all="toggleAllDisplayedSkills"
-          @open:detail="(id) => expandedSkillId = id || null"
-          @request:add-agent="showAgentManager = true"
+          @update:expanded="expandedSkillId = $event ? skill.id : null"
         />
       </div>
+    </div>
 
-      <div v-if="selectedSkills.size > 0" class="manage-selection-bar">
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      leave-active-class="transition duration-200 ease-in"
+      enter-from-class="translate-y-full opacity-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-from-class="translate-y-0 opacity-100"
+      leave-to-class="translate-y-full opacity-0"
+    >
+      <div
+        v-if="selectedSkills.size > 0"
+        class="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-lg px-4 py-2.5 shadow-lg"
+        style="background: var(--c-surface); border: 1px solid var(--c-border);"
+      >
         <input
           type="checkbox"
           :checked="allDisplayedSelected"
@@ -506,16 +555,26 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
           @change="toggleAllDisplayedSkills"
         />
         <span class="text-xs" style="color: var(--c-text);">
-          {{ t("manage.selected_scope_count", { selected: selectedVisibleCount, total: displaySkills.length }) || `已选 ${selectedVisibleCount} / 当前结果 ${displaySkills.length}` }}
+          {{ t("manage.selected_count", { count: selectedSkills.size }) }}
         </span>
-        <button class="manage-selection-primary" type="button" @click="openBatchPanel">
-          {{ t("manage.batch_panel_open") || "批量操作" }}
+        <button
+          class="cursor-pointer rounded-md px-3 py-1.5 text-[11px] transition-colors"
+          style="background: var(--c-primary); color: white;"
+          type="button"
+          @click="openBatchPanel"
+        >
+          {{ t("manage.batch_panel_open") }}
         </button>
-        <button class="manage-selection-clear" type="button" @click="deselectAllSkills">
-          {{ t("manage.deselect_all") || "取消选择" }}
+        <button
+          class="cursor-pointer rounded px-2 py-1 text-[11px]"
+          style="color: var(--c-text-secondary);"
+          type="button"
+          @click="deselectAllSkills"
+        >
+          {{ t("manage.deselect_all") }}
         </button>
       </div>
-    </div>
+    </Transition>
     <Teleport to="body">
       <div
         v-if="showAgentManager"

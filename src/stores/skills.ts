@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import type { Skill, DashboardData, SkillIssue } from "../types";
+import type { Skill, DashboardData, SkillIssue, SkillUpdateCheck } from "../types";
 import { useAgentsStore } from "./agents";
 
 export interface SyncActionResult {
@@ -20,6 +20,7 @@ export const useSkillsStore = defineStore("skills", () => {
   const dashboardLoading = ref(false);
   const issues = ref<SkillIssue[]>([]);
   const issuesLoading = ref(false);
+  const updateChecks = ref<Record<string, SkillUpdateCheck>>({});
 
   async function fetchSkills() {
     loading.value = true;
@@ -134,6 +135,18 @@ export const useSkillsStore = defineStore("skills", () => {
     return skill;
   }
 
+  async function checkSkillUpdate(skillId: string): Promise<SkillUpdateCheck> {
+    const result = await invoke<SkillUpdateCheck>("check_skill_update", { skillId });
+    updateChecks.value = { ...updateChecks.value, [skillId]: result };
+    return result;
+  }
+
+  async function checkAllSkillUpdates(): Promise<SkillUpdateCheck[]> {
+    const results = await invoke<SkillUpdateCheck[]>("check_all_skill_updates");
+    updateChecks.value = Object.fromEntries(results.map((result) => [result.skill_id, result]));
+    return results;
+  }
+
   async function deleteSkill(skillId: string) {
     await invoke("delete_library_skill", { skillId });
     refreshSkills();
@@ -226,6 +239,9 @@ export const useSkillsStore = defineStore("skills", () => {
     installSkill,
     installSkillFromSource,
     updateSkill,
+    checkSkillUpdate,
+    checkAllSkillUpdates,
+    updateChecks,
     deleteSkill,
     previewSkill,
     previewSkillAtPath,

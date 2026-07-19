@@ -6,6 +6,8 @@
 
 ### 1. 安装 / 更新
 
+- `docs/v0.2/19-skill-install-update-verification.md`（三种安装方式、失败诊断与验收清单）
+
 - `src-tauri/src/commands/skills.rs`
 - `src-tauri/src/utils/origin.rs`
 - `src/components/skills/InstallDialog.vue`

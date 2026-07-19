@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use tracing::warn;
 use uuid::Uuid;
@@ -11,7 +12,7 @@ use crate::models::dashboard::{
     DashboardAgent, DashboardData, DashboardSkill, DashboardStats, SharedSkillInfo,
 };
 use crate::models::history::HistoryAction;
-use crate::models::skill::{ConflictType, Skill, SkillIssue, SkillSource};
+use crate::models::skill::{ConflictType, Skill, SkillIssue, SkillSource, SkillUpdateCheck};
 use crate::parsers::skill_md::parse_skill_md_full;
 use crate::utils::config::{
     build_agents_from_config, load_agents, load_config, project_skill_roots,
@@ -160,6 +161,163 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
     });
 
     Ok(skills)
+}
+
+#[tauri::command]
+pub async fn check_skill_update(skill_id: String) -> Result<SkillUpdateCheck, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || check_skill_update_sync(skill_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("Update check task failed: {}", error)))?
+}
+
+fn check_skill_update_sync(skill_id: String) -> Result<SkillUpdateCheck, VibeError> {
+    let skill = list_skills()?
+        .into_iter()
+        .find(|skill| skill.id == skill_id)
+        .ok_or_else(|| VibeError::SkillNotFound {
+            skill_id: skill_id.clone(),
+        })?;
+    check_skill_update_for_skill(&skill)
+}
+
+fn check_skill_update_for_skill(skill: &Skill) -> Result<SkillUpdateCheck, VibeError> {
+    let skill_id = skill.id.clone();
+    let checked_at = datetime::chrono_now();
+    let Some(source) = skill.sources.iter().find(|source| source.from == "vibe-lib") else {
+        return Ok(SkillUpdateCheck {
+            skill_id,
+            method: "unknown".to_string(),
+            available: false,
+            current_commit: None,
+            remote_commit: None,
+            checked_at,
+            error: Some("Skill is not installed in the library; agent-only copies cannot be checked here".to_string()),
+        });
+    };
+    let Some(origin) = source.origin.as_ref() else {
+        return Ok(SkillUpdateCheck {
+            skill_id,
+            method: "unknown".to_string(),
+            available: false,
+            current_commit: None,
+            remote_commit: None,
+            checked_at,
+            error: Some("No provenance record is available".to_string()),
+        });
+    };
+
+    if normalize_source_method(&origin.method) != SOURCE_METHOD_GIT {
+        return Ok(SkillUpdateCheck {
+            skill_id,
+            method: origin.method.clone(),
+            available: false,
+            current_commit: None,
+            remote_commit: None,
+            checked_at,
+            error: Some("Only Git sources support remote update detection".to_string()),
+        });
+    }
+
+    check_git_source_update(&skill_id, origin, checked_at)
+}
+
+fn check_git_source_update(
+    skill_id: &str,
+    origin: &crate::models::origin::SkillOrigin,
+    checked_at: String,
+) -> Result<SkillUpdateCheck, VibeError> {
+    let Some(source_path) = origin.source_path.as_deref() else {
+        return Ok(SkillUpdateCheck {
+            skill_id: skill_id.to_string(),
+            method: SOURCE_METHOD_GIT.to_string(),
+            available: false,
+            current_commit: origin.commit.clone(),
+            remote_commit: None,
+            checked_at,
+            error: Some("Git source path is missing".to_string()),
+        });
+    };
+    let path = Path::new(source_path);
+    let current_commit = git_output(path, &["rev-parse", "HEAD"]);
+    let fetch_output = match run_git_fetch(path) {
+        Ok(output) => output,
+        Err(message) => {
+            warn!(skill = %skill_id, error = %message, "Skill update check failed");
+            return Ok(SkillUpdateCheck { skill_id: skill_id.to_string(), method: SOURCE_METHOD_GIT.to_string(), available: false, current_commit, remote_commit: None, checked_at, error: Some(message) });
+        }
+    };
+    if !fetch_output.status.success() {
+        let message = String::from_utf8_lossy(&fetch_output.stderr).trim().to_string();
+        let message = if message.is_empty() { "Git fetch failed; check remote access and permissions".to_string() } else { message };
+        warn!(skill = %skill_id, error = %message, "Skill update check failed");
+        return Ok(SkillUpdateCheck { skill_id: skill_id.to_string(), method: SOURCE_METHOD_GIT.to_string(), available: false, current_commit, remote_commit: None, checked_at, error: Some(message) });
+    }
+    let remote_ref = origin.branch.as_deref().map(|branch| format!("origin/{}", branch)).unwrap_or_else(|| "origin/HEAD".to_string());
+    let remote_commit = git_output(path, &["rev-parse", &remote_ref]);
+    let error = if remote_commit.is_none() { Some(format!("Remote branch {} is not available", remote_ref)) } else { None };
+    Ok(SkillUpdateCheck {
+        skill_id: skill_id.to_string(),
+        method: SOURCE_METHOD_GIT.to_string(),
+        available: current_commit.is_some() && remote_commit.is_some() && current_commit != remote_commit,
+        current_commit,
+        remote_commit,
+        checked_at,
+        error,
+    })
+}
+
+#[tauri::command]
+pub async fn check_all_skill_updates() -> Result<Vec<SkillUpdateCheck>, VibeError> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let skills = list_skills()?;
+        tracing::info!(skill_count = skills.len(), "Checking all skill updates");
+        let results: Result<Vec<_>, _> = skills
+            .iter()
+            .map(check_skill_update_for_skill)
+            .collect();
+        if let Ok(items) = &results {
+            let available = items.iter().filter(|item| item.available).count();
+            tracing::info!(checked = items.len(), available, "Finished checking skill updates");
+        }
+        results
+    })
+    .await
+    .map_err(|error| VibeError::Path(format!("Update check task failed: {}", error)))?
+}
+
+fn run_git_fetch(path: &Path) -> Result<std::process::Output, String> {
+    const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
+    let mut child = Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["-c", "credential.interactive=never", "fetch", "--quiet", "--no-tags", "origin"])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("Git fetch could not start: {}", error))?;
+    let started_at = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return child.wait_with_output().map_err(|error| error.to_string()),
+            Ok(None) if started_at.elapsed() < FETCH_TIMEOUT => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("Git fetch timed out after {} seconds", FETCH_TIMEOUT.as_secs()));
+            }
+            Err(error) => return Err(format!("Git fetch wait failed: {}", error)),
+        }
+    }
+}
+
+fn git_output(path: &Path, args: &[&str]) -> Option<String> {
+    let output = Command::new("git").arg("-C").arg(path).args(args).output().ok()?;
+    if !output.status.success() { return None; }
+    let value = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    (!value.is_empty()).then_some(value)
 }
 
 #[tauri::command]
@@ -1386,4 +1544,93 @@ fn get_modified_at(path: &Path) -> String {
         .and_then(|m| m.modified())
         .map(datetime::system_time_to_iso)
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn git(path: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(path)
+            .args(args)
+            .output()
+            .expect("git should start");
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn mock_git_update_is_detected() {
+        let root = std::env::temp_dir().join(format!("qs-vibe-mock-update-{}", Uuid::new_v4()));
+        let source = root.join("source");
+        let clone = root.join("clone");
+        let destination = root.join("library-skill");
+        fs::create_dir_all(&source).unwrap();
+        fs::write(
+            source.join("SKILL.md"),
+            "---\nname: mock-skill\ndescription: initial\n---\n",
+        )
+        .unwrap();
+
+        git(&source, &["init", "-b", "main"]);
+        git(&source, &["config", "user.email", "mock@example.com"]);
+        git(&source, &["config", "user.name", "mock"]);
+        git(&source, &["add", "."]);
+        git(&source, &["commit", "-m", "initial"]);
+        let output = Command::new("git")
+            .args(["clone", "-q"])
+            .arg(&source)
+            .arg(&clone)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        fs::create_dir_all(&destination).unwrap();
+        fs::copy(source.join("SKILL.md"), destination.join("SKILL.md")).unwrap();
+
+        fs::write(
+            source.join("SKILL.md"),
+            "---\nname: mock-skill\ndescription: updated\n---\n",
+        )
+        .unwrap();
+        git(&source, &["add", "."]);
+        git(&source, &["commit", "-m", "update"]);
+
+        let mut origin = crate::models::origin::SkillOrigin {
+            method: SOURCE_METHOD_GIT.to_string(),
+            provider: Some("local".to_string()),
+            url: Some(source.to_string_lossy().to_string()),
+            commit: git_output(&clone, &["rev-parse", "HEAD"]),
+            branch: Some("main".to_string()),
+            installed_at: datetime::chrono_now(),
+            installed_by: Some("test".to_string()),
+            trust_level: "explicit".to_string(),
+            source_path: Some(clone.to_string_lossy().to_string()),
+            command: None,
+            update_command: Some("git pull --ff-only".to_string()),
+            refresh_command: Some("git pull --ff-only".to_string()),
+            package_name: None,
+            version: None,
+            sync_mode: Some("copy".to_string()),
+            last_checked_at: None,
+        };
+
+        let result = check_git_source_update("mock-skill", &origin, datetime::chrono_now()).unwrap();
+        assert!(result.available);
+        assert!(result.current_commit.is_some());
+        assert!(result.remote_commit.is_some());
+        assert_ne!(result.current_commit, result.remote_commit);
+
+        update_from_git_source(&destination, "mock-skill", &mut origin, false).unwrap();
+        let updated_skill = fs::read_to_string(destination.join("SKILL.md")).unwrap();
+        assert!(updated_skill.contains("description: updated"));
+
+        fs::remove_dir_all(root).unwrap();
+    }
 }

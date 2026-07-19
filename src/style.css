@@ -428,6 +428,49 @@ body {
   border: 1px solid var(--c-border-subtle);
 }
 
+.workbench-scroll-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 3px 7px;
+  color: var(--c-primary);
+  background: var(--c-primary-light);
+  border: 1px solid color-mix(in srgb, var(--c-primary) 22%, var(--c-border-subtle));
+  border-radius: 999px;
+}
+
+.workbench-scroll-control-label {
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.workbench-scroll-track {
+  position: relative;
+  width: 54px;
+  height: 12px;
+  flex: 0 0 54px;
+  cursor: ew-resize;
+  touch-action: none;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-primary) 18%, var(--c-border-subtle));
+}
+
+.workbench-scroll-thumb {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  width: 18px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--c-primary);
+  transition: transform 80ms ease, background-color 120ms ease;
+}
+
+.workbench-scroll-control.is-dragging .workbench-scroll-thumb,
+.workbench-scroll-track:hover .workbench-scroll-thumb {
+  background: color-mix(in srgb, var(--c-primary) 78%, var(--c-text-strong));
+}
 .workbench-scroll-hint {
   gap: 5px;
   color: var(--c-primary);

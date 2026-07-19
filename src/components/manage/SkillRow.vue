@@ -267,9 +267,7 @@ onUnmounted(() => {
                 <div class="text-[10px] truncate" style="color: var(--c-text);">
                   {{ item.agent.name }} 路 {{ item.statusLabel }}
                 </div>
-                <div class="path-label truncate" :title="displayPath(item.source?.path || item.agent.skills_dir)">
-                  {{ displayPath(item.source?.path || item.agent.skills_dir) }}
-                </div>
+
               </div>
             </div>
           </div>
@@ -328,7 +326,7 @@ onUnmounted(() => {
 
 <!-- Expanded per-agent detail (shared with card via SkillDetail) -->
     <div v-if="isExpanded" class="border-t" style="border-color: var(--c-border);">
-      <SkillDetail :skill="skill" :agents="agents" />
+      <SkillDetail :skill="skill" :agents="agents" embedded />
     </div>
 
     <ConfirmDialog

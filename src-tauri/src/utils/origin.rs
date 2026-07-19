@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant};
 
 use crate::errors::VibeError;
 use crate::models::origin::SkillOrigin;
@@ -16,6 +17,7 @@ pub const SOURCE_METHOD_MARKETPLACE: &str = "marketplace";
 pub const UPDATE_STATUS_AUTO: &str = "auto_update";
 pub const UPDATE_STATUS_BEST_EFFORT: &str = "best_effort";
 pub const UPDATE_STATUS_UNKNOWN: &str = "unknown";
+const SOURCE_COMMAND_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitProbe {
@@ -296,19 +298,48 @@ pub fn run_update_command(command: &str, cwd: Option<&Path>) -> Result<(), VibeE
         cmd.current_dir(dir);
     }
 
-    let output = cmd.output().map_err(VibeError::Io)?;
+    cmd.env("CI", "1")
+        .env("NPM_CONFIG_YES", "true")
+        .env("npm_config_yes", "true");
+    tracing::info!(command = %command, cwd = ?cwd, timeout_seconds = SOURCE_COMMAND_TIMEOUT.as_secs(), "Running skill source command");
+    let mut child = cmd.spawn().map_err(|error| {
+        tracing::error!(command = %command, error = %error, "Skill source command could not start");
+        VibeError::Io(error)
+    })?;
+    let started_at = Instant::now();
+    loop {
+        if child.try_wait().map_err(VibeError::Io)?.is_some() {
+            break;
+        }
+        if started_at.elapsed() >= SOURCE_COMMAND_TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            let message = format!("command timed out after {} seconds", SOURCE_COMMAND_TIMEOUT.as_secs());
+            tracing::warn!(command = %command, timeout_seconds = SOURCE_COMMAND_TIMEOUT.as_secs(), "Skill source command timed out");
+            return Err(VibeError::Path(format!("Update command failed for {}: {}", command, message)));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let output = child.wait_with_output().map_err(VibeError::Io)?;
     if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !stdout.is_empty() {
+            tracing::debug!(command = %command, output = %stdout, "Skill source command completed");
+        }
         return Ok(());
     }
 
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let detail = if !stderr.is_empty() { stderr } else { stdout };
+    tracing::warn!(command = %command, exit_code = ?output.status.code(), output = %detail, "Skill source command failed");
     Err(VibeError::Path(format!(
         "Update command failed for {}: {}",
         command,
-        if stderr.is_empty() {
+        if detail.is_empty() {
             "check command availability, permissions, or source configuration".to_string()
         } else {
-            stderr
+            detail
         }
     )))
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { Agent, Skill } from "../../types";
 import { classifySkillSources } from "./manageFilters";
@@ -37,10 +37,68 @@ const attentionSkills = computed(() => props.skills.filter((skill) => {
   return skill.has_conflict || skill.has_dangling || sourceInfo.hasLinkedElsewhere;
 }));
 const normalSkills = computed(() => props.skills.filter((skill) => !attentionSkills.value.includes(skill)));
+const scrollViewport = ref<HTMLElement | null>(null);
+const scrollLeft = ref(0);
+const scrollMax = ref(0);
+const isDraggingScroll = ref(false);
+const scrollTrack = ref<HTMLElement | null>(null);
+const scrollThumbPosition = computed(() => {
+  if (scrollMax.value <= 0 || !scrollTrack.value) return 0;
+  const thumbWidth = 18;
+  const travel = Math.max(0, scrollTrack.value.clientWidth - thumbWidth);
+  return (scrollLeft.value / scrollMax.value) * travel;
+});
+
+function updateScrollMetrics() {
+  const viewport = scrollViewport.value;
+  if (!viewport) return;
+  scrollLeft.value = viewport.scrollLeft;
+  scrollMax.value = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+}
+
+function onScroll() {
+  updateScrollMetrics();
+}
+
+function moveScrollThumb(event: PointerEvent) {
+  if (!isDraggingScroll.value || !scrollTrack.value || !scrollViewport.value) return;
+  const rect = scrollTrack.value.getBoundingClientRect();
+  const thumbWidth = 18;
+  const travel = Math.max(1, rect.width - thumbWidth);
+  const offset = Math.min(travel, Math.max(0, event.clientX - rect.left - thumbWidth / 2));
+  scrollViewport.value.scrollLeft = (offset / travel) * scrollMax.value;
+}
+
+function onScrollPointerDown(event: PointerEvent) {
+  if (!scrollViewport.value || !scrollTrack.value || scrollMax.value <= 0) return;
+  isDraggingScroll.value = true;
+  scrollTrack.value.setPointerCapture(event.pointerId);
+  event.preventDefault();
+  moveScrollThumb(event);
+}
+
+function onScrollPointerMove(event: PointerEvent) {
+  moveScrollThumb(event);
+}
+
+function onScrollPointerUp(event: PointerEvent) {
+  if (!isDraggingScroll.value) return;
+  isDraggingScroll.value = false;
+  scrollTrack.value?.releasePointerCapture(event.pointerId);
+}
+
+onMounted(() => {
+  updateScrollMetrics();
+  window.addEventListener("resize", updateScrollMetrics);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", updateScrollMetrics);
+});
 const allVisibleSelected = computed(() => props.skills.length > 0 && props.skills.every((skill) => props.selectedIds.has(skill.id)));
 
 const gridStyle = computed(() => ({
-  gridTemplateColumns: `minmax(${layoutMode.value === "single" ? "220px" : "280px"}, 1.65fr) repeat(${agentCount.value}, minmax(${layoutMode.value === "wide" ? "150px" : "132px"}, 1fr)) minmax(92px, 0.5fr)`,
+  gridTemplateColumns: `minmax(${layoutMode.value === "single" ? "220px" : "280px"}, 1.65fr) repeat(${agentCount.value}, minmax(${layoutMode.value === "wide" ? "150px" : "132px"}, 1fr))`,
 }));
 
 function onExpanded(skillId: string, expanded: boolean) {
@@ -69,7 +127,21 @@ function onExpanded(skillId: string, expanded: boolean) {
       </div>
       <div class="flex shrink-0 items-center gap-2">
         <span v-if="layoutMode === 'single'" class="workbench-mode-label">{{ t("manage.workbench_single_agent") }}</span>
-        <span v-else-if="layoutMode === 'wide'" class="workbench-mode-label workbench-scroll-hint"><ArrowLeftRight :size="12" /> {{ t("manage.workbench_wide_agents", { count: agentCount }) }}</span>
+        <div v-else-if="layoutMode === 'wide'" class="workbench-scroll-control" :class="{ 'is-dragging': isDraggingScroll }">
+          <ArrowLeftRight :size="12" />
+          <span class="workbench-scroll-control-label">{{ t("manage.workbench_wide_agents", { count: agentCount }) }}</span>
+          <div
+            ref="scrollTrack"
+            class="workbench-scroll-track"
+            :title="t('manage.workbench_scroll_drag')"
+            @pointerdown="onScrollPointerDown"
+            @pointermove="onScrollPointerMove"
+            @pointerup="onScrollPointerUp"
+            @pointercancel="onScrollPointerUp"
+          >
+            <span class="workbench-scroll-thumb" :style="{ transform: `translateX(${scrollThumbPosition}px)` }" />
+          </div>
+        </div>
         <span v-else-if="layoutMode === 'matrix'" class="workbench-mode-label">{{ t("manage.workbench_agents_count", { count: agentCount }) }}</span>
       </div>
     </div>
@@ -86,14 +158,14 @@ function onExpanded(skillId: string, expanded: boolean) {
       </button>
     </div>
 
-    <div v-else class="workbench-scroll" :class="{ 'workbench-scroll-wide': layoutMode === 'wide' }">
+    <div v-else ref="scrollViewport" class="workbench-scroll" :class="{ 'workbench-scroll-wide': layoutMode === 'wide' }" @scroll="onScroll">
       <div class="workbench-grid workbench-header-row" :style="gridStyle">
         <div class="workbench-header-cell workbench-header-skill">{{ t("manage.workbench_skill") }}</div>
         <div v-for="agent in detectedAgents" :key="agent.id" class="workbench-header-cell" :title="agent.skills_dir">
           <span class="workbench-agent-dot" :class="agent.detected ? 'workbench-agent-online' : ''" />
           <span class="truncate">{{ agent.name }}</span>
         </div>
-        <div class="workbench-header-cell">{{ t("manage.workbench_action") }}</div>
+
       </div>
 
       <div v-if="attentionSkills.length > 0" class="workbench-group-label workbench-group-label-attention">

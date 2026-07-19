@@ -3,6 +3,17 @@ use serde::{Deserialize, Serialize};
 use crate::models::origin::SkillOrigin;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillUpdateCheck {
+    pub skill_id: String,
+    pub method: String,
+    pub available: bool,
+    pub current_commit: Option<String>,
+    pub remote_commit: Option<String>,
+    pub checked_at: String,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Skill {
     /// 文件夹名，作为唯一标识
     pub id: String,

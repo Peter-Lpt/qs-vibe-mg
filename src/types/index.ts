@@ -28,6 +28,16 @@ export interface SkillOrigin {
   last_checked_at?: string;
 }
 
+export interface SkillUpdateCheck {
+  skill_id: string;
+  method: string;
+  available: boolean;
+  current_commit?: string;
+  remote_commit?: string;
+  checked_at: string;
+  error?: string;
+}
+
 export interface Skill {
   id: string;
   name: string;

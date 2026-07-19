@@ -267,6 +267,7 @@ qs-vibe-mg/
 
 - `AGENTS.md`：项目开发约定和目录说明。
 - `docs/v0.2/18-filter-system-refactor-plan.md`：筛选系统重构方案、子 Agent 审计结果和验收标准。
+- `docs/v0.2/19-skill-install-update-verification.md`：Skill 三种安装方式、失败诊断、更新检测和验证清单。
 - `docs/v0.2/17-skill-workbench-redesign.md`：Skill 工作台设计方案。
 - `docs/v0.2/16-manage-ui-audit-and-optimization.md`：管理页 UI 审计记录。
 
