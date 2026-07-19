@@ -28,9 +28,16 @@ pub fn normalize_path(path: &Path) -> PathBuf {
 
 /// Component-aware containment check after normalization/canonicalization.
 pub fn is_path_within(path: &Path, base: &Path) -> bool {
-    let normalized_path = normalize_path(path);
+  let normalized_path = normalize_path(path);
+  let normalized_base = normalize_path(base);
+  normalized_path.strip_prefix(normalized_base).is_ok()
+}
+
+pub fn is_path_within_allow_final_link(path: &Path, base: &Path) -> bool {
+    let parent = path.parent().unwrap_or(path);
+    let normalized_parent = normalize_path(parent);
     let normalized_base = normalize_path(base);
-    normalized_path.strip_prefix(normalized_base).is_ok()
+    normalized_parent.strip_prefix(normalized_base).is_ok()
 }
 
 /// 递归复制目录

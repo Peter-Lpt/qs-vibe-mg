@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAgentsStore } from "./stores/agents";
 import { useSkillsStore } from "./stores/skills";
 import { useHistoryStore } from "./stores/history";
@@ -20,6 +21,7 @@ const skillsStore = useSkillsStore();
 const historyStore = useHistoryStore();
 const appStore = useAppStore();
 const toast = useToast();
+const appWindow = getCurrentWindow();
 
 const tabs: TabId[] = ["manage", "history"];
 
@@ -75,6 +77,22 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
+function isEditableTarget(target: EventTarget | null) {
+  const el = target instanceof HTMLElement ? target : null;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  return Boolean(el.closest("input, textarea, select, [role='textbox']"));
+}
+
+function handleGlobalContextMenu(e: MouseEvent) {
+  if (!isEditableTarget(e.target)) {
+    e.preventDefault();
+  }
+}
+
+let unlistenResize: (() => void) | null = null;
+let unlistenScaleChange: (() => void) | null = null;
+
 onMounted(async () => {
   appStore.init();
   locale.value = appStore.locale;
@@ -83,10 +101,20 @@ onMounted(async () => {
   await historyStore.fetchHistory();
   historyStore.updateUndoRedoState();
   document.addEventListener("keydown", handleGlobalKeydown);
+  document.addEventListener("contextmenu", handleGlobalContextMenu);
+  unlistenResize = await appWindow.onResized(() => {
+    window.dispatchEvent(new Event("resize"));
+  });
+  unlistenScaleChange = await appWindow.onScaleChanged(() => {
+    window.dispatchEvent(new Event("resize"));
+  });
 });
 
 onUnmounted(() => {
   document.removeEventListener("keydown", handleGlobalKeydown);
+  document.removeEventListener("contextmenu", handleGlobalContextMenu);
+  unlistenResize?.();
+  unlistenScaleChange?.();
 });
 </script>
 

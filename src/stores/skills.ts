@@ -33,17 +33,17 @@ export const useSkillsStore = defineStore("skills", () => {
     }
   }
 
-  let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-  async function refreshSkills() {
-    if (refreshTimer) clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(async () => {
-      refreshTimer = null;
-      try {
-        skills.value = await invoke<Skill[]>("list_skills");
-      } catch (e: unknown) {
-        error.value = String(e);
-      }
-    }, 120);
+  let refreshRequestId = 0;
+  async function refreshSkills(): Promise<void> {
+    const requestId = ++refreshRequestId;
+    try {
+      const nextSkills = await invoke<Skill[]>("list_skills");
+      if (requestId !== refreshRequestId) return;
+      skills.value = nextSkills;
+      error.value = null;
+    } catch (e: unknown) {
+      if (requestId === refreshRequestId) error.value = String(e);
+    }
   }
 
   function searchSkills(query: string) {

@@ -19,6 +19,7 @@ import ConfirmDialog from "../common/ConfirmDialog.vue";
 const props = defineProps<{
   skill: Skill;
   agents: Agent[];
+  embedded?: boolean;
 }>();
 
 const { t } = useI18n();
@@ -26,6 +27,10 @@ const skillsStore = useSkillsStore();
 const toast = useToast();
 const logger = useFileLogger();
 const actions = useSkillActions((k, p) => t(k, p as Record<string, unknown>));
+
+function displayPath(path: string | undefined): string {
+  return (path || "").replace(/[\\/]+/g, "/");
+}
 
 const agentsRef = computed(() => props.agents);
 const skillRef = computed(() => props.skill);
@@ -258,6 +263,9 @@ const sourceRows = computed(() =>
       confidence,
       originTitle,
       updateLabel: updateStatusLabel(source.update_status),
+      hasKnownMethod: !!source.origin?.method && source.origin.method !== "unknown",
+      hasKnownConfidence: !!source.origin || !!inferredProvider,
+      hasKnownUpdate: source.update_status === "auto_update" || source.update_status === "best_effort",
       canUpdate: canUpdateSource(source),
       dangling: source.is_symlink && (!source.symlink_target || source.content_hash === ""),
       isLatest: source.path === latestSourcePath.value,
@@ -547,7 +555,7 @@ function getAgentNameFromPath(path: string): string {
 
 <template>
   <div class="px-3 pb-3">
-    <div class="mb-3 rounded-md border p-2" style="background: var(--c-bg); border-color: var(--c-border);">
+    <div v-if="!embedded" class="mb-3 rounded-md border p-2" style="background: var(--c-bg); border-color: var(--c-border);">
       <div class="text-[10px] font-medium uppercase tracking-wide mb-1.5" style="color: var(--c-text-secondary);">
         {{ t("manage.sources_title") }}
       </div>
@@ -566,7 +574,7 @@ function getAgentNameFromPath(path: string): string {
             {{ sourceKindLabel(row.kind) }}
           </span>
           <span
-            v-if="row.source.origin"
+            v-if="row.hasKnownMethod"
             class="text-[9px] px-1.5 py-0.5 rounded shrink-0"
             style="background: var(--c-primary-light); color: var(--c-primary);"
             :title="row.originTitle || row.methodLabel"
@@ -591,16 +599,16 @@ function getAgentNameFromPath(path: string): string {
           >
             {{ t(row.relation === "same" ? "manage.source_content_same" : "manage.source_content_different") }}
           </span>
-          <span class="text-[10px] truncate min-w-0 flex-1" style="color: var(--c-text-secondary);" :title="row.source.path">
-            {{ row.source.path }}
+          <span class="path-label truncate min-w-0 flex-1" :title="displayPath(row.source.path)">
+            {{ displayPath(row.source.path) }}
           </span>
           <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);">
             {{ shortHash(row.source) }}
           </span>
-          <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="row.originTitle || row.confidence">
+          <span v-if="row.hasKnownConfidence" class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="row.originTitle || row.confidence">
             {{ row.confidence }}
           </span>
-          <span class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="t('manage.source_update_hint')">
+          <span v-if="row.hasKnownUpdate" class="text-[9px] shrink-0" style="color: var(--c-text-secondary);" :title="t('manage.source_update_hint')">
             {{ row.updateLabel }}
           </span>
           <button
@@ -681,8 +689,8 @@ function getAgentNameFromPath(path: string): string {
                     {{ t("manage.source_latest") }}
                   </span>
                 </div>
-                <div class="text-[10px] truncate" style="color: var(--c-text-secondary);" :title="it.source.path">
-                  {{ it.source.path }}
+                <div class="path-label truncate" :title="displayPath(it.source.path)">
+                  {{ displayPath(it.source.path) }}
                 </div>
               </div>
             </div>

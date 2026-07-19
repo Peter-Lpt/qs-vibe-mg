@@ -80,25 +80,23 @@ async function handleInstall() {
 <template>
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center"
-      style="background: rgba(0, 0, 0, 0.5);"
+      class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
       @click.self="emit('close')"
     >
       <div
-        class="w-full max-w-[560px] mx-4 rounded-xl p-5 shadow-xl"
-        style="background: var(--c-surface); border: 1px solid var(--c-border);"
+        class="modal-shell w-full max-w-[560px]"
       >
-        <h3 class="mb-4 text-sm font-semibold" style="color: var(--c-text);">
-          {{ t("skills.install") }}
-        </h3>
+        <div class="modal-header">
+          <h3 class="text-[15px] font-semibold" style="color: var(--c-text);">{{ t("skills.install") }}</h3>
+        </div>
 
-        <div class="mb-4">
-          <div class="mb-2 flex flex-wrap gap-2">
+        <div class="modal-body">
+          <div class="install-mode-tabs">
             <button
               v-for="option in modeOptions"
               :key="option.key"
               type="button"
-              class="rounded-md border px-3 py-1.5 text-xs transition-colors"
+              class="install-mode-tab"
               :class="sourceMode === option.key ? 'font-medium' : ''"
               :style="{
                 background: sourceMode === option.key ? 'var(--c-primary)' : 'var(--c-surface)',
@@ -111,50 +109,48 @@ async function handleInstall() {
             </button>
           </div>
 
-          <label class="mb-1 block text-xs" style="color: var(--c-text-secondary);">
+          <label class="install-field-label">
             {{ t("skills.install_source_label") }}
           </label>
-          <div class="flex gap-2">
+          <div class="install-source-row">
             <input
               v-model="sourceValue"
               :placeholder="currentPlaceholder"
-              class="flex-1 rounded-md border px-3 py-2 text-xs outline-none transition-colors"
+              class="install-source-input"
               style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
               @keyup.enter="handleInstall"
             />
             <button
               v-if="sourceMode === 'folder'"
-              class="btn-ghost shrink-0 rounded-md border px-3 py-2 text-xs cursor-pointer"
+              class="install-browse-button"
               @click="pickFolder"
             >
               {{ t("skills.select_folder") }}
             </button>
           </div>
-          <p class="mt-1 text-xs" style="color: var(--c-text-secondary);">
+          <p class="install-field-hint">
             {{ currentHint }}
           </p>
+          <label class="install-reference-option">
+            <input
+              v-model="referenceInstall"
+              type="checkbox"
+              class="h-3.5 w-3.5 cursor-pointer rounded"
+              style="accent-color: var(--c-primary);"
+            />
+            <span>{{ t("skills.install_reference") }}</span>
+          </label>
+          <p class="install-reference-hint">
+            {{ t("skills.install_reference_hint") }}
+          </p>
+
+          <div v-if="installError" class="install-error">
+            {{ installError }}
+          </div>
         </div>
-
-        <label class="mb-2 flex items-center gap-2 text-xs" style="color: var(--c-text-secondary);">
-          <input
-            v-model="referenceInstall"
-            type="checkbox"
-            class="h-3.5 w-3.5 cursor-pointer rounded"
-            style="accent-color: var(--c-primary);"
-          />
-          <span>{{ t("skills.install_reference") }}</span>
-        </label>
-        <p class="mb-4 text-[11px]" style="color: var(--c-text-secondary);">
-          {{ t("skills.install_reference_hint") }}
-        </p>
-
-        <div v-if="installError" class="mb-3 text-xs" style="color: var(--c-danger);">
-          {{ installError }}
-        </div>
-
-        <div class="flex justify-end gap-2">
+        <div class="modal-actions install-actions">
           <button
-            class="rounded-md border px-3 py-1.5 text-xs hover:opacity-80"
+            class="install-cancel-button"
             style="border-color: var(--c-border); color: var(--c-text);"
             @click="emit('close')"
             :disabled="installing"
@@ -162,7 +158,7 @@ async function handleInstall() {
             {{ t("settings.cancel") }}
           </button>
           <button
-            class="rounded-md px-3 py-1.5 text-xs hover:opacity-80"
+            class="install-submit-button"
             style="background: var(--c-primary); color: white;"
             @click="handleInstall"
             :disabled="installing"

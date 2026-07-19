@@ -32,6 +32,9 @@ import type {
   CircleSlash,
   ChevronRight,
   Search,
+  SearchX,
+  ChevronDown,
+  SlidersHorizontal,
   FileBox,
   Box,
   Share2,
@@ -73,6 +76,9 @@ declare module "vue" {
     CircleSlash: typeof CircleSlash;
     ChevronRight: typeof ChevronRight;
     Search: typeof Search;
+    SearchX: typeof SearchX;
+    ChevronDown: typeof ChevronDown;
+    SlidersHorizontal: typeof SlidersHorizontal;
     FileBox: typeof FileBox;
     Box: typeof Box;
     Share2: typeof Share2;

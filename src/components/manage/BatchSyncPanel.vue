@@ -512,18 +512,16 @@ function resultEntryText(entry: DryRunItem | BatchResult["failed"][number] | Bat
 
 <template>
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center"
-    style="background: rgba(0, 0, 0, 0.45);"
+    class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
     @click.self="closePanel"
   >
     <div
-      class="flex flex-col w-[min(92vw,920px)] h-[min(88vh,720px)] rounded-xl overflow-hidden"
-      style="background: var(--c-surface); border: 1px solid var(--c-border);"
+      class="modal-shell flex h-[min(88vh,720px)] w-[min(92vw,920px)] flex-col"
     >
       <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-3 border-b" style="border-color: var(--c-border);">
+      <div class="modal-header shrink-0">
         <div>
-          <h3 class="text-sm font-semibold" style="color: var(--c-text);">
+          <h3 class="text-[15px] font-semibold" style="color: var(--c-text);">
             {{ t("manage.batch_panel_title", { count: panelSkills.length }) }}
           </h3>
           <p class="text-[10px] mt-0.5" style="color: var(--c-text-secondary);">

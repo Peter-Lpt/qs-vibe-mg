@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "vue-i18n";
 import { useToast } from "../../composables/useToast";
 import { useSkillAgentStatus } from "../../composables/useSkillAgentStatus";
@@ -46,6 +46,11 @@ const previewLoading = ref(false);
 const showPreview = ref(false);
 const showDeleteConfirm = ref(false);
 const showAgentLegend = ref(false);
+const legendPinned = ref(false);
+const legendTrigger = ref<HTMLElement | null>(null);
+const legendPopover = ref<HTMLElement | null>(null);
+const legendStyle = ref<Record<string, string>>({});
+let legendHideTimer: ReturnType<typeof setTimeout> | null = null;
 const hasLibrarySource = computed(() => props.skill.sources.some((s) => s.from === "vibe-lib"));
 
 async function toggleExpand() {
@@ -71,11 +76,102 @@ async function handleDelete() {
 }
 
 function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
-  const parts = [`${item.agent.name}: ${item.statusLabel}`, item.agent.skills_dir];
-  if (item.source?.path) parts.push(`${t("manage.source_path")}: ${item.source.path}`);
-  if (item.source?.symlink_target) parts.push(`${t("manage.symlink_target")}: ${item.source.symlink_target}`);
+  const parts = [`${item.agent.name}: ${item.statusLabel}`, displayPath(item.agent.skills_dir)];
+  if (item.source?.path) parts.push(`${t("manage.source_path")}: ${displayPath(item.source.path)}`);
+  if (item.source?.symlink_target) parts.push(`${t("manage.symlink_target")}: ${displayPath(item.source.symlink_target)}`);
   return parts.join("\n");
 }
+
+function displayPath(path: string | undefined): string {
+  return (path || "").replace(/[\\/]+/g, "/");
+}
+
+function clearLegendHideTimer() {
+  if (legendHideTimer) {
+    clearTimeout(legendHideTimer);
+    legendHideTimer = null;
+  }
+}
+
+function updateLegendPosition() {
+  const trigger = legendTrigger.value;
+  if (!trigger) return;
+
+  const rect = trigger.getBoundingClientRect();
+  const width = 288;
+  const estimatedHeight = 220;
+  const gap = 8;
+  const margin = 12;
+  const left = Math.min(
+    window.innerWidth - width - margin,
+    Math.max(margin, rect.right - width)
+  );
+  const top =
+    rect.bottom + gap + estimatedHeight > window.innerHeight - margin
+      ? Math.max(margin, rect.top - estimatedHeight - gap)
+      : rect.bottom + gap;
+
+  legendStyle.value = {
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${width}px`,
+  };
+}
+
+function showLegend(pinned = false) {
+  clearLegendHideTimer();
+  if (pinned) legendPinned.value = true;
+  updateLegendPosition();
+  showAgentLegend.value = true;
+}
+
+function scheduleHideLegend() {
+  if (legendPinned.value) return;
+  clearLegendHideTimer();
+  legendHideTimer = setTimeout(() => {
+    showAgentLegend.value = false;
+  }, 120);
+}
+
+function closeLegend() {
+  clearLegendHideTimer();
+  legendPinned.value = false;
+  showAgentLegend.value = false;
+}
+
+function toggleLegend() {
+  if (showAgentLegend.value && legendPinned.value) {
+    closeLegend();
+    return;
+  }
+  showLegend(true);
+}
+
+function handleViewportChange() {
+  if (showAgentLegend.value) updateLegendPosition();
+}
+
+function handleDocumentPointerDown(event: PointerEvent) {
+  if (!showAgentLegend.value || !legendPinned.value) return;
+  const target = event.target instanceof Node ? event.target : null;
+  if (!target) return;
+  if (legendTrigger.value?.contains(target)) return;
+  if (legendPopover.value?.contains(target)) return;
+  closeLegend();
+}
+
+onMounted(() => {
+  window.addEventListener("resize", handleViewportChange);
+  window.addEventListener("scroll", handleViewportChange, true);
+  document.addEventListener("pointerdown", handleDocumentPointerDown);
+});
+
+onUnmounted(() => {
+  clearLegendHideTimer();
+  window.removeEventListener("resize", handleViewportChange);
+  window.removeEventListener("scroll", handleViewportChange, true);
+  document.removeEventListener("pointerdown", handleDocumentPointerDown);
+});
 </script>
 
 <template>
@@ -133,49 +229,52 @@ function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
         {{ syncedCount }}/{{ totalCount }}
       </span>
 
-      <!-- Agent 状态点 -->
-      <span class="relative flex items-center gap-0.5 shrink-0 overflow-visible">
+      <!-- Agent 鐘舵€佺偣 -->
+      <span class="relative flex items-center gap-0.5 shrink-0 overflow-visible" @mouseleave="scheduleHideLegend">
         <span
           v-for="item in allAgentStatuses"
           :key="item.agent.id"
           class="w-3 h-3 rounded-full shrink-0 inline-flex items-center justify-center text-[8px] font-medium cursor-help"
           :style="{ background: item.statusColor, color: item.status === 'unlinked' ? 'var(--c-text-secondary)' : 'white', border: item.status === 'unlinked' ? '1px solid var(--c-border)' : '0', boxShadow: item.status === 'unlinked' ? 'none' : '0 0 0 2px var(--c-surface)' }"
           :title="statusTip(item)"
-          @mouseenter="showAgentLegend = true"
+          @mouseenter="showLegend()"
         />
         <button
+          ref="legendTrigger"
           class="w-5 h-5 inline-flex items-center justify-center rounded cursor-help"
           style="color: var(--c-text-secondary);"
           :title="t('manage.agent_status_legend')"
-          @mouseenter="showAgentLegend = true"
-          @click.stop="showAgentLegend = !showAgentLegend"
+          @mouseenter="showLegend()"
+          @click.stop="toggleLegend"
         >
           <CircleAlert :size="12" />
         </button>
-        <div
-          v-if="showAgentLegend"
-          class="fixed right-6 top-24 z-[1000] w-72 rounded-lg border p-3 shadow-xl"
-          style="background: var(--c-surface-raised); border-color: var(--c-border);"
-          @mouseenter="showAgentLegend = true"
-          @mouseleave="showAgentLegend = false"
-        >
-          <div class="text-[11px] font-semibold mb-2" style="color: var(--c-text);">
-            {{ t("manage.agent_status_legend") }}
-          </div>
-          <div v-for="item in allAgentStatuses" :key="item.agent.id" class="flex items-start gap-2 py-1">
-            <span class="w-2 h-2 rounded-full mt-1 shrink-0" :style="{ background: item.statusColor }" />
-            <div class="min-w-0">
-              <div class="text-[10px] truncate" style="color: var(--c-text);">
-                {{ item.agent.name }} · {{ item.statusLabel }}
-              </div>
-              <div class="text-[9px] truncate" style="color: var(--c-text-secondary);" :title="item.source?.path || item.agent.skills_dir">
-                {{ item.source?.path || item.agent.skills_dir }}
+        <Teleport to="body">
+          <div
+            v-if="showAgentLegend"
+            ref="legendPopover"
+            class="fixed z-[1000] rounded-lg border p-3 shadow-xl"
+            :style="{ ...legendStyle, background: 'var(--c-surface-raised)', borderColor: 'var(--c-border)' }"
+            @mouseenter="showLegend()"
+            @mouseleave="scheduleHideLegend"
+          >
+            <div class="text-[11px] font-semibold mb-2" style="color: var(--c-text);">
+              {{ t("manage.agent_status_legend") }}
+            </div>
+            <div v-for="item in allAgentStatuses" :key="item.agent.id" class="flex items-start gap-2 py-1">
+              <span class="w-2 h-2 rounded-full mt-1 shrink-0" :style="{ background: item.statusColor }" />
+              <div class="min-w-0">
+                <div class="text-[10px] truncate" style="color: var(--c-text);">
+                  {{ item.agent.name }} 路 {{ item.statusLabel }}
+                </div>
+                <div class="path-label truncate" :title="displayPath(item.source?.path || item.agent.skills_dir)">
+                  {{ displayPath(item.source?.path || item.agent.skills_dir) }}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </Teleport>
       </span>
-
       <span
         v-if="skill.has_conflict"
         class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"

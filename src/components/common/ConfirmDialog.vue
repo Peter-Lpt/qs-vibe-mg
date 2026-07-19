@@ -25,24 +25,18 @@ const emit = defineEmits<{
 <template>
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center"
-      style="background: rgba(0, 0, 0, 0.5);"
+      class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
       @click.self="emit('cancel')"
     >
       <div
-        class="rounded-lg p-5 shadow-xl max-w-sm w-full mx-4"
-        style="background: var(--c-surface); border: 1px solid var(--c-border);"
+        class="modal-shell w-full max-w-sm"
       >
-        <h3 class="text-sm font-semibold mb-2" style="color: var(--c-text);">
-          {{ title }}
-        </h3>
-        <p class="text-sm mb-4" style="color: var(--c-text-secondary);">
-          {{ message }}
-        </p>
-        <div v-if="error" class="text-xs mb-3 px-2 py-1.5 rounded-md" style="background: var(--c-danger-light); color: var(--c-danger);">
-          {{ error }}
+        <div class="modal-body">
+          <h3 class="mb-2 text-[15px] font-semibold" style="color: var(--c-text);">{{ title }}</h3>
+          <p class="text-[13px] leading-6" style="color: var(--c-text-secondary);">{{ message }}</p>
+          <div v-if="error" class="mt-3 rounded-md px-3 py-2 text-xs" style="background: var(--c-danger-light); color: var(--c-danger);">{{ error }}</div>
         </div>
-        <div class="flex justify-end gap-2">
+        <div class="modal-actions">
           <button
             class="px-3 py-1.5 text-xs rounded-md border cursor-pointer hover:opacity-80"
             style="border-color: var(--c-border); color: var(--c-text);"

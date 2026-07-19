@@ -125,6 +125,10 @@ function rootName(rootId: string): string {
   return props.agents.find((a) => a.id === rootId)?.name ?? rootId;
 }
 
+function displayPath(path: string | undefined): string {
+  return (path || "").replace(/[\\/]+/g, "/");
+}
+
 function linkedByCount(root: TreeRoot, node: TreeSkillNode): number {
   if (root.kind !== "library") return 0;
   const map = (root as TreeRoot & { _linkedByMap?: Record<string, number> })._linkedByMap;
@@ -215,36 +219,31 @@ const highlighted = computed(() => {
 
 <template>
   <div class="text-xs">
-    <div v-for="root in roots" :key="root.id" class="mb-2">
+    <div v-for="root in roots" :key="root.id" class="tree-root-shell mb-1.5">
       <!-- 根节点 -->
       <div
-        class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer select-none"
-        :style="{
-          background: 'var(--c-surface)',
-          border: '1px solid var(--c-border)',
-        }"
+        class="tree-root-header flex items-center gap-2 cursor-pointer select-none"
         @click="toggleRoot(root.id)"
         @dragover="root.kind === 'agent' ? ($event.preventDefault()) : null"
         @drop="onDropOnRoot(root, $event)"
       >
         <ChevronRight class="text-[10px] transition-transform" :size="14" :style="{ transform: expandedRoots.has(root.id) ? 'rotate(90deg)' : 'rotate(0deg)', color: 'var(--c-text-secondary)' }" />
         <span class="text-xs font-semibold" style="color: var(--c-text);">{{ root.label }}</span>
-        <span class="text-[10px] truncate" style="color: var(--c-text-secondary);">{{ root.dirPath }}</span>
+        <span class="path-label min-w-0 truncate" :title="displayPath(root.dirPath)">{{ displayPath(root.dirPath) }}</span>
         <span class="text-[10px] ml-auto shrink-0" style="color: var(--c-text-secondary);">
           {{ root.stats.total }} · {{ root.stats.synced }}<Link2 :size="12" class="inline" /> {{ root.stats.independent }}<Folder :size="12" class="inline" />
           <template v-if="root.stats.conflict"> · <span class="inline-flex items-center gap-0.5" style="color: var(--c-warning);"><TriangleAlert :size="12" /> {{ root.stats.conflict }}</span></template>
           <template v-if="root.stats.dangling"> · <span class="inline-flex items-center gap-0.5" style="color: var(--c-danger);"><CircleSlash :size="12" /> {{ root.stats.dangling }}</span></template>
         </span>
         <button
-          class="text-[10px] px-1.5 py-0.5 rounded cursor-pointer shrink-0"
-          style="border: 1px solid var(--c-border); background: var(--c-bg); color: var(--c-text-secondary);"
+          class="tree-action-button shrink-0"
           @click.stop="reveal({ ...({ path: root.dirPath } as TreeSkillNode) })"
           :title="t('manage.reveal')"
         ><FolderOpen :size="14" /></button>
       </div>
 
       <!-- 子节点（单列表） -->
-      <div v-if="expandedRoots.has(root.id)" class="ml-3 mt-1 space-y-1">
+      <div v-if="expandedRoots.has(root.id)" class="space-y-0.5 p-1.5">
         <div
           v-for="node in root.children"
           :key="node.nodeKey"
@@ -252,7 +251,7 @@ const highlighted = computed(() => {
         >
           <!-- 行 header：点击切换展开；只承载单行内容，保持行高不变，不嵌套详情 -->
           <div
-            class="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer group"
+            class="tree-node-row flex items-center gap-1.5 px-2 py-1 cursor-pointer group"
             :style="{
               background: selectedIds.has(node.id)
                 ? 'var(--c-primary-light)'
@@ -280,15 +279,15 @@ const highlighted = computed(() => {
             </span>
 
             <!-- 行内主操作 -->
-            <div class="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-              <button v-if="node.linkState === 'independent'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-primary);" :title="root.kind === 'project' ? t('manage.import_library') : t('manage.btn_sync')" @click.stop="doSync(node)"><Plus :size="14" /></button>
-              <button v-if="root.kind !== 'project' && node.linkState === 'independent_same'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-primary);" :title="t('manage.btn_replace')" @click.stop="doReplace(node)"><Link2 :size="14" /></button>
-              <button v-if="root.kind !== 'project' && node.linkState === 'synced'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('skills.unlink')" @click.stop="doUnlink(node)"><Unlink :size="14" /></button>
-              <button v-if="root.kind !== 'project' && node.linkState === 'linked_elsewhere'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" :title="t('manage.relink')" @click.stop="doRelink(node)"><RefreshCw :size="14" /></button>
-              <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('skills.preview')" @click.stop="togglePreview(node)"><Eye :size="14" /></button>
-              <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('manage.reveal')" @click.stop="reveal(node)"><FolderOpen :size="14" /></button>
-              <button class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-text-secondary);" :title="t('manage.copy_path')" @click.stop="copyPath(node)"><Copy :size="14" /></button>
-              <button v-if="root.kind === 'library'" class="text-[10px] px-1 rounded cursor-pointer inline-flex items-center" style="color: var(--c-danger);" :title="t('skills.delete_library')" @click.stop="showDelete = { node }"><Trash2 :size="14" /></button>
+            <div class="tree-actions shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+              <button v-if="node.linkState === 'independent'" class="tree-action-button" style="color: var(--c-primary);" :title="root.kind === 'project' ? t('manage.import_library') : t('manage.btn_sync')" @click.stop="doSync(node)"><Plus :size="14" /></button>
+              <button v-if="root.kind !== 'project' && node.linkState === 'independent_same'" class="tree-action-button" style="color: var(--c-primary);" :title="t('manage.btn_replace')" @click.stop="doReplace(node)"><Link2 :size="14" /></button>
+              <button v-if="root.kind !== 'project' && node.linkState === 'synced'" class="tree-action-button" :title="t('skills.unlink')" @click.stop="doUnlink(node)"><Unlink :size="14" /></button>
+              <button v-if="root.kind !== 'project' && node.linkState === 'linked_elsewhere'" class="tree-action-button" :title="t('manage.relink')" @click.stop="doRelink(node)"><RefreshCw :size="14" /></button>
+              <button class="tree-action-button" :title="t('skills.preview')" @click.stop="togglePreview(node)"><Eye :size="14" /></button>
+              <button class="tree-action-button" :title="t('manage.reveal')" @click.stop="reveal(node)"><FolderOpen :size="14" /></button>
+              <button class="tree-action-button" :title="t('manage.copy_path')" @click.stop="copyPath(node)"><Copy :size="14" /></button>
+              <button v-if="root.kind === 'library'" class="tree-action-button" style="color: var(--c-danger);" :title="t('skills.delete_library')" @click.stop="showDelete = { node }"><Trash2 :size="14" /></button>
             </div>
           </div>
 

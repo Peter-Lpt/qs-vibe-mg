@@ -49,7 +49,19 @@
 - `src-tauri/src/models/skill.rs`
 - `src/components/manage/ManageTab.vue`
 
-### 5. 配置 / 目录发现
+### 5. 管理页 UI / 交互入口
+
+- `docs/v0.2/15-manage-ui-optimization.md`
+- `docs/v0.2/16-manage-ui-audit-and-optimization.md`
+- `docs/v0.2/17-skill-workbench-redesign.md`
+- `src/components/manage/ManageTab.vue`
+- `src/components/manage/SkillWorkbench.vue`
+- `src/components/manage/SkillWorkbenchRow.vue`
+- `src/components/manage/IssueRepairPanel.vue`
+
+重点看：同步控制台、Agent 范围筛选、更多筛选、问题修复分组和批量入口。
+
+### 6. 配置 / 目录发现
 
 - `src-tauri/src/commands/config.rs`
 - `src-tauri/src/utils/config.rs`
@@ -74,4 +86,3 @@
 3. `src-tauri/src/utils/origin.rs`
 4. `src-tauri/src/commands/skills.rs`
 5. `src/components/skills/InstallDialog.vue`
-

@@ -58,6 +58,16 @@
 - `src/components/manage/ManageTab.vue`
 - `src/components/settings/SettingsPage.vue`
 - `src/components/history/HistoryTab.vue`
+- `src/components/manage/IssueRepairPanel.vue`（同步控制台内的紧凑问题修复入口）
+
+### v0.2 管理页体验优化
+
+- `docs/v0.2/15-manage-ui-optimization.md`
+- `docs/v0.2/16-manage-ui-audit-and-optimization.md`
+- `docs/v0.2/17-skill-workbench-redesign.md`
+- `src/components/manage/ManageTab.vue`（搜索、Agent 范围、低频筛选与问题修复的合并布局）
+- `src/components/manage/SkillWorkbench.vue`（自适应 Agent 关系工作台）
+- `src/components/manage/SkillWorkbenchRow.vue`（Skill 行、状态关系和行内详情）
 
 ### 技能管理
 
@@ -90,4 +100,3 @@
 - 命令执行使用 `cmd /C` 或 `sh -lc`。
 - Rust 环境在 Windows 下依赖 `RUSTUP_HOME` / `CARGO_HOME`。
 - 所有路径逻辑尽量走 `utils/fs.rs` 和 `utils/path.rs`。
-

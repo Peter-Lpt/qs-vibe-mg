@@ -19,28 +19,28 @@ async function closeWindow() {
   await appWindow.close();
 }
 
-async function startWindowDrag(event: PointerEvent) {
-  if (event.button !== 0 || event.detail > 1) return;
+async function handleTitlebarMouseDown(event: MouseEvent) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  if (event.detail === 2) {
+    await toggleMaximizeWindow();
+    return;
+  }
   await appWindow.startDragging();
 }
 </script>
 
 <template>
-  <div class="flex flex-col h-screen overflow-hidden" style="background: var(--c-bg);">
+  <div class="app-shell-root flex flex-col h-dvh min-h-0 overflow-hidden" style="background: var(--c-bg);">
     <header class="app-shell-header flex items-center gap-5 px-5 py-3 shrink-0">
       <div
         class="flex items-center gap-2.5 shrink-0 select-none"
-        data-tauri-drag-region
-        @pointerdown="startWindowDrag"
-        @dblclick="toggleMaximizeWindow"
+        @mousedown="handleTitlebarMouseDown"
       >
-        <div
-          class="brand-mark"
-          data-tauri-drag-region
-        >
+        <div class="brand-mark">
           QS
         </div>
-        <div class="min-w-0" data-tauri-drag-region>
+        <div class="min-w-0">
           <h1 class="text-sm font-semibold leading-tight" style="color: var(--c-text-strong);">
             {{ t('app.workspace_title') }}
           </h1>
@@ -56,9 +56,7 @@ async function startWindowDrag(event: PointerEvent) {
 
       <div
         class="titlebar-drag-spacer flex-1 self-stretch min-w-4"
-        data-tauri-drag-region
-        @pointerdown="startWindowDrag"
-        @dblclick="toggleMaximizeWindow"
+        @mousedown="handleTitlebarMouseDown"
       />
 
       <div class="ml-auto flex items-center gap-1 shrink-0">
@@ -90,7 +88,7 @@ async function startWindowDrag(event: PointerEvent) {
       </div>
     </header>
 
-    <div class="flex-1 overflow-y-auto px-5 py-4" style="background: var(--c-bg);">
+    <div class="app-shell-content flex-1 min-h-0 overflow-y-auto px-5 py-4" style="background: var(--c-bg);">
       <slot />
     </div>
   </div>

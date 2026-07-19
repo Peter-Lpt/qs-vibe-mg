@@ -6,6 +6,7 @@ import type { Agent, Skill } from "../../types";
 const props = defineProps<{
   skills: Skill[];
   agents: Agent[];
+  compact?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -89,29 +90,32 @@ const groups = computed(() => {
   ];
   return data.filter((group) => group.skills.length > 0);
 });
+
+const totalIssueSkills = computed(() => groups.value.reduce((total, group) => total + group.skills.length, 0));
 </script>
 
 <template>
-  <div v-if="groups.length > 0" class="workspace-panel">
-    <div class="flex items-center gap-2 mb-2">
+  <div v-if="groups.length > 0" :class="props.compact ? 'rounded-lg border p-2.5' : 'workspace-panel'" :style="props.compact ? { borderColor: 'var(--c-border-subtle)', background: 'var(--c-bg)' } : undefined">
+    <div class="mb-2 flex items-center gap-2">
       <CircleAlert :size="14" style="color: var(--c-warning);" />
       <span class="text-xs font-semibold" style="color: var(--c-text-strong);">
         {{ t("manage.repair_title") }}
       </span>
-      <span class="text-[10px]" style="color: var(--c-text-secondary);">
-        {{ t("manage.repair_subtitle") }}
+      <span class="text-[11px] truncate" style="color: var(--c-text-secondary);">
+        {{ props.compact ? totalIssueSkills + ' ' + (t('manage.repair_groups') || '项待处理') : t("manage.repair_subtitle") }}
       </span>
     </div>
-    <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+    <div class="grid max-h-56 grid-cols-1 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2" :style="props.compact ? undefined : { gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }">
       <button
         v-for="group in groups"
         :key="group.id"
-        class="agent-overview-card px-3 py-2.5 text-left cursor-pointer transition-colors hover:bg-[var(--c-surface-hover)]"
+        :class="props.compact ? 'rounded-md border px-2.5 py-2 text-left cursor-pointer transition-colors hover:bg-[var(--c-surface-hover)]' : 'agent-overview-card px-3 py-2.5 text-left cursor-pointer transition-colors hover:bg-[var(--c-surface-hover)]'"
+        :style="props.compact ? { borderColor: 'var(--c-border-subtle)' } : undefined"
         @click="emit('select-group', group.skills.map((skill) => skill.id), group.batch, group.id)"
       >
         <div class="flex items-center gap-2">
-          <component :is="group.icon" :size="14" :style="{ color: group.color }" />
-          <span class="text-[11px] font-medium truncate" style="color: var(--c-text);">{{ group.label }}</span>
+          <component :is="group.icon" :size="13" :style="{ color: group.color }" />
+          <span class="text-[10px] font-medium truncate" style="color: var(--c-text);">{{ group.label }}</span>
           <span class="text-[11px] ml-auto" :style="{ color: group.color }">{{ group.skills.length }}</span>
         </div>
       </button>

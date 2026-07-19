@@ -190,18 +190,14 @@ onMounted(() => {
 
 <template>
   <div
-    class="fixed inset-0 z-40 flex items-center justify-center"
-    style="background: rgba(0, 0, 0, 0.5);"
+    class="modal-backdrop fixed inset-0 z-40 flex items-center justify-center p-4"
     @click.self="appStore.showSettings = false"
   >
     <div
-      class="settings-dialog rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col"
-      style="background: var(--c-surface); border: 1px solid var(--c-border);"
+      class="modal-shell settings-dialog flex w-full max-w-md flex-col"
     >
-      <div class="flex items-center justify-between p-4 border-b shrink-0" style="border-color: var(--c-border);">
-        <h2 class="text-sm font-semibold" style="color: var(--c-text);">
-          {{ t('settings.title') }}
-        </h2>
+      <div class="modal-header shrink-0">
+        <h2 class="text-[15px] font-semibold" style="color: var(--c-text);">{{ t('settings.title') }}</h2>
         <button
           class="text-lg hover:opacity-70 cursor-pointer"
           style="color: var(--c-text-secondary);"
