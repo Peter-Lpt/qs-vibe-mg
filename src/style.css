@@ -42,6 +42,8 @@
   --c-pink: #ec4899;
   --c-pink-light: rgba(236, 72, 153, 0.08);
   --c-teal: #14b8a6;
+  --c-plugin: #8b5cf6;
+  --c-plugin-light: rgba(139, 92, 246, 0.1);
   --dot-1: #3b82f6;
   --dot-2: #8b5cf6;
   --dot-3: #22c55e;
@@ -94,6 +96,8 @@
   --c-pink: #f472b6;
   --c-pink-light: rgba(236, 72, 153, 0.12);
   --c-teal: #2dd4bf;
+  --c-plugin: #a78bfa;
+  --c-plugin-light: rgba(167, 139, 250, 0.12);
   --dot-1: #60a5fa;
   --dot-2: #a78bfa;
   --dot-3: #4ade80;

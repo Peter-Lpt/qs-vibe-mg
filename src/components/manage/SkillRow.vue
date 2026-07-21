@@ -18,6 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "update:expanded", value: boolean): void;
   (e: "toggle:select", skillId: string): void;
+  (e: "sync-plugin", skillId: string): void;
 }>();
 
 const { t } = useI18n();
@@ -73,6 +74,10 @@ async function handleDelete() {
   } catch (e: unknown) {
     toast.show(String(e), "error");
   }
+}
+
+function handleSyncPlugin() {
+  emit("sync-plugin", props.skill.id);
 }
 
 function statusTip(item: (typeof allAgentStatuses.value)[number]): string {
@@ -177,18 +182,22 @@ onUnmounted(() => {
 <template>
   <div
     class="skill-row-shell"
+    :class="{ 'skill-row-plugin': skill.from_plugin }"
     :style="{
-      borderColor: skill.has_conflict
-        ? 'var(--c-warning)'
-        : skill.has_dangling
-          ? 'var(--c-danger)'
-          : skill.is_duplicate
-            ? 'var(--c-info)'
-            : selected
-              ? 'var(--c-primary)'
-              : isExpanded
+      borderColor: skill.from_plugin
+        ? 'var(--c-plugin, #8b5cf6)'
+        : skill.has_conflict
+          ? 'var(--c-warning)'
+          : skill.has_dangling
+            ? 'var(--c-danger)'
+            : skill.is_duplicate
+              ? 'var(--c-info)'
+              : selected
                 ? 'var(--c-primary)'
-                : 'var(--c-border)',
+                : isExpanded
+                  ? 'var(--c-primary)'
+                  : 'var(--c-border)',
+      background: skill.from_plugin ? 'var(--c-plugin-light, rgba(139, 92, 246, 0.05))' : undefined,
     }"
   >
     <!-- Collapsed header -->
@@ -209,12 +218,21 @@ onUnmounted(() => {
         :style="{ color: 'var(--c-text-secondary)', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }"
       />
 
-      <TriangleAlert v-if="skill.has_conflict" class="shrink-0" :size="14" style="color: var(--c-warning);" />
+      <Puzzle v-if="skill.from_plugin" class="shrink-0" :size="14" style="color: var(--c-plugin, #8b5cf6);" />
+      <TriangleAlert v-else-if="skill.has_conflict" class="shrink-0" :size="14" style="color: var(--c-warning);" />
       <CircleX v-else-if="skill.has_dangling" class="shrink-0" :size="14" style="color: var(--c-danger);" />
       <Copy v-else-if="skill.is_duplicate" class="shrink-0" :size="14" style="color: var(--c-info);" />
 
       <span class="text-sm font-semibold truncate" style="color: var(--c-text-strong);">
         {{ skill.name || skill.id }}
+      </span>
+
+      <span
+        v-if="skill.from_plugin && skill.plugin_source"
+        class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+        style="background: var(--c-plugin-light, rgba(139, 92, 246, 0.15)); color: var(--c-plugin, #8b5cf6);"
+      >
+        {{ skill.plugin_source }}
       </span>
 
       <span
@@ -229,7 +247,7 @@ onUnmounted(() => {
         {{ syncedCount }}/{{ totalCount }}
       </span>
 
-      <!-- Agent 鐘舵€佺偣 -->
+      <!-- Agent 状态点 -->
       <span class="relative flex items-center gap-0.5 shrink-0 overflow-visible" @mouseleave="scheduleHideLegend">
         <span
           v-for="item in allAgentStatuses"
@@ -265,9 +283,8 @@ onUnmounted(() => {
               <span class="w-2 h-2 rounded-full mt-1 shrink-0" :style="{ background: item.statusColor }" />
               <div class="min-w-0">
                 <div class="text-[10px] truncate" style="color: var(--c-text);">
-                  {{ item.agent.name }} 路 {{ item.statusLabel }}
+                  {{ item.agent.name }} - {{ item.statusLabel }}
                 </div>
-
               </div>
             </div>
           </div>
@@ -289,6 +306,16 @@ onUnmounted(() => {
       </span>
 
       <div class="flex items-center gap-1 ml-auto shrink-0">
+        <button
+          v-if="skill.from_plugin && !hasLibrarySource"
+          class="h-6 px-2 flex items-center justify-center rounded cursor-pointer transition-colors text-[10px] font-medium"
+          style="background: var(--c-plugin-light, rgba(139, 92, 246, 0.15)); color: var(--c-plugin, #8b5cf6);"
+          @click.stop="handleSyncPlugin"
+          :title="t('manage.sync_to_library')"
+        >
+          <DownloadCloud :size="12" class="mr-1" />
+          {{ t("manage.sync_to_library") }}
+        </button>
         <button
           class="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors"
           :style="{

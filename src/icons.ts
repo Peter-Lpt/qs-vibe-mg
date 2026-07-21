@@ -42,6 +42,7 @@ import {
   Box,
   Share2,
   ArrowLeftRight,
+  ArrowUp,
   GitMerge,
   History,
   Moon,
@@ -49,6 +50,7 @@ import {
   Square,
   Sun,
   Wrench,
+  Puzzle,
 } from "@lucide/vue";
 
 const icons = {
@@ -92,6 +94,7 @@ const icons = {
   Box,
   Share2,
   ArrowLeftRight,
+  ArrowUp,
   GitMerge,
   History,
   Moon,
@@ -99,6 +102,7 @@ const icons = {
   Square,
   Sun,
   Wrench,
+  Puzzle,
 };
 
 export function registerIcons(app: App) {

@@ -8,7 +8,7 @@ use crate::models::agent::Agent;
 use crate::models::history::HistoryAction;
 use crate::models::sync::SyncResult;
 use crate::utils::config::{invalidate_agents_cache, load_agents};
-use crate::utils::fs::{self as vibe_fs, LinkCreationReport};
+use crate::utils::fs::{self as vibe_fs, LinkCreationReport, copy_skill_dir_all};
 use crate::utils::hash::dir_hash;
 use crate::utils::history::{record_action, record_action_with_skills, record_action_with_source};
 use crate::utils::path::vibe_skills_dir;
@@ -868,6 +868,7 @@ pub fn batch_skill_action(
             "remove_dangling" => {
                 unlink_skill(&skill_id, agent, None).map(|_| action_report("unlink"))
             }
+            "sync_from_plugin" => sync_from_plugin_impl(&skill_id, agent),
             _ => {
                 result.errors.push(format!("Unknown action: {}", action));
                 continue;
@@ -897,4 +898,44 @@ pub fn batch_skill_action(
     }
 
     Ok(result)
+}
+
+/// 从 plugin 同步 skill 到中心库
+fn sync_from_plugin_impl(skill_id: &str, _agent: &Agent) -> Result<LinkCreationReport, VibeError> {
+    let vibe_dir = vibe_skills_dir()?;
+    let skill_path = vibe_dir.join(skill_id);
+
+    // 如果中心库已存在，直接返回成功
+    if skill_path.exists() {
+        return Ok(action_report("sync_from_plugin"));
+    }
+
+    // 查找 plugin 来源的路径
+    let skills = crate::commands::skills::list_skills()?;
+    let skill = skills.iter().find(|s| s.id == skill_id).ok_or_else(|| {
+        VibeError::SkillNotFound {
+            skill_id: skill_id.to_string(),
+        }
+    })?;
+
+    let plugin_source = skill.sources.iter().find(|s| {
+        s.source_kind == "marketplace"
+            || s.from.starts_with("claude-plugin:")
+            || s.from.starts_with("codex-plugin:")
+    }).ok_or_else(|| {
+        VibeError::Path(format!("No plugin source found for skill {}", skill_id))
+    })?;
+
+    let source_path = Path::new(&plugin_source.path);
+    if !source_path.exists() {
+        return Err(VibeError::Path(format!(
+            "Plugin source path does not exist: {}",
+            source_path.display()
+        )));
+    }
+
+    // 复制到中心库
+    copy_skill_dir_all(source_path, &skill_path)?;
+
+    Ok(action_report("sync_from_plugin"))
 }

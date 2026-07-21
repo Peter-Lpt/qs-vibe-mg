@@ -5,7 +5,8 @@ export type AgentAction =
   | "relink"
   | "remove_dangling"
   | "link"
-  | "unlink";
+  | "unlink"
+  | "sync_from_plugin";
 
 export type TFunc = (key: string, params?: Record<string, unknown>) => string;
 
@@ -89,6 +90,16 @@ export const SKILL_ACTIONS: Record<AgentAction, SkillActionDefinition> = {
     priority: 6,
     mutatesLibrary: false,
     removesTarget: true,
+  },
+  sync_from_plugin: {
+    id: "sync_from_plugin",
+    labelKey: "manage.btn_sync_from_plugin",
+    successKey: "manage.synced_from_plugin",
+    color: "var(--c-plugin, #8b5cf6)",
+    style: "background: var(--c-plugin, #8b5cf6); color: white;",
+    priority: 2,
+    mutatesLibrary: true,
+    removesTarget: false,
   },
 };
 
