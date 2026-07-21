@@ -49,6 +49,12 @@ pub struct Skill {
     pub is_duplicate: bool,
     /// 是否缺少 name 字段（frontmatter 中没有 name 或 name 为空）
     pub missing_name: bool,
+    /// 是否来自 plugin（仅用于展示，不参与冲突检测）
+    #[serde(default)]
+    pub from_plugin: bool,
+    /// plugin 来源名称（如 claude-plugin:ruflo 中的 ruflo）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_source: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

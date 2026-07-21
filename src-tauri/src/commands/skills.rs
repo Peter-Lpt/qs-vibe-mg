@@ -92,6 +92,8 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
 
     scan_project_sources(&mut map, &mut hash_cache)?;
 
+    scan_plugin_marketplace_skills(&mut map, &mut hash_cache)?;
+
     crate::utils::hash::save_hash_cache(&vibe_dir, &hash_cache);
 
     let mut skills: Vec<Skill> = map
@@ -99,9 +101,31 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
         .map(|(id, entry)| {
             let linked_agents = find_linked_agents(&id, &agents);
 
-            // 检测冲突：多个 source 的 content_hash 不完全相同
-            let unique_hashes: Vec<&str> = entry
-                .sources
+            // 检查是否来自 plugin
+            let from_plugin = entry.sources.iter().any(|s| {
+                s.source_kind == "marketplace" || s.from.starts_with("claude-plugin:") || s.from.starts_with("codex-plugin:")
+            });
+            let plugin_source = if from_plugin {
+                entry.sources.iter()
+                    .find(|s| s.source_kind == "marketplace" || s.from.starts_with("claude-plugin:") || s.from.starts_with("codex-plugin:"))
+                    .and_then(|s| {
+                        if s.from.starts_with("claude-plugin:") {
+                            Some(s.from.strip_prefix("claude-plugin:").unwrap_or(&s.from).to_string())
+                        } else if s.from.starts_with("codex-plugin:") {
+                            Some(s.from.strip_prefix("codex-plugin:").unwrap_or(&s.from).to_string())
+                        } else {
+                            None
+                        }
+                    })
+            } else {
+                None
+            };
+
+            // 检测冲突：多个 source 的 content_hash 不完全相同（排除 plugin 来源）
+            let non_plugin_sources: Vec<&SkillSource> = entry.sources.iter()
+                .filter(|s| s.source_kind != "marketplace" && !s.from.starts_with("claude-plugin:") && !s.from.starts_with("codex-plugin:"))
+                .collect();
+            let unique_hashes: Vec<&str> = non_plugin_sources
                 .iter()
                 .map(|s| s.content_hash.as_str())
                 .filter(|h| !h.is_empty())
@@ -110,8 +134,8 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
                 .collect();
             let has_conflict = unique_hashes.len() > 1;
 
-            // 检测断链：is_symlink 为 true 但 symlink_target 不存在
-            let has_dangling = entry.sources.iter().any(|s| {
+            // 检测断链：is_symlink 为 true 但 symlink_target 不存在（排除 plugin 来源）
+            let has_dangling = non_plugin_sources.iter().any(|s| {
                 if !s.is_symlink {
                     return false;
                 }
@@ -121,9 +145,9 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
                 }
             });
 
-            // 检测重复：同文件夹名但 SKILL.md name 不同
+            // 检测重复：同文件夹名但 SKILL.md name 不同（排除 plugin 来源）
             let unique_names: std::collections::HashSet<&str> =
-                entry.sources.iter().map(|s| s.name.as_str()).collect();
+                non_plugin_sources.iter().map(|s| s.name.as_str()).collect();
             let is_duplicate = unique_names.len() > 1;
 
             // 检测 name 是否为空
@@ -147,16 +171,21 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
                 has_dangling,
                 is_duplicate,
                 missing_name,
+                from_plugin,
+                plugin_source,
             }
         })
         .collect();
 
-    // 排序：冲突和断链置顶，其余按字母排序
+    // 排序：冲突和断链置顶，plugin 置底，其余按字母排序
     skills.sort_by(|a, b| {
         let a_issue = a.has_conflict || a.has_dangling;
         let b_issue = b.has_conflict || b.has_dangling;
+        let a_plugin = a.from_plugin;
+        let b_plugin = b.from_plugin;
         b_issue
             .cmp(&a_issue)
+            .then_with(|| a_plugin.cmp(&b_plugin))
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
 
@@ -940,6 +969,8 @@ fn install_skill_from_materialized_source(
         has_dangling: false,
         is_duplicate: false,
         missing_name: false,
+        from_plugin: false,
+        plugin_source: None,
     })
 }
 
@@ -1298,6 +1329,8 @@ fn source_kind_for(source_id: &str) -> String {
         "project".to_string()
     } else if source_id.starts_with("external:") {
         "external".to_string()
+    } else if source_id.starts_with("claude-plugin:") || source_id.starts_with("codex-plugin:") {
+        "marketplace".to_string()
     } else {
         "agent".to_string()
     }
@@ -1343,6 +1376,108 @@ fn scan_project_sources(
             )?;
         }
     }
+    Ok(())
+}
+
+/// 扫描 Claude Plugin 和 Codex Plugin 市场安装的 skill
+/// Claude 目录结构: ~/.claude/plugins/cache/{marketplace}/{plugin-name}/{version}/skills/{skill-name}/SKILL.md
+/// Codex 目录结构: ~/.codex/plugins/cache/{plugin-name}/{category}/{version}/skills/{skill-name}/SKILL.md
+fn scan_plugin_marketplace_skills(
+    map: &mut HashMap<String, SkillEntry>,
+    hash_cache: &mut crate::utils::hash::HashCache,
+) -> Result<(), VibeError> {
+    let home_dir = dirs::home_dir().ok_or_else(|| VibeError::Path("Home directory not found".to_string()))?;
+
+    // 扫描 Claude Plugin
+    let claude_plugins_dir = home_dir.join(".claude").join("plugins").join("cache");
+    scan_plugin_directory(&claude_plugins_dir, "claude-plugin", map, hash_cache)?;
+
+    // 扫描 Codex Plugin
+    let codex_plugins_dir = home_dir.join(".codex").join("plugins").join("cache");
+    scan_plugin_directory(&codex_plugins_dir, "codex-plugin", map, hash_cache)?;
+
+    Ok(())
+}
+
+/// 扫描插件目录中的 skill
+/// 支持两种目录结构：
+/// 1. {marketplace}/{plugin-name}/{version}/skills/ (Claude Plugin)
+/// 2. {plugin-name}/{category}/{version}/skills/ (Codex Plugin)
+fn scan_plugin_directory(
+    plugins_dir: &Path,
+    plugin_type: &str,
+    map: &mut HashMap<String, SkillEntry>,
+    hash_cache: &mut crate::utils::hash::HashCache,
+) -> Result<(), VibeError> {
+    if !plugins_dir.exists() || !plugins_dir.is_dir() {
+        return Ok(());
+    }
+
+    // 遍历第一层目录（marketplace 或 plugin-name）
+    for first_level_entry in fs::read_dir(plugins_dir)? {
+        let first_level_entry = first_level_entry?;
+        let first_level_path = first_level_entry.path();
+        if !first_level_path.is_dir() {
+            continue;
+        }
+        let first_level_name = first_level_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        // 遍历第二层目录（plugin-name 或 category）
+        for second_level_entry in fs::read_dir(&first_level_path)? {
+            let second_level_entry = second_level_entry?;
+            let second_level_path = second_level_entry.path();
+            if !second_level_path.is_dir() {
+                continue;
+            }
+
+            // 检查是否有 skills 目录（直接在第二层）
+            let skills_dir = second_level_path.join("skills");
+            if skills_dir.exists() && skills_dir.is_dir() {
+                let source_id = format!("{}:{}", plugin_type, first_level_name);
+                scan_directory(
+                    &skills_dir,
+                    &source_id,
+                    map,
+                    false,
+                    0,
+                    &mut std::collections::HashSet::new(),
+                    hash_cache,
+                    None,
+                )?;
+                continue;
+            }
+
+            // 遍历第三层目录（version）
+            for third_level_entry in fs::read_dir(&second_level_path)? {
+                let third_level_entry = third_level_entry?;
+                let third_level_path = third_level_entry.path();
+                if !third_level_path.is_dir() {
+                    continue;
+                }
+
+                let skills_dir = third_level_path.join("skills");
+                if !skills_dir.exists() || !skills_dir.is_dir() {
+                    continue;
+                }
+
+                let source_id = format!("{}:{}", plugin_type, first_level_name);
+                scan_directory(
+                    &skills_dir,
+                    &source_id,
+                    map,
+                    false,
+                    0,
+                    &mut std::collections::HashSet::new(),
+                    hash_cache,
+                    None,
+                )?;
+            }
+        }
+    }
+
     Ok(())
 }
 

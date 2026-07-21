@@ -1,6 +1,6 @@
 export interface SkillSource {
   from: string;
-  source_kind?: "library" | "agent" | "project" | "external";
+  source_kind?: "library" | "agent" | "project" | "external" | "marketplace";
   path: string;
   name: string;
   description: string;
@@ -56,6 +56,8 @@ export interface Skill {
   has_dangling: boolean;
   is_duplicate: boolean;
   missing_name: boolean;
+  from_plugin: boolean;
+  plugin_source?: string;
 }
 
 export interface Agent {

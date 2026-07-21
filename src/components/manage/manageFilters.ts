@@ -22,17 +22,45 @@ export interface SourceClassification {
   hasAgent: boolean;
   hasProject: boolean;
   hasExternal: boolean;
+  hasMarketplace: boolean;
   hasAgentSymlink: boolean;
   hasIndependentAgentCopy: boolean;
   hasLinkedElsewhere: boolean;
 }
 
-function sourceKind(source: SkillSource, agentIds: ReadonlySet<string>): "library" | "agent" | "project" | "external" {
+// Plugin 类型到 Agent ID 的映射
+export const PLUGIN_AGENT_MAP: Record<string, string> = {
+  "claude-plugin": "claude-code",
+  "codex-plugin": "codex",
+};
+
+function sourceKind(source: SkillSource, agentIds: ReadonlySet<string>): "library" | "agent" | "project" | "external" | "marketplace" {
+  if (source.source_kind === "marketplace") return "marketplace";
   if (source.source_kind) return source.source_kind;
   if (source.from === "vibe-lib") return "library";
   if (source.from.startsWith("project:")) return "project";
+  if (source.from.startsWith("claude-plugin:") || source.from.startsWith("codex-plugin:")) return "marketplace";
   if (agentIds.has(source.from)) return "agent";
   return "external";
+}
+
+// 获取 plugin 来源对应的 agent ID
+export function getPluginAgentId(source: SkillSource): string | null {
+  for (const [prefix, agentId] of Object.entries(PLUGIN_AGENT_MAP)) {
+    if (source.from.startsWith(prefix + ":")) {
+      return agentId;
+    }
+  }
+  return null;
+}
+
+// 检查 skill 是否属于指定的 agent（包括 plugin 来源）
+export function skillBelongsToAgent(skill: Skill, agentId: string): boolean {
+  return skill.sources.some((source) => {
+    if (source.from === agentId) return true;
+    const pluginAgentId = getPluginAgentId(source);
+    return pluginAgentId === agentId;
+  });
 }
 
 function normalizePath(path: string): string {
@@ -46,6 +74,7 @@ export function classifySkillSources(skill: Skill, agents: readonly Agent[] = []
     hasAgent: false,
     hasProject: false,
     hasExternal: false,
+    hasMarketplace: false,
     hasAgentSymlink: false,
     hasIndependentAgentCopy: false,
     hasLinkedElsewhere: false,
@@ -61,6 +90,7 @@ export function classifySkillSources(skill: Skill, agents: readonly Agent[] = []
     }
     if (kind === "project") classification.hasProject = true;
     if (kind === "external") classification.hasExternal = true;
+    if (kind === "marketplace") classification.hasMarketplace = true;
   }
 
   const librarySource = skill.sources.find((source) => sourceKind(source, agentIds) === "library");
@@ -78,12 +108,14 @@ export function matchesStatusPreset(
   agents: readonly Agent[] = []
 ): boolean {
   if (preset === "all") return true;
+  // Plugin 来源的 skill 不参与状态筛选（只在 "all" 时显示）
+  if (skill.from_plugin) return false;
   const sources = classifySkillSources(skill, agents);
   if (preset === "needs_attention") {
     return skill.has_conflict || skill.has_dangling || sources.hasLinkedElsewhere;
   }
-  if (preset === "linked_any") return sources.hasAgentSymlink;
-  return !sources.hasAgentSymlink;
+  if (preset === "linked_any") return sources.hasAgentSymlink || sources.hasMarketplace;
+  return !sources.hasAgentSymlink && !sources.hasMarketplace;
 }
 
 export function matchesIssues(skill: Skill, issues: ReadonlySet<IssueFilter>): boolean {
@@ -104,7 +136,7 @@ export function matchesLibraryScope(
   const sourceInfo = classifySkillSources(skill, agents);
   return (
     (scopes.has("missing_library") && !sourceInfo.hasLibrary) ||
-    (scopes.has("library_only") && sourceInfo.hasLibrary && !sourceInfo.hasAgent && !sourceInfo.hasProject && !sourceInfo.hasExternal)
+    (scopes.has("library_only") && sourceInfo.hasLibrary && !sourceInfo.hasAgent && !sourceInfo.hasProject && !sourceInfo.hasExternal && !sourceInfo.hasMarketplace)
   );
 }
 
@@ -115,7 +147,16 @@ export function matchesAgentScope(
 ): boolean {
   if (agentIds.size === 0) return true;
   const matched = [...agentIds].some((agentId) =>
-    skill.sources.some((source) => source.from === agentId || (source.source_kind === "agent" && source.from === agentId))
+    skill.sources.some((source) => {
+      // 直接匹配 agent ID
+      if (source.from === agentId) return true;
+      // 匹配 agent 类型的 source
+      if (source.source_kind === "agent" && source.from === agentId) return true;
+      // 匹配 plugin 来源的 skill（映射到对应的 agent）
+      const pluginAgentId = getPluginAgentId(source);
+      if (pluginAgentId && pluginAgentId === agentId) return true;
+      return false;
+    })
   );
   return mode === "exclude" ? !matched : matched;
 }

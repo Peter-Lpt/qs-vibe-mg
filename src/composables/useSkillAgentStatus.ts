@@ -1,6 +1,7 @@
 import { computed, type Ref } from "vue";
 import type { Skill, Agent, SkillSource } from "../types";
 import { ACTION_PRIORITY } from "./skillActionRegistry";
+import { getPluginAgentId } from "../components/manage/manageFilters";
 export type { AgentAction, TFunc } from "./skillActionRegistry";
 export { actionLabel, actionStyle, cellBtnLabel } from "./skillActionRegistry";
 import type { AgentAction, TFunc } from "./skillActionRegistry";
@@ -59,6 +60,13 @@ const STATUS_META: Record<
   },
 };
 
+// 检查 source 是否属于指定的 agent（包括 plugin 来源）
+function sourceBelongsToAgent(source: SkillSource, agentId: string): boolean {
+  if (source.from === agentId) return true;
+  const pluginAgentId = getPluginAgentId(source);
+  return pluginAgentId === agentId;
+}
+
 export function useSkillAgentStatus(
   skill: Ref<Skill>,
   agents: Ref<Agent[]>,
@@ -72,7 +80,8 @@ export function useSkillAgentStatus(
     const detected = agents.value.filter((a) => a.detected);
     const result: AgentStatus[] = [];
     for (const agent of detected) {
-      const source = skill.value.sources.find((s) => s.from === agent.id);
+      // 查找属于该 agent 的 source（包括 plugin 来源）
+      const source = skill.value.sources.find((s) => sourceBelongsToAgent(s, agent.id));
       if (!source) {
         result.push({
           agent,
@@ -90,6 +99,19 @@ export function useSkillAgentStatus(
           status: "origin",
           action: "none",
           ...meta("origin", t),
+        });
+        continue;
+      }
+      // Plugin 来源的 skill 显示为已同步，可从 plugin 同步到中心库
+      if (source.source_kind === "marketplace" || source.from.startsWith("claude-plugin:") || source.from.startsWith("codex-plugin:")) {
+        result.push({
+          agent,
+          source,
+          status: "synced",
+          action: vibeSource.value ? "none" : "sync_from_plugin",
+          statusLabel: t("manage.status_plugin"),
+          statusColor: "var(--c-plugin, #8b5cf6)",
+          statusIcon: "🧩",
         });
         continue;
       }
