@@ -14,6 +14,7 @@ import SkeletonCard from "../common/SkeletonCard.vue";
 import {
   useManageFilters,
   useManageSelection,
+  skillBelongsToAgent,
   type IssueFilter,
   type LibraryScope,
   type StatusPreset,
@@ -36,6 +37,7 @@ const showAddAgent = ref(false);
 const showInstall = ref(false);
 const showBatch = ref(false);
 const batchRepairContext = ref<string | null>(null);
+const showScrollToTop = ref(false);
 
 const detectedAgents = computed(() => agentsStore.agents.filter((agent) => agent.detected && agent.enabled));
 const skillList = computed(() => skillsStore.skills);
@@ -56,13 +58,13 @@ const activeAgentTokens = computed(() => [...filterModel.agentIds.value]);
 
 const agentOverviews = computed(() => detectedAgents.value.map((agent) => ({
   agent,
-  skillCount: skillsStore.skills.filter((skill) => skill.sources.some((source) => source.from === agent.id)).length,
-  linkedCount: skillsStore.skills.filter((skill) => skill.sources.some((source) => source.from === agent.id && source.is_symlink)).length,
-  conflictCount: skillsStore.skills.filter((skill) => skill.has_conflict && skill.sources.some((source) => source.from === agent.id)).length,
+  skillCount: skillsStore.skills.filter((skill) => skillBelongsToAgent(skill, agent.id)).length,
+  linkedCount: skillsStore.skills.filter((skill) => skillBelongsToAgent(skill, agent.id) && skill.sources.some((source) => source.is_symlink)).length,
+  conflictCount: skillsStore.skills.filter((skill) => skill.has_conflict && skillBelongsToAgent(skill, agent.id)).length,
 })))
 
 function agentSkillCount(agentId: string): number {
-  return skillsStore.skills.filter((skill) => skill.sources.some((source) => source.from === agentId)).length;
+  return skillsStore.skills.filter((skill) => skillBelongsToAgent(skill, agentId)).length;
 }
 ;
 
@@ -70,6 +72,106 @@ const totalSkills = computed(() => skillsStore.skills.length);
 const sharedSkills = computed(() => skillsStore.skills.filter((skill) => skill.sources.filter((source) => source.from !== "vibe-lib").length > 1));
 const uniqueSkills = computed(() => skillsStore.skills.filter((skill) => skill.sources.filter((source) => source.from !== "vibe-lib").length === 1));
 const issueSkills = computed(() => skillsStore.skills.filter((skill) => skill.has_conflict || skill.has_dangling));
+
+// 分离普通 skill 和 plugin skill
+const normalSkills = computed(() => filterModel.filteredSkills.value.filter((skill) => !skill.from_plugin));
+const pluginSkills = computed(() => filterModel.filteredSkills.value.filter((skill) => skill.from_plugin));
+
+// 按 plugin 来源分组
+const pluginGroups = computed(() => {
+  const groups = new Map<string, typeof pluginSkills.value>();
+  for (const skill of pluginSkills.value) {
+    const source = skill.plugin_source || "unknown";
+    const group = groups.get(source) || [];
+    group.push(skill);
+    groups.set(source, group);
+  }
+  return Array.from(groups.entries()).map(([source, skills]) => ({ source, skills }));
+});
+
+// Plugin 分组展开/收起状态
+const pluginSectionExpanded = ref(true);
+const expandedPluginGroups = ref<Set<string>>(new Set());
+
+function togglePluginSection() {
+  pluginSectionExpanded.value = !pluginSectionExpanded.value;
+}
+
+function togglePluginGroup(source: string) {
+  const next = new Set(expandedPluginGroups.value);
+  if (next.has(source)) {
+    next.delete(source);
+  } else {
+    next.add(source);
+  }
+  expandedPluginGroups.value = next;
+}
+
+function isPluginGroupExpanded(source: string): boolean {
+  return expandedPluginGroups.value.has(source);
+}
+
+// Plugin 分组多选功能
+function getPluginGroupSkills(source: string) {
+  return pluginSkills.value.filter((skill) => skill.plugin_source === source);
+}
+
+function isPluginGroupSelected(source: string): boolean {
+  const groupSkills = getPluginGroupSkills(source);
+  return groupSkills.length > 0 && groupSkills.every((skill) => selectedSkills.value.has(skill.id));
+}
+
+function isPluginGroupPartiallySelected(source: string): boolean {
+  const groupSkills = getPluginGroupSkills(source);
+  const selectedCount = groupSkills.filter((skill) => selectedSkills.value.has(skill.id)).length;
+  return selectedCount > 0 && selectedCount < groupSkills.length;
+}
+
+function togglePluginGroupSelection(source: string) {
+  const groupSkills = getPluginGroupSkills(source);
+  const allSelected = isPluginGroupSelected(source);
+  
+  if (allSelected) {
+    // 取消全选
+    for (const skill of groupSkills) {
+      if (selectedSkills.value.has(skill.id)) {
+        selectionModel.toggleOne(skill.id);
+      }
+    }
+  } else {
+    // 全选
+    for (const skill of groupSkills) {
+      if (!selectedSkills.value.has(skill.id)) {
+        selectionModel.toggleOne(skill.id);
+      }
+    }
+  }
+}
+
+// 回到顶部功能
+let scrollContainer: HTMLElement | null = null;
+
+function getScrollContainer(): HTMLElement | null {
+  if (!scrollContainer) {
+    scrollContainer = document.querySelector('.app-shell-content');
+  }
+  return scrollContainer;
+}
+
+function scrollToTop() {
+  const container = getScrollContainer();
+  if (container) {
+    container.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function handleScroll() {
+  const container = getScrollContainer();
+  if (container) {
+    showScrollToTop.value = container.scrollTop > 300;
+  }
+}
+
 const sortOptions = computed(() => [
   { value: "status", label: t("manage.sort_by_status_priority") || "需处理优先" },
   { value: "updated", label: t("manage.sort_by_updated") || "最近更新" },
@@ -94,6 +196,22 @@ function toggleAllDisplayedSkills() {
 
 function deselectAllSkills() {
   selectionModel.clearSelection();
+}
+
+async function handleSyncPlugin(skillId: string) {
+  try {
+    const skill = skillsStore.skills.find((s) => s.id === skillId);
+    if (!skill) return;
+
+    // 获取 plugin 来源的路径
+    const pluginSource = skill.sources.find((s) => s.source_kind === "marketplace");
+    if (!pluginSource) return;
+
+    await skillsStore.installSkill(pluginSource.path, false);
+    toast.show(t("manage.sync_to_library_success") || "已同步到中心库", "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
 }
 
 function chooseSort(value: "status" | "updated" | "name" | "linked_agents") {
@@ -149,6 +267,13 @@ function handleSortOutside(event: PointerEvent) {
 onMounted(async () => {
   document.addEventListener("keydown", handleKeydown);
   document.addEventListener("pointerdown", handleSortOutside);
+  // 延迟获取滚动容器，确保 DOM 已渲染
+  setTimeout(() => {
+    const container = getScrollContainer();
+    if (container) {
+      container.addEventListener("scroll", handleScroll);
+    }
+  }, 100);
   if (skillsStore.skills.length === 0) await skillsStore.fetchSkills();
   if (agentsStore.agents.length === 0) await agentsStore.fetchAgents();
   if (skillsStore.issues.length === 0) await skillsStore.fetchIssues();
@@ -158,6 +283,10 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener("keydown", handleKeydown);
   document.removeEventListener("pointerdown", handleSortOutside);
+  const container = getScrollContainer();
+  if (container) {
+    container.removeEventListener("scroll", handleScroll);
+  }
 });
 
 async function refreshManageData() {
@@ -517,9 +646,11 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
           {{ selectedSkills.size }}/{{ displaySkills.length }}
         </span>
       </div>
+
+      <!-- 普通 skill 列表 -->
       <div class="space-y-2" :style="{ paddingBottom: selectedSkills.size > 0 ? '56px' : '0' }">
         <SkillRow
-          v-for="skill in displaySkills"
+          v-for="skill in normalSkills"
           :key="skill.id"
           :id="`skill-${skill.id}`"
           :skill="skill"
@@ -528,8 +659,71 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
           :expanded="expandedSkillId === skill.id"
           @toggle:select="toggleSkillSelect"
           @update:expanded="expandedSkillId = $event ? skill.id : null"
+          @sync-plugin="handleSyncPlugin"
         />
       </div>
+
+      <!-- Plugin skill 分组 -->
+      <template v-if="pluginSkills.length > 0">
+        <div class="plugin-separator" @click="togglePluginSection">
+          <div class="plugin-separator-line" />
+          <div class="plugin-separator-content">
+            <ChevronRight
+              class="plugin-expand-icon"
+              :class="{ 'plugin-expand-icon-expanded': pluginSectionExpanded }"
+              :size="14"
+            />
+            <Puzzle :size="14" style="color: var(--c-plugin, #8b5cf6);" />
+            <span class="plugin-separator-text">
+              {{ t("manage.plugin_skills") || "Plugin Skills" }}
+            </span>
+            <span class="plugin-separator-count">{{ pluginSkills.length }}</span>
+          </div>
+          <div class="plugin-separator-line" />
+        </div>
+
+        <!-- 按 plugin 来源分组 -->
+        <template v-if="pluginSectionExpanded">
+          <div v-for="group in pluginGroups" :key="group.source" class="plugin-group">
+            <div class="plugin-group-header">
+              <div class="plugin-group-header-left" @click="togglePluginGroup(group.source)">
+                <ChevronRight
+                  class="plugin-expand-icon"
+                  :class="{ 'plugin-expand-icon-expanded': isPluginGroupExpanded(group.source) }"
+                  :size="12"
+                />
+                <span class="plugin-group-name">{{ group.source }}</span>
+                <span class="plugin-group-count">{{ group.skills.length }}</span>
+              </div>
+              <label class="plugin-group-select-all" @click.stop>
+                <input
+                  type="checkbox"
+                  :checked="isPluginGroupSelected(group.source)"
+                  :indeterminate="isPluginGroupPartiallySelected(group.source)"
+                  class="h-3 w-3 rounded cursor-pointer"
+                  style="accent-color: var(--c-plugin, #8b5cf6);"
+                  @change="togglePluginGroupSelection(group.source)"
+                />
+                <span class="plugin-group-select-label">{{ t("manage.select_all") || "全选" }}</span>
+              </label>
+            </div>
+            <div v-if="isPluginGroupExpanded(group.source)" class="space-y-2">
+              <SkillRow
+                v-for="skill in group.skills"
+                :key="skill.id"
+                :id="`skill-${skill.id}`"
+                :skill="skill"
+                :agents="agentsStore.agents"
+                :selected="selectedSkills.has(skill.id)"
+                :expanded="expandedSkillId === skill.id"
+                @toggle:select="toggleSkillSelect"
+                @update:expanded="expandedSkillId = $event ? skill.id : null"
+                @sync-plugin="handleSyncPlugin"
+              />
+            </div>
+          </div>
+        </template>
+      </template>
     </div>
 
     <Transition
@@ -646,5 +840,168 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
       @resolve-conflict="resolveConflictFromBatch"
       @applied="onBatchApplied"
     />
+
+    <!-- 回到顶部悬浮按钮 -->
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      leave-active-class="transition duration-200 ease-in"
+      enter-from-class="opacity-0 scale-90"
+      enter-to-class="opacity-100 scale-100"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-90"
+    >
+      <button
+        v-if="showScrollToTop"
+        class="scroll-to-top-btn"
+        type="button"
+        :title="t('manage.scroll_to_top') || '回到顶部'"
+        @click="scrollToTop"
+      >
+        <ArrowUp :size="18" />
+      </button>
+    </Transition>
   </div>
 </template>
+
+<style scoped>
+.plugin-separator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.plugin-separator:hover .plugin-separator-content {
+  background: var(--c-plugin-light, rgba(139, 92, 246, 0.15));
+}
+
+.plugin-separator-line {
+  flex: 1;
+  height: 1px;
+  background: var(--c-plugin, #8b5cf6);
+  opacity: 0.3;
+}
+
+.plugin-separator-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  background: var(--c-plugin-light, rgba(139, 92, 246, 0.1));
+  transition: background-color 0.15s ease;
+}
+
+.plugin-separator-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-plugin, #8b5cf6);
+}
+
+.plugin-separator-count {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--c-plugin, #8b5cf6);
+  color: white;
+}
+
+.plugin-expand-icon {
+  transition: transform 0.2s ease;
+  color: var(--c-plugin, #8b5cf6);
+}
+
+.plugin-expand-icon-expanded {
+  transform: rotate(90deg);
+}
+
+.plugin-group {
+  margin-bottom: 16px;
+}
+
+.plugin-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-left: 4px;
+  user-select: none;
+}
+
+.plugin-group-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.plugin-group-header-left:hover .plugin-group-name {
+  opacity: 0.8;
+}
+
+.plugin-group-select-all {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.plugin-group-select-all:hover {
+  background: var(--c-plugin-light, rgba(139, 92, 246, 0.1));
+}
+
+.plugin-group-select-label {
+  font-size: 10px;
+  color: var(--c-plugin, #8b5cf6);
+}
+
+.plugin-group-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-plugin, #8b5cf6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: opacity 0.15s ease;
+}
+
+.plugin-group-count {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--c-plugin-light, rgba(139, 92, 246, 0.15));
+  color: var(--c-plugin, #8b5cf6);
+}
+
+.scroll-to-top-btn {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 50;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow-md);
+  color: var(--c-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.scroll-to-top-btn:hover {
+  background: var(--c-surface-hover);
+  color: var(--c-text);
+  box-shadow: var(--shadow-lg);
+}
+</style>
