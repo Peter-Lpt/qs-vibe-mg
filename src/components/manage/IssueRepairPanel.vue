@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import type { Agent, Skill } from "../../types";
+import type { Skill } from "../../types";
 
 const props = defineProps<{
   skills: Skill[];
-  agents: Agent[];
   compact?: boolean;
 }>();
 
@@ -15,10 +14,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 
-const detectedAgents = computed(() => props.agents.filter((agent) => agent.detected));
-
 const groups = computed(() => {
-  const agentIds = detectedAgents.value.map((agent) => agent.id);
   const data = [
     {
       id: "conflict",
@@ -46,31 +42,6 @@ const groups = computed(() => {
         const hasAgent = skill.sources.some((source) => source.from !== "vibe-lib" && !source.from.startsWith("project:"));
         const hasProject = skill.sources.some((source) => source.from.startsWith("project:"));
         return !hasLibrary && hasAgent && hasProject;
-      }),
-      batch: true,
-    },
-    {
-      id: "uncovered",
-      label: t("manage.repair_uncovered"),
-      icon: "CircleDashed",
-      color: "var(--c-text-secondary)",
-      skills: props.skills.filter((skill) => {
-        const hasLibrary = skill.sources.some((source) => source.from === "vibe-lib");
-        if (!hasLibrary) return false;
-        return agentIds.some((agentId) => !skill.sources.some((source) => source.from === agentId));
-      }),
-      batch: true,
-    },
-    {
-      id: "only_agent",
-      label: t("manage.repair_only_agent"),
-      icon: "Folder",
-      color: "var(--c-text-secondary)",
-      skills: props.skills.filter((skill) => {
-        const hasLibrary = skill.sources.some((source) => source.from === "vibe-lib");
-        const hasAgent = skill.sources.some((source) => source.from !== "vibe-lib" && !source.from.startsWith("project:"));
-        const hasProject = skill.sources.some((source) => source.from.startsWith("project:"));
-        return !hasLibrary && hasAgent && !hasProject;
       }),
       batch: true,
     },

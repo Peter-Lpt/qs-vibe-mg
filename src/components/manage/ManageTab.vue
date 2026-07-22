@@ -233,6 +233,17 @@ function toggleIssue(issue: IssueFilter) {
   filterModel.toggleIssue(issue);
 }
 
+function toggleAllIssues() {
+  const issues: IssueFilter[] = ["conflict", "dangling", "duplicate"];
+  const allActive = issues.every((i) => filterModel.issues.value.has(i));
+  // 全部激活则清除，否则全部激活
+  if (allActive) {
+    issues.forEach((i) => filterModel.issues.value.delete(i));
+  } else {
+    issues.forEach((i) => filterModel.issues.value.add(i));
+  }
+}
+
 function toggleLibraryScope(scope: LibraryScope) {
   filterModel.toggleLibraryScope(scope);
 }
@@ -457,10 +468,17 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
           <div class="text-[10px] uppercase tracking-wide" style="color: var(--c-text-secondary);">{{ t("manage.status_unlinked") || "独立" }}</div>
           <div class="text-lg font-semibold" style="color: var(--c-text);">{{ uniqueSkills.length }}</div>
         </div>
-        <div class="rounded-lg px-3 py-2" style="background: var(--c-warning-light); border: 1px solid color-mix(in srgb, var(--c-warning) 22%, transparent);">
+        <button
+          class="rounded-lg px-3 py-2 text-left transition-all"
+          :class="hasActiveFilters && activeIssueTokens.length > 0 ? 'ring-1 ring-[var(--c-warning)]' : 'cursor-pointer hover:brightness-95'"
+          style="background: var(--c-warning-light); border: 1px solid color-mix(in srgb, var(--c-warning) 22%, transparent);"
+          type="button"
+          :title="t('manage.filter_to_issues') || '点击筛选异常技能'"
+          @click="toggleAllIssues()"
+        >
           <div class="text-[10px] uppercase tracking-wide" style="color: var(--c-warning);">{{ t("manage.conflict_count") || "异常" }}</div>
           <div class="text-lg font-semibold" style="color: var(--c-warning);">{{ issueSkills.length }}</div>
-        </div>
+        </button>
       </div>
     </section>
 
@@ -608,7 +626,7 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
     </section>
 
     <section class="workspace-panel !p-3 manage-issue-summary">
-      <IssueRepairPanel :skills="skillsStore.skills" :agents="agentsStore.agents" compact @select-group="selectIssueGroup" />
+      <IssueRepairPanel :skills="skillsStore.skills" compact @select-group="selectIssueGroup" />
     </section>
 
     <!-- Loading -->
