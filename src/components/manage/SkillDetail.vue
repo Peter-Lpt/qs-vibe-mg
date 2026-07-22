@@ -32,6 +32,15 @@ function displayPath(path: string | undefined): string {
   return (path || "").replace(/[\\/]+/g, "/");
 }
 
+function resolveRevealPath(source: SkillSource, agent?: Agent | null): string {
+  if (source.from === "vibe-lib") return source.path;
+  if (source.from.startsWith("project:") || source.from.startsWith("external:")) return source.path;
+  if (source.source_kind === "marketplace" || source.from.startsWith("claude-plugin:") || source.from.startsWith("codex-plugin:")) {
+    return source.path;
+  }
+  return agent?.skills_dir || source.path;
+}
+
 const agentsRef = computed(() => props.agents);
 const skillRef = computed(() => props.skill);
 const { allAgentStatuses, groupedStatuses, vibeSource } =
@@ -49,6 +58,7 @@ const resolvingPlan = ref(false);
 const cleaningDanglingPath = ref<string | null>(null);
 const pendingAgentDelete = ref<SkillSource | null>(null);
 const deletingAgentPath = ref<string | null>(null);
+const detachingPath = ref<string | null>(null);
 const updatingSkill = ref(false);
 const showMarkdownPreview = ref(false);
 const markdownPreviewContent = ref("");
@@ -262,6 +272,7 @@ function sourceMethodLabel(method?: string): string {
 
 const sourceRows = computed(() =>
   props.skill.sources.map((source) => {
+    const agent = props.agents.find((a) => a.id === source.from) ?? null;
     const metadataUrl = props.skill.metadata?.repository || props.skill.metadata?.source || props.skill.metadata?.homepage;
     const inferredProvider = /github/i.test(`${metadataUrl || ""} ${source.path}`)
       ? "GitHub"
@@ -290,6 +301,7 @@ const sourceRows = computed(() =>
       : "";
     return {
       source,
+      agent,
       label: sourceLabel(source),
       kind: source.source_kind || (source.from === "vibe-lib" ? "library" : source.from.startsWith("project:") ? "project" : "agent"),
       methodLabel: sourceMethodLabel(source.origin?.method),
@@ -301,6 +313,7 @@ const sourceRows = computed(() =>
       hasKnownUpdate: source.update_status === "auto_update" || source.update_status === "best_effort",
       canUpdate: canUpdateSource(source),
       dangling: source.is_symlink && (!source.symlink_target || source.content_hash === ""),
+      canDetachKeepLocalCopy: canDetachSource(source),
       isLatest: source.path === latestSourcePath.value,
       sameCount: sameContentCount(source),
       relation: contentRelation(source),
@@ -391,6 +404,9 @@ async function toggleMarkdownPreview() {
 
 function sourceLabel(source: SkillSource): string {
   if (source.from === "vibe-lib") return t("manage.library");
+  if (source.source_kind === "marketplace") return t("manage.source_kind_marketplace");
+  if (source.from.startsWith("claude-plugin:")) return source.from.replace(/^claude-plugin:/, "");
+  if (source.from.startsWith("codex-plugin:")) return source.from.replace(/^codex-plugin:/, "");
   if (source.from.startsWith("project:")) {
     const raw = source.from.replace(/^project:/, "");
     const parts = raw.split(/[\\/]/).filter(Boolean);
@@ -410,6 +426,7 @@ function shortHash(source: SkillSource): string {
 
 function sourceKindLabel(kind: string): string {
   if (kind === "library") return t("manage.source_kind_library");
+  if (kind === "marketplace") return t("manage.source_kind_marketplace");
   if (kind === "project") return t("manage.source_kind_project");
   if (kind === "external") return t("manage.source_kind_external");
   return t("manage.source_kind_agent");
@@ -421,6 +438,10 @@ function isProjectSource(source: SkillSource): boolean {
 
 function canDeleteAgentSource(source: SkillSource): boolean {
   return source.from !== "vibe-lib" && !isProjectSource(source) && props.agents.some((agent) => agent.id === source.from);
+}
+
+function canDetachSource(source: SkillSource): boolean {
+  return source.from !== "vibe-lib" && !isProjectSource(source) && source.is_symlink && !!source.symlink_target && !!source.content_hash;
 }
 
 function requestDeleteAgentSource(source: SkillSource) {
@@ -451,6 +472,19 @@ async function cleanDanglingSource(source: SkillSource) {
     toast.show(String(e), "error");
   } finally {
     cleaningDanglingPath.value = null;
+  }
+}
+
+async function detachKeepLocalCopy(source: SkillSource) {
+  if (source.from === "vibe-lib" || isProjectSource(source) || detachingPath.value) return;
+  detachingPath.value = source.path;
+  try {
+    await skillsStore.detachKeepLocalCopy(props.skill.id, source.from, source.path);
+    toast.show(t("manage.detached_keep_local_copy_success", { agent: sourceLabel(source) }), "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  } finally {
+    detachingPath.value = null;
   }
 }
 
@@ -635,7 +669,7 @@ function getAgentNameFromPath(path: string): string {
 
 <template>
   <div class="px-3 pb-3">
-    <div v-if="!embedded" class="mb-3 rounded-md border p-2" style="background: var(--c-bg); border-color: var(--c-border);">
+    <div class="mb-3 rounded-md border p-2" style="background: var(--c-bg); border-color: var(--c-border);">
           <div class="text-[10px] font-medium uppercase tracking-wide mb-1.5" style="color: var(--c-text-secondary);">
         <div class="flex items-center justify-between gap-2">
           <span>{{ t("manage.sources_title") }}</span>
@@ -732,9 +766,26 @@ function getAgentNameFromPath(path: string): string {
             <Link2Off v-if="cleaningDanglingPath !== row.source.path" :size="12" />
             <RefreshCw v-else :size="12" class="animate-spin" />
           </button>
-          <button class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer" style="color: var(--c-text-secondary);" :title="t('manage.reveal')" @click.stop="actions.reveal(row.source)">
+          <button
+            v-if="row.canDetachKeepLocalCopy"
+            class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer"
+            style="color: var(--c-primary);"
+            :disabled="detachingPath === row.source.path"
+            :title="t('manage.detach_keep_local_copy')"
+            @click.stop="detachKeepLocalCopy(row.source)"
+          >
+            <RefreshCw v-if="detachingPath === row.source.path" :size="12" class="animate-spin" />
+            <CopyPlus v-else :size="12" />
+          </button>
+          <button
+            class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer"
+            style="color: var(--c-text-secondary);"
+            :title="t('manage.reveal')"
+            @click.stop="actions.reveal({ path: resolveRevealPath(row.source, row.agent) })"
+          >
             <FolderOpen :size="12" />
-          </button>          <button
+          </button>
+          <button
             v-if="canDeleteAgentSource(row.source)"
             class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer"
             style="color: var(--c-danger);"
@@ -1046,7 +1097,7 @@ function getAgentNameFromPath(path: string): string {
             class="w-6 h-6 inline-flex items-center justify-center rounded cursor-pointer shrink-0"
             style="color: var(--c-text-secondary);"
             :title="t('manage.reveal')"
-            @click.stop="actions.reveal(item.source)"
+            @click.stop="actions.reveal({ path: resolveRevealPath(item.source, item.agent) })"
           >
             <FolderOpen :size="12" />
           </button>

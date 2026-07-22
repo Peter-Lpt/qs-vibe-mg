@@ -306,6 +306,28 @@ pub fn is_link(path: &Path) -> bool {
     is_symlink(path) || is_junction(path)
 }
 
+/// 将链接目标复制为本地真实目录，并移除原链接。
+pub fn detach_link_keep_copy(link: &Path) -> Result<(), VibeError> {
+    if !is_link(link) {
+        return Err(VibeError::Path(format!(
+            "Path is not a link: {}",
+            link.display()
+        )));
+    }
+
+    let target = read_link_target(link)?;
+    if !target.exists() {
+        return Err(VibeError::Path(format!(
+            "Link target does not exist: {}",
+            target.display()
+        )));
+    }
+
+    remove_symlink(link)?;
+    copy_skill_dir_all(&target, link)?;
+    Ok(())
+}
+
 /// 获取 symlink 或 junction 的目标路径（解析为绝对路径）
 pub fn read_link_target(link: &Path) -> Result<std::path::PathBuf, VibeError> {
     // 先尝试普通 symlink

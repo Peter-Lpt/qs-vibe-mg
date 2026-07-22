@@ -19,6 +19,7 @@ import {
   type LibraryScope,
   type StatusPreset,
 } from "./manageFilters";
+import type { Skill } from "../../types";
 
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
@@ -71,10 +72,19 @@ function agentSkillCount(agentId: string): number {
 const totalSkills = computed(() => skillsStore.skills.length);
 const sharedSkills = computed(() => skillsStore.skills.filter((skill) => skill.sources.filter((source) => source.from !== "vibe-lib").length > 1));
 const uniqueSkills = computed(() => skillsStore.skills.filter((skill) => skill.sources.filter((source) => source.from !== "vibe-lib").length === 1));
-const issueSkills = computed(() => skillsStore.skills.filter((skill) => skill.has_conflict || skill.has_dangling));
+const issueSkills = computed(() => skillsStore.skills.filter((skill) => skill.has_conflict || skill.has_dangling || skill.is_duplicate));
 
-// 分离普通 skill 和 plugin skill
-const normalSkills = computed(() => filterModel.filteredSkills.value.filter((skill) => !skill.from_plugin));
+function hasNonPluginSource(skill: Skill): boolean {
+  return skill.sources.some(
+    (source) =>
+      source.from === "vibe-lib" ||
+      source.source_kind === "agent" ||
+      (!source.source_kind && !source.from.startsWith("claude-plugin:") && !source.from.startsWith("codex-plugin:"))
+  );
+}
+
+// 分离普通 skill 和 plugin skill；plugin + skills 同名时同时展示在普通区，方便清理本地/库副本。
+const normalSkills = computed(() => filterModel.filteredSkills.value.filter((skill) => !skill.from_plugin || hasNonPluginSource(skill)));
 const pluginSkills = computed(() => filterModel.filteredSkills.value.filter((skill) => skill.from_plugin));
 
 // 按 plugin 来源分组
@@ -710,7 +720,7 @@ function selectIssueGroup(skillIds: string[], openBatch: boolean, repairContext:
             <div v-if="isPluginGroupExpanded(group.source)" class="space-y-2">
               <SkillRow
                 v-for="skill in group.skills"
-                :key="skill.id"
+                :key="`plugin-${group.source}-${skill.id}`"
                 :id="`skill-${skill.id}`"
                 :skill="skill"
                 :agents="agentsStore.agents"

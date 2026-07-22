@@ -185,7 +185,13 @@ onUnmounted(() => {
     :class="{ 'skill-row-plugin': skill.from_plugin }"
     :style="{
       borderColor: skill.from_plugin
-        ? 'var(--c-plugin, #8b5cf6)'
+        ? skill.has_conflict
+          ? 'var(--c-warning)'
+          : skill.has_dangling
+            ? 'var(--c-danger)'
+            : skill.is_duplicate
+              ? 'var(--c-info)'
+              : 'var(--c-plugin, #8b5cf6)'
         : skill.has_conflict
           ? 'var(--c-warning)'
           : skill.has_dangling
@@ -218,10 +224,10 @@ onUnmounted(() => {
         :style="{ color: 'var(--c-text-secondary)', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }"
       />
 
-      <Puzzle v-if="skill.from_plugin" class="shrink-0" :size="14" style="color: var(--c-plugin, #8b5cf6);" />
-      <TriangleAlert v-else-if="skill.has_conflict" class="shrink-0" :size="14" style="color: var(--c-warning);" />
+      <TriangleAlert v-if="skill.has_conflict" class="shrink-0" :size="14" style="color: var(--c-warning);" />
       <CircleX v-else-if="skill.has_dangling" class="shrink-0" :size="14" style="color: var(--c-danger);" />
       <Copy v-else-if="skill.is_duplicate" class="shrink-0" :size="14" style="color: var(--c-info);" />
+      <Puzzle v-else-if="skill.from_plugin" class="shrink-0" :size="14" style="color: var(--c-plugin, #8b5cf6);" />
 
       <span class="text-sm font-semibold truncate" style="color: var(--c-text-strong);">
         {{ skill.name || skill.id }}

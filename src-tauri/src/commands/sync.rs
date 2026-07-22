@@ -341,6 +341,52 @@ pub fn remove_link(
 }
 
 #[tauri::command]
+pub fn detach_keep_local_copy(
+    skill_id: String,
+    agent_id: String,
+    source_path: Option<String>,
+) -> Result<String, VibeError> {
+    tracing::info!(
+        "detach_keep_local_copy: skill={}, agent={}",
+        skill_id,
+        agent_id
+    );
+
+    let agents = load_agents()?;
+    let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
+        tracing::error!("detach_keep_local_copy: agent not found: {}", agent_id);
+        VibeError::AgentNotFound {
+            agent_id: agent_id.clone(),
+        }
+    })?;
+
+    let link_path = resolve_agent_skill_path(agent, &skill_id, source_path.as_deref(), false)?;
+    if !vibe_fs::is_link(&link_path) {
+        return Err(VibeError::LinkNotFound {
+            skill_id: skill_id.clone(),
+            agent_id: agent_id.clone(),
+        });
+    }
+
+    vibe_fs::detach_link_keep_copy(&link_path)?;
+    invalidate_agents_cache();
+    let recorded_source_path = link_path.to_string_lossy().to_string();
+
+    if let Err(e) = record_action_with_source(
+        HistoryAction::DetachKeepLocalCopy,
+        &skill_id,
+        Some(vec![skill_id.clone()]),
+        Some(&agent_id),
+        Some("copy"),
+        Some(&recorded_source_path),
+    ) {
+        warn!("Failed to record DetachKeepLocalCopy action: {}", e);
+    }
+
+    Ok("copy".to_string())
+}
+
+#[tauri::command]
 pub fn remove_agent_skill_copy(
     skill_id: String,
     agent_id: String,

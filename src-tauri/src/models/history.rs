@@ -24,6 +24,7 @@ pub struct HistoryEntry {
 pub enum HistoryAction {
     Link,
     Unlink,
+    DetachKeepLocalCopy,
     Install,
     Delete,
     BatchLink,

@@ -22,6 +22,7 @@ const actionTypes = [
   { value: "delete", labelKey: "history.filter_delete" },
   { value: "link", labelKey: "history.filter_link" },
   { value: "unlink", labelKey: "history.filter_unlink" },
+  { value: "detach_keep_local_copy", labelKey: "history.filter_detach_keep_local_copy" },
   { value: "batch_link", labelKey: "history.filter_batch_link" },
   { value: "batch_unlink", labelKey: "history.filter_batch_unlink" },
 ];
@@ -82,6 +83,8 @@ function getActionLabel(entry: {
       return t("history.linked", { skill, agent, mode });
     case "unlink":
       return t("history.unlinked", { skill, agent });
+    case "detach_keep_local_copy":
+      return t("history.detached_keep_local_copy", { skill, agent });
     case "install":
       return t("history.installed", { skill });
     case "delete":
@@ -107,6 +110,8 @@ function getActionIcon(action: string): string {
       return "🔗";
     case "unlink":
       return "❌";
+    case "detach_keep_local_copy":
+      return "📦";
     case "install":
       return "📥";
     case "delete":
@@ -127,6 +132,8 @@ function getActionColor(action: string): string {
       return "var(--c-primary)";
     case "unlink":
     case "batch_unlink":
+      return "var(--c-warning)";
+    case "detach_keep_local_copy":
       return "var(--c-warning)";
     case "install":
       return "var(--c-success)";

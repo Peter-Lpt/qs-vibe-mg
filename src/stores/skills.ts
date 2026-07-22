@@ -97,6 +97,12 @@ export const useSkillsStore = defineStore("skills", () => {
     useAgentsStore().fetchAgents();
   }
 
+  async function detachKeepLocalCopy(skillId: string, agentId: string, sourcePath?: string) {
+    await invoke("detach_keep_local_copy", { skillId, agentId, sourcePath: sourcePath ?? null });
+    refreshSkills();
+    useAgentsStore().fetchAgents();
+  }
+
   async function removeAgentSkillCopy(skillId: string, agentId: string, sourcePath: string) {
     await invoke("remove_agent_skill_copy", { skillId, agentId, sourcePath });
     refreshSkills();
@@ -235,6 +241,7 @@ export const useSkillsStore = defineStore("skills", () => {
     fetchIssues,
     createLink,
     removeLink,
+    detachKeepLocalCopy,
     removeAgentSkillCopy,
     installSkill,
     installSkillFromSource,

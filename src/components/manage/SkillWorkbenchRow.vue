@@ -33,7 +33,7 @@ const { allAgentStatuses } = useSkillAgentStatus(skillRef, agentsRef, (key, para
 const statusesByAgent = computed(() => new Map(allAgentStatuses.value.map((status) => [status.agent.id, status])));
 const needsAttention = computed(() => {
   const sourceInfo = classifySkillSources(props.skill, props.agents);
-  return props.skill.has_conflict || props.skill.has_dangling || sourceInfo.hasLinkedElsewhere;
+  return props.skill.has_conflict || props.skill.has_dangling || props.skill.is_duplicate || sourceInfo.hasLinkedElsewhere;
 });
 
 function statusFor(agent: Agent): AgentStatus | undefined {

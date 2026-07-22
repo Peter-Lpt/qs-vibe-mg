@@ -111,15 +111,31 @@
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+
 body {
   margin: 0;
   font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1.5;
-  background: var(--c-bg);
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.app-shell-root {
+  height: 100dvh;
+  border: 1px solid var(--c-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--c-bg);
+  isolation: isolate;
 }
 
 .app-shell-header {

@@ -53,6 +53,7 @@ pub fn run() {
             commands::skills::get_dashboard_data,
             commands::sync::create_link,
             commands::sync::remove_link,
+            commands::sync::detach_keep_local_copy,
             commands::sync::remove_agent_skill_copy,
             commands::sync::batch_link,
             commands::sync::batch_unlink,

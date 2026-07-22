@@ -31,7 +31,7 @@ async function handleTitlebarMouseDown(event: MouseEvent) {
 </script>
 
 <template>
-  <div class="app-shell-root flex flex-col h-dvh min-h-0 overflow-hidden" style="background: var(--c-bg);">
+  <div class="app-shell-root flex flex-col min-h-0">
     <header class="app-shell-header flex items-center gap-5 px-5 py-3 shrink-0">
       <div
         class="flex items-center gap-2.5 shrink-0 select-none"

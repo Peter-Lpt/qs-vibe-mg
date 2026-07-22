@@ -166,6 +166,28 @@ fn do_unlink(skill_id: &str, agent: &Agent, source_path: Option<&str>) -> Result
     Ok(())
 }
 
+fn remove_existing_path(path: &Path) -> Result<(), VibeError> {
+    if vibe_fs::is_link(path) {
+        vibe_fs::remove_symlink(path)?;
+    } else if path.is_dir() {
+        fs::remove_dir_all(path)?;
+    } else if path.exists() {
+        fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
+fn do_detach_keep_copy(skill_id: &str, agent: &Agent, source_path: Option<&str>) -> Result<(), VibeError> {
+    let link_path = source_path
+        .filter(|p| !p.trim().is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| Path::new(&agent.skills_dir).join(skill_id));
+    if link_path.exists() || vibe_fs::is_link(&link_path) {
+        vibe_fs::detach_link_keep_copy(&link_path)?;
+    }
+    Ok(())
+}
+
 fn do_delete_skill(skill_id: &str) -> Result<(), VibeError> {
     let skill_path = vibe_skills_dir()?.join(skill_id);
     if skill_path.exists() {
@@ -203,6 +225,26 @@ pub fn perform_undo(entry: &HistoryEntry) -> Result<(), VibeError> {
             let vibe_dir = vibe_skills_dir()?;
             let skill_path = vibe_dir.join(&entry.skill_id);
             if skill_path.exists() {
+                do_link(&entry.skill_id, &agent, entry.source_path.as_deref())
+            } else {
+                Ok(())
+            }
+        }
+        HistoryAction::DetachKeepLocalCopy => {
+            let agent = entry.agent_id.as_ref().ok_or_else(|| {
+                VibeError::History("DetachKeepLocalCopy entry missing agent_id".to_string())
+            })?;
+            let agent = resolve_agent(agent)?;
+            let vibe_dir = vibe_skills_dir()?;
+            let skill_path = vibe_dir.join(&entry.skill_id);
+            if skill_path.exists() {
+                let link_path = entry
+                    .source_path
+                    .as_deref()
+                    .filter(|p| !p.trim().is_empty())
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|| Path::new(&agent.skills_dir).join(&entry.skill_id));
+                remove_existing_path(&link_path)?;
                 do_link(&entry.skill_id, &agent, entry.source_path.as_deref())
             } else {
                 Ok(())
@@ -262,6 +304,13 @@ pub fn perform_redo(entry: &HistoryEntry) -> Result<(), VibeError> {
             })?;
             let agent = resolve_agent(agent)?;
             do_unlink(&entry.skill_id, &agent, entry.source_path.as_deref())
+        }
+        HistoryAction::DetachKeepLocalCopy => {
+            let agent = entry.agent_id.as_ref().ok_or_else(|| {
+                VibeError::History("DetachKeepLocalCopy entry missing agent_id".to_string())
+            })?;
+            let agent = resolve_agent(agent)?;
+            do_detach_keep_copy(&entry.skill_id, &agent, entry.source_path.as_deref())
         }
         HistoryAction::Install => Err(VibeError::History(
             "Cannot redo install operation".to_string(),

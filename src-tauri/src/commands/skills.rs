@@ -145,10 +145,12 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
                 }
             });
 
-            // 检测重复：同文件夹名但 SKILL.md name 不同（排除 plugin 来源）
+            // 检测重复：同文件夹名但 SKILL.md name 不同，或 plugin 与中心库/本地副本同时存在
             let unique_names: std::collections::HashSet<&str> =
                 non_plugin_sources.iter().map(|s| s.name.as_str()).collect();
-            let is_duplicate = unique_names.len() > 1;
+            let has_plugin_source = from_plugin;
+            let has_local_copy = !non_plugin_sources.is_empty();
+            let is_duplicate = unique_names.len() > 1 || (has_plugin_source && has_local_copy);
 
             // 检测 name 是否为空
             let missing_name = entry.name.is_empty();
