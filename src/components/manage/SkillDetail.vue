@@ -32,13 +32,8 @@ function displayPath(path: string | undefined): string {
   return (path || "").replace(/[\\/]+/g, "/");
 }
 
-function resolveRevealPath(source: SkillSource, agent?: Agent | null): string {
-  if (source.from === "vibe-lib") return source.path;
-  if (source.from.startsWith("project:") || source.from.startsWith("external:")) return source.path;
-  if (source.source_kind === "marketplace" || source.from.startsWith("claude-plugin:") || source.from.startsWith("codex-plugin:")) {
-    return source.path;
-  }
-  return agent?.skills_dir || source.path;
+function resolveRevealPath(source: SkillSource, _agent?: Agent | null): string {
+  return source.path;
 }
 
 const agentsRef = computed(() => props.agents);
@@ -434,6 +429,10 @@ function sourceKindLabel(kind: string): string {
 
 function isProjectSource(source: SkillSource): boolean {
   return source.source_kind === "project" || source.from.startsWith("project:");
+}
+
+function isPluginSource(source: SkillSource): boolean {
+  return source.source_kind === "marketplace" || source.from.startsWith("claude-plugin:") || source.from.startsWith("codex-plugin:");
 }
 
 function canDeleteAgentSource(source: SkillSource): boolean {
@@ -1114,7 +1113,7 @@ function getAgentNameFromPath(path: string): string {
           </button>
 
           <button
-            v-if="item.action !== 'none'"
+            v-if="item.action !== 'none' && item.source && isPluginSource(item.source)"
             class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors shrink-0 whitespace-nowrap"
             :style="actionStyle(item.action)"
             :disabled="resolvingConflict === item.agent.id"
