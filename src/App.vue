@@ -29,7 +29,9 @@ const appWindow = getCurrentWindow();
 const skillList = computed(() => skillsStore.skills);
 const detectedAgents = computed(() => agentsStore.agents.filter((a) => a.detected && a.enabled));
 const skillsViewId = computed<SmartViewId>(() =>
-  appStore.activeView === "history" ? appStore.lastSkillsView : appStore.activeView
+  appStore.activeView === "history" || appStore.activeView === "settings"
+    ? appStore.lastSkillsView
+    : appStore.activeView
 );
 const defaultDomain = computed(() => viewToFilterPreset(skillsViewId.value).domain);
 const filterModel = useManageFilters(skillList, detectedAgents, defaultDomain);
@@ -153,21 +155,19 @@ onUnmounted(() => {
         :agents="detectedAgents"
         :facet-counts="filterModel.facetCounts.value"
         @select="appStore.setActiveView"
-        @open-settings="appStore.showSettings = true"
       />
     </template>
 
     <KeepAlive>
       <SkillsView
-        v-if="appStore.activeView !== 'history'"
+        v-if="appStore.activeView !== 'history' && appStore.activeView !== 'settings'"
         :key="'skills'"
         :view="skillsViewId"
         :filter-model="filterModel"
       />
-      <HistoryTab v-else :key="'history'" />
+      <HistoryTab v-else-if="appStore.activeView === 'history'" :key="'history'" />
+      <SettingsPage v-else :key="'settings'" />
     </KeepAlive>
   </AppLayout>
-
-  <SettingsPage v-if="appStore.showSettings" />
   <ToastContainer />
 </template>

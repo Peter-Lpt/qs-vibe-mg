@@ -25,7 +25,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "select", view: ViewId): void;
-  (e: "open-settings"): void;
 }>();
 
 const { t } = useI18n();
@@ -221,8 +220,13 @@ const activeFilterCount = computed(() =>
     <button
       type="button"
       class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs cursor-pointer transition-colors hover:bg-[var(--c-surface-hover)]"
-      style="color: var(--c-text-secondary);"
-      @click="emit('open-settings')"
+      :style="
+        activeView === 'settings'
+          ? { background: 'var(--c-primary-light)', color: 'var(--c-primary)' }
+          : { color: 'var(--c-text-secondary)' }
+      "
+      :aria-current="activeView === 'settings' ? 'page' : undefined"
+      @click="emit('select', 'settings')"
     >
       <Settings :size="14" class="shrink-0" />
       <span class="flex-1 truncate text-left">{{ t("app.settings") }}</span>

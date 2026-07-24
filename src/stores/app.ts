@@ -13,7 +13,6 @@ export const useAppStore = defineStore("app", () => {
   const locale = ref<Locale>(
     (localStorage.getItem("vibe-locale") as Locale) || "zh"
   );
-  const showSettings = ref(false);
   const resolvedTheme = ref<"light" | "dark">("light");
   const config = ref<AppConfig | null>(null);
   const projectRootSuggestions = ref<ProjectRootSuggestion[]>([]);
@@ -26,6 +25,7 @@ export const useAppStore = defineStore("app", () => {
     "unlinked",
     "plugins",
     "history",
+    "settings",
   ];
   function isValidViewId(value: string | null): value is ViewId {
     return value !== null && (VIEW_IDS as readonly string[]).includes(value);
@@ -51,8 +51,8 @@ export const useAppStore = defineStore("app", () => {
 
   function setActiveView(view: ViewId) {
     activeView.value = view;
-    if (view !== "history") {
-      lastSkillsView.value = view;
+    if (view !== "history" && view !== "settings") {
+      lastSkillsView.value = view as SmartViewId;
       localStorage.setItem("vibe-last-skills-view", view);
     }
     localStorage.setItem("vibe-active-view", view);
@@ -134,7 +134,6 @@ export const useAppStore = defineStore("app", () => {
   return {
     theme,
     locale,
-    showSettings,
     resolvedTheme,
     config,
     projectRootSuggestions,

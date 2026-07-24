@@ -123,7 +123,7 @@ export type SmartViewId =
   | "unlinked"
   | "plugins";
 
-export type ViewId = SmartViewId | "history";
+export type ViewId = SmartViewId | "history" | "settings";
 
 export type ConflictType = "SameNameDiffContent" | "DanglingLink";
 

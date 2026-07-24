@@ -64,13 +64,6 @@ async function handleTitlebarMouseDown(event: MouseEvent) {
           <Sun v-if="appStore.resolvedTheme === 'dark'" :size="16" />
           <Moon v-else :size="16" />
         </button>
-        <button
-          class="icon-button"
-          @click.stop="appStore.showSettings = true"
-          :title="t('app.settings')"
-        >
-          <Settings :size="16" />
-        </button>
         <div class="titlebar-divider" />
         <button class="window-button" :title="t('app.window_minimize')" @click.stop="minimizeWindow">
           <Minus :size="14" />
