@@ -182,12 +182,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <h2 class="text-sm font-semibold" style="color: var(--c-text-strong);">{{ t('settings.title') }}</h2>
+  <div>
+    <h2 class="text-base font-semibold mb-5" style="color: var(--c-text);">{{ t('settings.title') }}</h2>
 
-    <div class="space-y-4 max-w-lg">
+    <div class="space-y-5">
       <!-- 版本 -->
-      <section class="rounded-md border p-3" style="border-color: var(--c-border); background: var(--c-bg);">
+      <section class="workspace-panel !p-3">
         <div class="flex items-center justify-between gap-3">
           <div>
             <div class="text-xs font-medium" style="color: var(--c-text);">{{ t('settings.version_info') }}</div>
@@ -205,14 +205,14 @@ onMounted(() => {
 
       <!-- 主题 -->
       <div>
-        <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">{{ t('settings.theme') }}</label>
+        <label class="text-xs font-medium block mb-2" style="color: var(--c-text);">{{ t('settings.theme') }}</label>
         <div class="flex gap-2">
           <button
             v-for="th in themes"
             :key="th.value"
-            class="px-3 py-1.5 text-xs rounded-md border cursor-pointer transition-opacity"
+            class="px-3 py-1.5 text-xs rounded-md border cursor-pointer transition-colors"
             :style="{
-              background: appStore.theme === th.value ? 'var(--c-primary)' : 'transparent',
+              background: appStore.theme === th.value ? 'var(--c-primary)' : 'var(--c-surface)',
               color: appStore.theme === th.value ? 'white' : 'var(--c-text)',
               borderColor: appStore.theme === th.value ? 'var(--c-primary)' : 'var(--c-border)',
             }"
@@ -225,14 +225,14 @@ onMounted(() => {
 
       <!-- 语言 -->
       <div>
-        <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">{{ t('settings.language') }}</label>
+        <label class="text-xs font-medium block mb-2" style="color: var(--c-text);">{{ t('settings.language') }}</label>
         <div class="flex gap-2">
           <button
             v-for="loc in locales"
             :key="loc.value"
-            class="px-3 py-1.5 text-xs rounded-md border cursor-pointer transition-opacity"
+            class="px-3 py-1.5 text-xs rounded-md border cursor-pointer transition-colors"
             :style="{
-              background: appStore.locale === loc.value ? 'var(--c-primary)' : 'transparent',
+              background: appStore.locale === loc.value ? 'var(--c-primary)' : 'var(--c-surface)',
               color: appStore.locale === loc.value ? 'white' : 'var(--c-text)',
               borderColor: appStore.locale === loc.value ? 'var(--c-primary)' : 'var(--c-border)',
             }"
@@ -245,11 +245,11 @@ onMounted(() => {
 
       <!-- 技能库路径 -->
       <div>
-        <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">{{ t('settings.vibe_skills_path') }}</label>
-        <p class="text-xs mb-2" style="color: var(--c-text-secondary);">{{ t('settings.vibe_skills_path_hint') }}</p>
+        <label class="text-xs font-medium block mb-2" style="color: var(--c-text);">{{ t('settings.vibe_skills_path') }}</label>
+        <p class="text-[11px] mb-2" style="color: var(--c-text-secondary);">{{ t('settings.vibe_skills_path_hint') }}</p>
         <button
-          class="w-full px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80 text-left"
-          style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+          class="w-full px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80 text-left transition-colors"
+          style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
           @click="pickVibePath"
         >
           {{ t('settings.pick_vibe_path') }}
@@ -258,31 +258,31 @@ onMounted(() => {
 
       <!-- 项目根目录 -->
       <div>
-        <div class="flex items-center justify-between mb-1.5">
+        <div class="flex items-center justify-between mb-2">
           <label class="text-xs font-medium" style="color: var(--c-text);">{{ t('settings.project_roots') }}</label>
           <div class="flex gap-2">
             <button
-              class="px-3 py-1.5 text-xs rounded-md border cursor-pointer hover:opacity-80"
-              style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+              class="px-2.5 py-1 text-[11px] rounded-md border cursor-pointer hover:opacity-80 transition-colors"
+              style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
               @click="addProjectRoot"
             >
               {{ t('settings.project_roots_pick') }}
             </button>
             <button
-              class="px-3 py-1.5 text-xs rounded-md border cursor-pointer hover:opacity-80"
-              style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+              class="px-2.5 py-1 text-[11px] rounded-md border cursor-pointer hover:opacity-80 transition-colors"
+              style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
               @click="showProjectRootsAdvanced = !showProjectRootsAdvanced"
             >
               {{ showProjectRootsAdvanced ? t('settings.project_roots_advanced_hide') : t('settings.project_roots_advanced_show') }}
             </button>
           </div>
         </div>
-        <p class="text-xs mb-2" style="color: var(--c-text-secondary);">{{ t('settings.project_roots_hint') }}</p>
+        <p class="text-[11px] mb-2" style="color: var(--c-text-secondary);">{{ t('settings.project_roots_hint') }}</p>
         <div class="space-y-2">
           <div
             v-if="appStore.projectRootSuggestions.length > 0"
-            class="rounded-md border p-2 space-y-2"
-            style="border-color: var(--c-border); background: var(--c-bg);"
+            class="rounded-md border p-2.5 space-y-2"
+            style="border-color: var(--c-border); background: var(--c-surface);"
           >
             <div class="text-[11px] font-medium" style="color: var(--c-text-secondary);">{{ t('settings.project_roots_suggestions') }}</div>
             <div
@@ -290,7 +290,7 @@ onMounted(() => {
               :key="suggestion.path"
               class="flex items-center gap-2 justify-between text-[11px]"
             >
-              <div class="min-w-0">
+              <div class="min-w-0 flex-1">
                 <div class="truncate" style="color: var(--c-text);">{{ suggestion.is_current ? t('settings.project_roots_current') : suggestion.path }}</div>
                 <div class="truncate" style="color: var(--c-text-tertiary);">
                   <span v-if="suggestion.matched_dirs.length > 0">{{ suggestion.matched_dirs.join(', ') }}</span>
@@ -298,26 +298,26 @@ onMounted(() => {
                 </div>
               </div>
               <button
-                class="px-2 py-1 rounded-md border cursor-pointer hover:opacity-80 shrink-0"
-                style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+                class="px-2 py-1 rounded-md border cursor-pointer hover:opacity-80 shrink-0 transition-colors"
+                style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
                 @click="addSuggestedRoot(suggestion.path)"
               >
                 {{ t('settings.project_roots_add') }}
               </button>
             </div>
           </div>
-          <div v-if="projectRootsList.length > 0" class="space-y-2">
+          <div v-if="projectRootsList.length > 0" class="space-y-1.5">
             <div
               v-for="root in projectRootsList"
               :key="root"
               class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-[11px]"
-              style="border-color: var(--c-border); background: var(--c-bg); color: var(--c-text-secondary);"
+              style="border-color: var(--c-border); background: var(--c-surface); color: var(--c-text-secondary);"
             >
-              <div class="min-w-0">
+              <div class="min-w-0 flex-1">
                 <div class="truncate" style="color: var(--c-text);">{{ root }}</div>
                 <div class="truncate" style="color: var(--c-text-tertiary);">{{ detectCurrentFolder(root) ? t('settings.project_roots_current') : t('settings.project_roots_added') }}</div>
               </div>
-              <button class="cursor-pointer hover:opacity-80 shrink-0" style="color: var(--c-danger);" :title="t('settings.project_roots_remove')" @click="removeProjectRoot(root)">&times;</button>
+              <button class="cursor-pointer hover:opacity-80 shrink-0 transition-colors" style="color: var(--c-danger);" :title="t('settings.project_roots_remove')" @click="removeProjectRoot(root)">&times;</button>
             </div>
           </div>
           <p v-else class="text-[11px]" style="color: var(--c-text-tertiary);">{{ t('settings.project_roots_empty') }}</p>
@@ -327,16 +327,16 @@ onMounted(() => {
           <textarea
             v-model="projectRootsText"
             rows="4"
-            class="w-full mt-2 px-3 py-2 text-xs rounded-md border outline-none resize-none"
-            style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+            class="w-full mt-2 px-3 py-2 text-xs rounded-md border outline-none resize-none transition-colors"
+            style="background: var(--c-surface); border-color: var(--c-border); color: var(--c-text);"
             :placeholder="t('settings.project_roots_placeholder')"
           />
         </details>
         <div class="flex items-center justify-between mt-2">
           <span class="text-[11px]" style="color: var(--c-text-tertiary);">{{ t('settings.project_roots_count', { count: projectRootsCount }) }}</span>
           <button
-            class="px-3 py-1.5 text-xs rounded-md border cursor-pointer hover:opacity-80"
-            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+            class="px-3 py-1.5 text-[11px] rounded-md border cursor-pointer hover:opacity-80 transition-colors"
+            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
             :disabled="savingProjectRoots"
             @click="saveProjectRoots"
           >
@@ -348,18 +348,18 @@ onMounted(() => {
 
       <!-- 数据管理 -->
       <div>
-        <label class="text-xs font-medium block mb-1.5" style="color: var(--c-text);">{{ t('settings.data_management') }}</label>
+        <label class="text-xs font-medium block mb-2" style="color: var(--c-text);">{{ t('settings.data_management') }}</label>
         <div class="flex gap-2">
           <button
-            class="flex-1 px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80"
-            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+            class="flex-1 px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80 transition-colors"
+            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
             @click="handleExport"
           >
             {{ t('settings.export_data') }}
           </button>
           <button
-            class="flex-1 px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80"
-            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-bg);"
+            class="flex-1 px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80 transition-colors"
+            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
             @click="handleImport"
           >
             {{ t('settings.import_data') }}
