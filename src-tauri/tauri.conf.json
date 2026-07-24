@@ -15,6 +15,8 @@
         "title": "QS-Vibe",
         "width": 1100,
         "height": 720,
+        "minWidth": 800,
+        "minHeight": 480,
         "resizable": true,
         "center": true,
         "decorations": false,

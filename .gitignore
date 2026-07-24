@@ -50,6 +50,7 @@ $RECYCLE.BIN/
 
 # Vite
 *.local
+.vite/
 
 # TypeScript
 *.tsbuildinfo

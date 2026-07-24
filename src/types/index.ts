@@ -116,7 +116,16 @@ export interface ProjectRootSuggestion {
   matched_dirs: string[];
 }
 
-export type TabId = "manage" | "history";
+export type SmartViewId =
+  | "all"
+  | "attention"
+  | "linked"
+  | "unlinked"
+  | "missing_library"
+  | "library_only"
+  | "plugins";
+
+export type ViewId = SmartViewId | "history";
 
 export type ConflictType = "SameNameDiffContent" | "DanglingLink";
 

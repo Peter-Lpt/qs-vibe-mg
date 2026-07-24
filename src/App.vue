@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from "vue";
+import { computed, onMounted, onUnmounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAgentsStore } from "./stores/agents";
@@ -7,10 +7,12 @@ import { useSkillsStore } from "./stores/skills";
 import { useHistoryStore } from "./stores/history";
 import { useAppStore } from "./stores/app";
 import { useToast } from "./composables/useToast";
-import type { TabId } from "./types";
+import { useSmartViews, viewToFilterPreset } from "./composables/useSmartViews";
+import { useManageFilters } from "./components/manage/manageFilters";
+import type { SmartViewId } from "./types";
 import AppLayout from "./components/layout/AppLayout.vue";
-import TabBar from "./components/layout/TabBar.vue";
-import ManageTab from "./components/manage/ManageTab.vue";
+import AppSidebar from "./components/layout/AppSidebar.vue";
+import SkillsView from "./components/manage/SkillsView.vue";
 import HistoryTab from "./components/history/HistoryTab.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
 import ToastContainer from "./components/common/ToastContainer.vue";
@@ -23,7 +25,15 @@ const appStore = useAppStore();
 const toast = useToast();
 const appWindow = getCurrentWindow();
 
-const tabs: TabId[] = ["manage", "history"];
+// ── 筛选模型与视图计数（App 层持有，侧边栏与 SkillsView 共用同一数据源） ──
+const skillList = computed(() => skillsStore.skills);
+const detectedAgents = computed(() => agentsStore.agents.filter((a) => a.detected && a.enabled));
+const skillsViewId = computed<SmartViewId>(() =>
+  appStore.activeView === "history" ? appStore.lastSkillsView : appStore.activeView
+);
+const defaultDomain = computed(() => viewToFilterPreset(skillsViewId.value).domain);
+const filterModel = useManageFilters(skillList, detectedAgents, defaultDomain);
+const { viewCounts } = useSmartViews(skillList, detectedAgents, filterModel.state);
 
 watch(
   () => appStore.locale,
@@ -42,18 +52,27 @@ watch(
 );
 
 function handleGlobalKeydown(e: KeyboardEvent) {
-  // Ctrl+1-2: tab switch
-  if (e.ctrlKey && !e.shiftKey && e.key >= "1" && e.key <= "2") {
+  // Ctrl/Cmd+1: 返回技能库（恢复上次子视图）
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "1") {
     e.preventDefault();
-    const idx = Number(e.key) - 1;
-    if (idx < tabs.length) {
-      appStore.activeTab = tabs[idx];
-    }
+    appStore.setActiveView(appStore.lastSkillsView);
+    return;
+  }
+  // Ctrl/Cmd+2: 历史记录
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "2") {
+    e.preventDefault();
+    appStore.setActiveView("history");
     return;
   }
 
-  // Ctrl+Z: undo (in history tab)
-  if (e.ctrlKey && !e.shiftKey && e.key === "z" && appStore.activeTab === "history") {
+  // Ctrl+Z: undo（仅历史视图且非可编辑目标）
+  if (
+    (e.ctrlKey || e.metaKey) &&
+    !e.shiftKey &&
+    e.key === "z" &&
+    appStore.activeView === "history" &&
+    !isEditableTarget(e.target)
+  ) {
     e.preventDefault();
     if (historyStore.canUndo && historyStore.latestUndoableId) {
       historyStore.undoById(historyStore.latestUndoableId);
@@ -64,8 +83,14 @@ function handleGlobalKeydown(e: KeyboardEvent) {
     return;
   }
 
-  // Ctrl+Shift+Z: redo (in history tab)
-  if (e.ctrlKey && e.shiftKey && e.key === "Z" && appStore.activeTab === "history") {
+  // Ctrl+Shift+Z: redo（仅历史视图且非可编辑目标）
+  if (
+    (e.ctrlKey || e.metaKey) &&
+    e.shiftKey &&
+    e.key === "Z" &&
+    appStore.activeView === "history" &&
+    !isEditableTarget(e.target)
+  ) {
     e.preventDefault();
     if (historyStore.canRedo && historyStore.latestRedoableId) {
       historyStore.redoById(historyStore.latestRedoableId);
@@ -120,13 +145,23 @@ onUnmounted(() => {
 
 <template>
   <AppLayout>
-    <template #tabs>
-      <TabBar v-model="appStore.activeTab" />
+    <template #sidebar>
+      <AppSidebar
+        :active-view="appStore.activeView"
+        :counts="viewCounts"
+        @select="appStore.setActiveView"
+        @open-settings="appStore.showSettings = true"
+      />
     </template>
 
     <KeepAlive>
-      <ManageTab v-if="appStore.activeTab === 'manage'" />
-      <HistoryTab v-else-if="appStore.activeTab === 'history'" />
+      <SkillsView
+        v-if="appStore.activeView !== 'history'"
+        :key="'skills'"
+        :view="skillsViewId"
+        :filter-model="filterModel"
+      />
+      <HistoryTab v-else :key="'history'" />
     </KeepAlive>
   </AppLayout>
 

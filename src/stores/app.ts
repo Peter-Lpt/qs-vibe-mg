@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import type { AppConfig, ProjectRootSuggestion, TabId } from "../types";
+import type { AppConfig, ProjectRootSuggestion, SmartViewId, ViewId } from "../types";
 
 export type ThemeMode = "system" | "light" | "dark";
 export type Locale = "zh" | "en" | "zh-TW";
@@ -18,18 +18,47 @@ export const useAppStore = defineStore("app", () => {
   const config = ref<AppConfig | null>(null);
   const projectRootSuggestions = ref<ProjectRootSuggestion[]>([]);
 
-  // 兼容旧值：将旧 tab id 映射到新 id
-  const storedTab = localStorage.getItem("vibe-active-tab") as TabId | null;
-  const initialTab: TabId =
-    storedTab === "manage" || storedTab === "history"
-      ? storedTab
-      : storedTab === "overview" || storedTab === "symlink" || storedTab === "skills"
-        ? "manage"
-        : storedTab === "agents" || storedTab === "dashboard"
-          ? "manage"
-          : "manage";
+  // ── 视图状态（v0.3：activeTab → activeView，统一 setter + 持久化） ──
+  const VIEW_IDS: readonly ViewId[] = [
+    "all",
+    "attention",
+    "linked",
+    "unlinked",
+    "missing_library",
+    "library_only",
+    "plugins",
+    "history",
+  ];
+  function isValidViewId(value: string | null): value is ViewId {
+    return value !== null && (VIEW_IDS as readonly string[]).includes(value);
+  }
+  function isValidSmartViewId(value: string | null): value is SmartViewId {
+    return isValidViewId(value) && value !== "history";
+  }
 
-  const activeTab = ref<TabId>(initialTab);
+  // 旧 key "vibe-active-tab" 一次性迁移：manage（含 legacy overview/symlink/skills/agents/dashboard）→ "all"；history → "history"
+  const storedView = localStorage.getItem("vibe-active-view");
+  const legacyTab = localStorage.getItem("vibe-active-tab");
+  const initialView: ViewId = isValidViewId(storedView)
+    ? storedView
+    : legacyTab === "history"
+      ? "history"
+      : "all";
+
+  const storedLastSkillsView = localStorage.getItem("vibe-last-skills-view");
+  const activeView = ref<ViewId>(initialView);
+  const lastSkillsView = ref<SmartViewId>(
+    isValidSmartViewId(storedLastSkillsView) ? storedLastSkillsView : "all"
+  );
+
+  function setActiveView(view: ViewId) {
+    activeView.value = view;
+    if (view !== "history") {
+      lastSkillsView.value = view;
+      localStorage.setItem("vibe-last-skills-view", view);
+    }
+    localStorage.setItem("vibe-active-view", view);
+  }
 
   function applyTheme(mode: ThemeMode) {
     const root = document.documentElement;
@@ -59,10 +88,6 @@ export const useAppStore = defineStore("app", () => {
     localStorage.setItem("vibe-locale", loc);
   }
 
-  function setActiveTab(tab: TabId) {
-    activeTab.value = tab;
-    localStorage.setItem("vibe-active-tab", tab);
-  }
 
   function init() {
     applyTheme(theme.value);
@@ -115,10 +140,11 @@ export const useAppStore = defineStore("app", () => {
     resolvedTheme,
     config,
     projectRootSuggestions,
-    activeTab,
+    activeView,
+    lastSkillsView,
+    setActiveView,
     setTheme,
     setLocale,
-    setActiveTab,
     init,
     exportData,
     readFileFromPath,

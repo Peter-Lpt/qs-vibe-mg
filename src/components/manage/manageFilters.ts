@@ -6,6 +6,7 @@ export type IssueFilter = "conflict" | "dangling" | "duplicate";
 export type LibraryScope = "missing_library" | "library_only";
 export type AgentMatch = "any" | "exclude";
 export type SortMode = "status" | "updated" | "name" | "linked_agents";
+export type DomainScope = "local" | "plugin";
 
 export interface ManageFilterState {
   query: string;
@@ -15,6 +16,7 @@ export interface ManageFilterState {
   agentIds: Set<string>;
   agentMatch: AgentMatch;
   sort: SortMode;
+  domain: DomainScope;
 }
 
 export interface SourceClassification {
@@ -33,6 +35,24 @@ export const PLUGIN_AGENT_MAP: Record<string, string> = {
   "claude-plugin": "claude-code",
   "codex-plugin": "codex",
 };
+
+// 是否存在非 plugin 来源（自 ManageTab.vue 上提，实现不变）
+export function hasNonPluginSource(skill: Skill): boolean {
+  return skill.sources.some(
+    (source) =>
+      source.from === "vibe-lib" ||
+      source.source_kind === "agent" ||
+      (!source.source_kind &&
+        !source.from.startsWith("claude-plugin:") &&
+        !source.from.startsWith("codex-plugin:"))
+  );
+}
+
+// domain 互斥分区：每个 skill 恰好属于一个域
+export function matchesDomain(skill: Skill, domain: DomainScope): boolean {
+  if (domain === "local") return !skill.from_plugin || hasNonPluginSource(skill);
+  return skill.from_plugin && !hasNonPluginSource(skill);
+}
 
 function sourceKind(source: SkillSource, agentIds: ReadonlySet<string>): "library" | "agent" | "project" | "external" | "marketplace" {
   if (source.source_kind === "marketplace") return "marketplace";
@@ -108,8 +128,8 @@ export function matchesStatusPreset(
   agents: readonly Agent[] = []
 ): boolean {
   if (preset === "all") return true;
-  // Plugin 来源的 skill 不参与状态筛选（只在 "all" 时显示）
-  if (skill.from_plugin) return false;
+  // v0.3：移除 from_plugin 硬排除——状态谓词对本地/插件统一语义，
+  // 纯插件副本由 matchesDomain("local") = false 挡在本地视图之外（domain 原子交付）。
   const sources = classifySkillSources(skill, agents);
   if (preset === "needs_attention") {
     return skill.has_conflict || skill.has_dangling || sources.hasLinkedElsewhere;
@@ -207,6 +227,7 @@ export function sortSkills(skills: readonly Skill[], sort: SortMode, agents: rea
 
 export function filterSkills(skills: readonly Skill[], state: ManageFilterState, agents: readonly Agent[]): Skill[] {
   const filtered = skills.filter((skill) =>
+    matchesDomain(skill, state.domain) &&
     matchesQuery(skill, state.query) &&
     matchesStatusPreset(skill, state.statusPreset, agents) &&
     matchesIssues(skill, state.issues) &&
@@ -252,7 +273,8 @@ export function computeFacetCounts(
 
 export function useManageFilters(
   skills: ComputedRef<Skill[]> | Ref<Skill[]>,
-  agents: ComputedRef<Agent[]> | Ref<Agent[]>
+  agents: ComputedRef<Agent[]> | Ref<Agent[]>,
+  defaultDomain?: ComputedRef<DomainScope> | Ref<DomainScope>
 ) {
   const query = ref("");
   const statusPreset = ref<StatusPreset>("all");
@@ -261,6 +283,7 @@ export function useManageFilters(
   const agentIds = ref<Set<string>>(new Set());
   const agentMatch = ref<AgentMatch>("any");
   const sort = ref<SortMode>("status");
+  const domain = ref<DomainScope>(defaultDomain?.value ?? "local");
 
   const state = computed<ManageFilterState>(() => ({
     query: query.value,
@@ -270,6 +293,7 @@ export function useManageFilters(
     agentIds: agentIds.value,
     agentMatch: agentMatch.value,
     sort: sort.value,
+    domain: domain.value,
   }));
   const filteredSkills = computed(() => filterSkills(skills.value, state.value, agents.value));
   const facetCounts = computed(() => computeFacetCounts(skills.value, state.value, agents.value));
@@ -278,7 +302,8 @@ export function useManageFilters(
     Number(statusPreset.value !== "all") +
     issues.value.size +
     libraryScope.value.size +
-    Number(agentIds.value.size > 0)
+    Number(agentIds.value.size > 0) +
+    Number(defaultDomain ? domain.value !== defaultDomain.value : false)
   );
   const hasActiveFilters = computed(() => activeFilterCount.value > 0);
 
@@ -293,6 +318,7 @@ export function useManageFilters(
     libraryScope.value = new Set();
     agentIds.value = new Set();
     agentMatch.value = "any";
+    if (defaultDomain) domain.value = defaultDomain.value;
   }
 
   function toggleIssue(issue: IssueFilter) {
@@ -352,6 +378,7 @@ export function useManageFilters(
     agentIds,
     agentMatch,
     sort,
+    domain,
     state,
     filteredSkills,
     facetCounts,

@@ -50,10 +50,6 @@ async function handleTitlebarMouseDown(event: MouseEvent) {
         </div>
       </div>
 
-      <div class="shrink-0 min-w-0">
-        <slot name="tabs" />
-      </div>
-
       <div
         class="titlebar-drag-spacer flex-1 self-stretch min-w-4"
         @mousedown="handleTitlebarMouseDown"
@@ -88,8 +84,11 @@ async function handleTitlebarMouseDown(event: MouseEvent) {
       </div>
     </header>
 
-    <div class="app-shell-content flex-1 min-h-0 overflow-y-auto px-5 py-4" style="background: var(--c-bg);">
-      <slot />
+    <div class="flex flex-1 min-h-0">
+      <slot name="sidebar" />
+      <div class="app-shell-content flex-1 min-w-0 min-h-0 overflow-y-auto px-5 py-4" style="background: var(--c-bg);">
+        <slot />
+      </div>
     </div>
   </div>
 </template>
