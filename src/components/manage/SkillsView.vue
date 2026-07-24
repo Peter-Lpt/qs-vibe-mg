@@ -339,8 +339,15 @@ function handleKeydown(event: KeyboardEvent) {
     event.preventDefault();
     searchInput.value?.focus();
   }
-  if (event.key === "Escape" && sortMenuOpen.value) {
-    sortMenuOpen.value = false;
+  if (event.key === "Escape") {
+    if (sortMenuOpen.value) {
+      sortMenuOpen.value = false;
+      return;
+    }
+    if (filterOpen.value) {
+      filterOpen.value = false;
+      return;
+    }
   }
 }
 function handlePointerDown(event: PointerEvent) {

@@ -297,5 +297,5 @@ export function samePath(a: string, b: string): boolean {
 }
 
 function normalizePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+  return path.replace(/\\/g, "/").replace(/\/+$/, "").toLocaleLowerCase();
 }
