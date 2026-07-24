@@ -299,3 +299,85 @@ export function samePath(a: string, b: string): boolean {
 function normalizePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+$/, "").toLocaleLowerCase();
 }
+
+// 纯函数：获取 skill 对所有 agent 的状态（非 composable，可在循环中调用）
+export function getAgentStatuses(skill: Skill, agents: Agent[], t: TFunc): AgentStatus[] {
+  const detected = agents.filter((a) => a.detected);
+  const vibeSource = skill.sources.find((s) => s.from === "vibe-lib");
+  const result: AgentStatus[] = [];
+
+  for (const agent of detected) {
+    const source = skill.sources.find((s) => sourceBelongsToAgent(s, agent.id));
+    if (!source) {
+      result.push({
+        agent, source: null, status: "unlinked",
+        action: vibeSource ? "link" : "none",
+        ...meta("unlinked", t),
+      });
+      continue;
+    }
+    if (source.from === "vibe-lib") {
+      result.push({
+        agent, source, status: "origin", action: "none",
+        ...meta("origin", t),
+      });
+      continue;
+    }
+    if (source.source_kind === "marketplace" || source.from.startsWith("claude-plugin:") || source.from.startsWith("codex-plugin:")) {
+      result.push({
+        agent, source, status: "synced",
+        action: vibeSource ? "none" : "sync_from_plugin",
+        statusLabel: t("manage.status_plugin"),
+        statusColor: "var(--c-plugin, #8b5cf6)",
+        statusIcon: "🧩",
+      });
+      continue;
+    }
+    if (!source.is_symlink) {
+      if (vibeSource) {
+        if (source.content_hash === vibeSource.content_hash) {
+          result.push({
+            agent, source, status: "independent", action: "replace_with_link",
+            statusLabel: t("manage.status_independent_same"),
+            statusColor: "var(--c-text-secondary)",
+            statusIcon: "●",
+          });
+        } else {
+          result.push({
+            agent, source, status: "independent", action: "sync_to_vibe",
+            statusLabel: t("manage.status_independent_conflict"),
+            statusColor: "var(--c-warning)",
+            statusIcon: "⚠",
+          });
+        }
+      } else {
+        result.push({
+          agent, source, status: "independent", action: "sync_to_vibe",
+          statusLabel: t("manage.status_independent"),
+          statusColor: "var(--c-text-secondary)",
+          statusIcon: "●",
+        });
+      }
+      continue;
+    }
+    if (!source.symlink_target || source.content_hash === "") {
+      result.push({
+        agent, source, status: "dangling", action: "remove_dangling",
+        ...meta("dangling", t),
+      });
+      continue;
+    }
+    if (vibeSource?.path && samePath(source.symlink_target, vibeSource.path)) {
+      result.push({
+        agent, source, status: "synced", action: "unlink",
+        ...meta("synced", t),
+      });
+    } else {
+      result.push({
+        agent, source, status: "linked_elsewhere", action: "relink",
+        ...meta("linked_elsewhere", t),
+      });
+    }
+  }
+  return result;
+}

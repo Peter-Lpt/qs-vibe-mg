@@ -6,7 +6,7 @@ import { useAgentsStore } from "../../stores/agents";
 import { useAppStore } from "../../stores/app";
 import { useToast } from "../../composables/useToast";
 import { SMART_VIEWS, viewToFilterPreset } from "../../composables/useSmartViews";
-import { useBatchActions, type BatchActionOption } from "../../composables/useBatchActions";
+import { useBatchActions, type BatchIntent } from "../../composables/useBatchActions";
 import SkillRow from "./SkillRow.vue";
 import IssueRepairPanel, { type RepairGroupId } from "./IssueRepairPanel.vue";
 import InstallDialog from "../skills/InstallDialog.vue";
@@ -66,30 +66,41 @@ const selectedSkills = selectionModel.selectedIds;
 const allDisplayedSelected = selectionModel.allVisibleSelected;
 const someDisplayedSelected = selectionModel.partiallyVisibleSelected;
 
-// ── 批量操作 ──────────────────────────────────────
+// ── 批量操作（意图驱动） ──────────────────────────────────────
 const selectedSkillsList = computed(() =>
   skillsStore.skills.filter((s) => selectedSkills.value.has(s.id))
 );
-const { availableActions, operating: batchOperating, result: batchResult, execute: executeBatchAction, clearResult } =
+const { allPairs, intents, operating: batchOperating, result: batchResult, execute: executeBatchIntent, clearResult } =
   useBatchActions(selectedSkillsList, detectedAgents, t);
 
-const batchMenuOpen = ref(false);
-const batchMenuRef = ref<HTMLElement | null>(null);
-const batchConfirmAction = ref<BatchActionOption | null>(null);
+const batchShowConfirm = ref(false);
+const batchConfirmIntent = ref<BatchIntent | null>(null);
 const batchShowResult = ref(false);
+const batchExpandDetails = ref(false);
 
-function onBatchActionSelected(act: BatchActionOption) {
-  batchMenuOpen.value = false;
-  batchConfirmAction.value = act;
+function onIntentClick(intent: BatchIntent) {
+  if (intent.needsConfirm) {
+    batchConfirmIntent.value = intent;
+    batchShowConfirm.value = true;
+  } else {
+    // 安全操作直接执行
+    runIntent(intent);
+  }
 }
 
-async function onBatchConfirm() {
-  const action = batchConfirmAction.value;
-  if (!action) return;
-  batchConfirmAction.value = null;
-  await executeBatchAction(action);
+async function runIntent(intent: BatchIntent) {
+  await executeBatchIntent(intent);
   batchShowResult.value = true;
+  batchExpandDetails.value = false;
   selectionModel.pruneMissing(skillsStore.skills);
+}
+
+function onBatchConfirm() {
+  const intent = batchConfirmIntent.value;
+  if (!intent) return;
+  batchShowConfirm.value = false;
+  batchConfirmIntent.value = null;
+  runIntent(intent);
 }
 
 function closeBatchResult() {
@@ -211,11 +222,8 @@ function handleFilterGroup(group: RepairGroupId) {
   } else {
     filterModel.libraryScope.value = new Set([...filterModel.libraryScope.value, "missing_library"]);
   }
-  // 自动全选 + 打开批量下拉
+  // 自动全选（浮动条会自动出现）
   selectionModel.toggleAllVisible();
-  if (availableActions.value.length > 0) {
-    batchMenuOpen.value = true;
-  }
 }
 
 // ── 详情展开 / 选择 ──────────────────────────────────
@@ -316,13 +324,12 @@ function handleKeydown(event: KeyboardEvent) {
   }
   if (event.key === "Escape") {
     if (sortMenuOpen.value) { sortMenuOpen.value = false; return; }
-    if (batchMenuOpen.value) { batchMenuOpen.value = false; return; }
+    if (batchShowConfirm.value) { batchShowConfirm.value = false; return; }
   }
 }
 function handlePointerDown(event: PointerEvent) {
   const target = event.target as Node;
   if (sortMenuRef.value && !sortMenuRef.value.contains(target)) sortMenuOpen.value = false;
-  if (batchMenuRef.value && !batchMenuRef.value.contains(target)) batchMenuOpen.value = false;
 }
 
 // ── 视图切换 ──────────────────────────────────
@@ -331,8 +338,8 @@ watch(
   (view) => {
     applyViewPreset(view);
     expandedSkillId.value = null;
-    batchMenuOpen.value = false;
-    batchConfirmAction.value = null;
+    batchShowConfirm.value = false;
+    batchConfirmIntent.value = null;
   },
   { immediate: true }
 );
@@ -645,62 +652,74 @@ defineExpose({
         </div>
       </div>
 
-      <!-- 批量操作条 -->
+      <!-- 浮动批量操作条（sticky 底部） -->
       <div
-        v-if="selectedSkills.size > 0"
-        class="flex items-center gap-3 rounded-lg border px-4 py-2.5"
-        style="background: var(--c-primary-light); border-color: color-mix(in srgb, var(--c-primary) 30%, transparent);"
+        v-if="selectedSkills.size > 0 && intents.length > 0"
+        class="sticky bottom-0 z-10 rounded-lg border px-4 py-3"
+        style="background: var(--c-surface); border-color: var(--c-border); box-shadow: 0 -4px 12px rgba(0,0,0,0.08);"
       >
-        <span class="text-xs" style="color: var(--c-text);">
-          {{ t("manage.selected_scope_count", { selected: selectedSkills.size, total: displaySkills.length }) }}
-        </span>
-        <div class="ml-auto flex items-center gap-2">
-          <!-- 操作下拉 -->
-          <div ref="batchMenuRef" class="relative">
-            <button
-              class="cursor-pointer rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-50"
-              style="background: var(--c-primary); color: white;"
-              type="button"
-              :disabled="batchOperating || availableActions.length === 0"
-              @click="batchMenuOpen = !batchMenuOpen"
-            >
-              {{ t("manage.batch_panel_open") }} ▾
-            </button>
-            <div
-              v-if="batchMenuOpen"
-              class="absolute right-0 bottom-full z-20 mb-1 w-56 rounded-lg border p-1 shadow-lg"
-              style="background: var(--c-surface-raised); border-color: var(--c-border);"
-            >
-              <button
-                v-for="act in availableActions"
-                :key="act.action"
-                class="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-[var(--c-surface-hover)]"
-                type="button"
-                @click="onBatchActionSelected(act)"
-              >
-                <span :style="{ color: act.color }">{{ act.label }}</span>
-                <span
-                  class="rounded-full px-1.5 text-[9px]"
-                  style="background: var(--c-surface-hover); color: var(--c-text-secondary);"
-                >{{ act.count }}</span>
-              </button>
-              <div
-                v-if="availableActions.length === 0"
-                class="px-2.5 py-2 text-[11px]"
-                style="color: var(--c-text-tertiary);"
-              >
-                {{ t("manage.no_batch_actions") }}
-              </div>
-            </div>
-          </div>
+        <!-- 摘要 -->
+        <div class="flex items-center gap-2 text-[11px] mb-2" style="color: var(--c-text-secondary);">
+          <span>{{ t("batch.selected_summary", { skills: selectedSkills.size, pairs: intents.reduce((s, i) => s + i.count, 0) }) }}</span>
           <button
-            class="cursor-pointer rounded px-2 py-1 text-[11px]"
-            style="color: var(--c-text-secondary);"
+            class="ml-auto text-[10px] cursor-pointer hover:underline"
+            style="color: var(--c-text-tertiary);"
             type="button"
+            @click="batchExpandDetails = !batchExpandDetails"
+          >
+            {{ batchExpandDetails ? t("batch.hide_details") : t("batch.show_details") }}
+          </button>
+        </div>
+
+        <!-- 意图按钮 -->
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-for="intent in intents"
+            :key="intent.id"
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-medium cursor-pointer transition-colors border disabled:opacity-50"
+            :style="{
+              background: 'var(--c-primary-light)',
+              borderColor: 'var(--c-primary)',
+              color: 'var(--c-primary)',
+            }"
+            :disabled="batchOperating"
+            @click="onIntentClick(intent)"
+          >
+            <component :is="intent.icon" :size="13" />
+            {{ t(intent.labelKey, { count: intent.count }) }}
+          </button>
+
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] cursor-pointer"
+            style="color: var(--c-text-secondary);"
             @click="deselectAllSkills"
           >
             {{ t("manage.deselect_all") }}
           </button>
+        </div>
+
+        <!-- 展开详情 -->
+        <div v-if="batchExpandDetails" class="mt-2 rounded border text-[10px] overflow-hidden" style="border-color: var(--c-border);">
+          <div class="max-h-32 overflow-y-auto">
+            <div
+              v-for="(pair, i) in allPairs.slice(0, 100)"
+              :key="i"
+              class="flex items-center gap-2 px-2.5 py-1"
+              :style="{ background: i % 2 ? 'var(--c-surface)' : 'transparent' }"
+            >
+              <span class="truncate flex-1" style="color: var(--c-text);">{{ pair.skillName }}</span>
+              <span style="color: var(--c-text-tertiary);">→</span>
+              <span class="truncate" style="color: var(--c-text-secondary);">{{ pair.agentName }}</span>
+              <span class="shrink-0 rounded px-1 text-[9px]" style="background: var(--c-surface-hover); color: var(--c-text-tertiary);">
+                {{ t(`manage.btn_${pair.action}`) }}
+              </span>
+            </div>
+            <div v-if="allPairs.length > 100" class="px-2.5 py-1 text-[10px]" style="color: var(--c-text-tertiary);">
+              ... {{ allPairs.length - 100 }} {{ t("manage.batch_detail_more") }}
+            </div>
+          </div>
         </div>
       </div>
     </template>
@@ -709,49 +728,45 @@ defineExpose({
   <!-- 批量确认弹窗 -->
   <Teleport to="body">
     <div
-      v-if="batchConfirmAction"
+      v-if="batchShowConfirm && batchConfirmIntent"
       class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
-      @click.self="batchConfirmAction = null"
+      @click.self="batchShowConfirm = false"
     >
       <div class="modal-shell flex w-full max-w-lg flex-col" style="max-height: 80vh;">
         <div class="modal-header shrink-0">
           <h3 class="text-sm font-semibold" style="color: var(--c-text);">
-            {{ t('manage.batch_confirm_title') }}
+            {{ t(`batch.confirm_${batchConfirmIntent.id}_title`) }}
           </h3>
           <button
             class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md"
             style="color: var(--c-text-secondary);"
             type="button"
-            @click="batchConfirmAction = null"
+            @click="batchShowConfirm = false"
           >
             &times;
           </button>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
-          <div class="flex items-center gap-2 text-xs">
-            <span :style="{ color: batchConfirmAction.color }">{{ batchConfirmAction.label }}</span>
-            <span class="rounded-full px-1.5 py-0.5 text-[10px]" style="background: var(--c-surface-hover); color: var(--c-text-secondary);">
-              {{ batchConfirmAction.count }} {{ t("manage.batch_detail_pairs") }}
-            </span>
-          </div>
+          <p class="text-xs" style="color: var(--c-text-secondary);">
+            {{ t(`batch.confirm_${batchConfirmIntent.id}_msg`, { count: batchConfirmIntent.count }) }}
+          </p>
           <div class="rounded border text-[11px] overflow-hidden" style="border-color: var(--c-border);">
             <div class="max-h-48 overflow-y-auto">
               <div
-                v-for="(pair, i) in batchConfirmAction.pairs.slice(0, 50)"
+                v-for="(pair, i) in batchConfirmIntent.pairs.slice(0, 50)"
                 :key="i"
                 class="flex items-center gap-2 px-3 py-1.5"
                 :style="{ background: i % 2 ? 'var(--c-surface)' : 'transparent' }"
               >
-                <span class="truncate flex-1" style="color: var(--c-text);">
-                  {{ selectedSkillsList.find(s => s.id === pair[0])?.name || pair[0] }}
-                </span>
+                <span class="truncate flex-1" style="color: var(--c-text);">{{ pair.skillName }}</span>
                 <span style="color: var(--c-text-tertiary);">→</span>
-                <span class="truncate" style="color: var(--c-text-secondary);">
-                  {{ detectedAgents.find(a => a.id === pair[1])?.name || pair[1] }}
+                <span class="truncate" style="color: var(--c-text-secondary);">{{ pair.agentName }}</span>
+                <span class="shrink-0 rounded px-1 text-[9px]" style="background: var(--c-surface-hover); color: var(--c-text-tertiary);">
+                  {{ t(`manage.btn_${pair.action}`) }}
                 </span>
               </div>
-              <div v-if="batchConfirmAction.pairs.length > 50" class="px-3 py-1.5 text-[10px]" style="color: var(--c-text-tertiary);">
-                ... {{ batchConfirmAction.pairs.length - 50 }} {{ t("manage.batch_detail_more") }}
+              <div v-if="batchConfirmIntent.pairs.length > 50" class="px-3 py-1.5 text-[10px]" style="color: var(--c-text-tertiary);">
+                ... {{ batchConfirmIntent.pairs.length - 50 }} {{ t("manage.batch_detail_more") }}
               </div>
             </div>
           </div>
@@ -760,7 +775,7 @@ defineExpose({
           <button
             class="rounded-md px-3 py-1.5 text-[11px] cursor-pointer"
             style="color: var(--c-text-secondary); border: 1px solid var(--c-border);"
-            @click="batchConfirmAction = null"
+            @click="batchShowConfirm = false"
           >
             {{ t("common.cancel") }}
           </button>
@@ -787,7 +802,7 @@ defineExpose({
       <div class="modal-shell flex w-full max-w-lg flex-col" style="max-height: 80vh;">
         <div class="modal-header shrink-0">
           <h3 class="text-sm font-semibold" style="color: var(--c-text);">
-            {{ t("manage.batch_result_title") }}
+            {{ t("batch.result_title") }}
           </h3>
           <button
             class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md"
@@ -799,17 +814,14 @@ defineExpose({
           </button>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
-          <!-- 汇总 -->
           <div class="flex items-center gap-3 text-xs">
-            <span :style="{ color: batchConfirmAction?.color || 'var(--c-primary)' }">{{ batchResult.action }}</span>
             <span class="rounded-full px-1.5 py-0.5 text-[10px]" style="background: var(--c-success-light, rgba(34,197,94,0.15)); color: var(--c-success);">
-              {{ batchResult.success }} {{ t("manage.batch_result_success_count") }}
+              {{ batchResult.success }} {{ t("batch.result_success") }}
             </span>
             <span v-if="batchResult.errors > 0" class="rounded-full px-1.5 py-0.5 text-[10px]" style="background: var(--c-danger-light, rgba(239,68,68,0.15)); color: var(--c-danger);">
-              {{ batchResult.errors }} {{ t("manage.batch_result_error_count") }}
+              {{ batchResult.errors }} {{ t("batch.result_error") }}
             </span>
           </div>
-          <!-- 详情列表 -->
           <div class="rounded border text-[11px] overflow-hidden" style="border-color: var(--c-border);">
             <div class="max-h-64 overflow-y-auto">
               <div
@@ -821,15 +833,11 @@ defineExpose({
                   color: detail.status === 'success' ? 'var(--c-text)' : 'var(--c-danger)',
                 }"
               >
-                <span class="shrink-0 w-3">
-                  {{ detail.status === "success" ? "✓" : "✗" }}
-                </span>
+                <span class="shrink-0 w-3">{{ detail.status === "success" ? "✓" : "✗" }}</span>
                 <span class="truncate flex-1">{{ detail.skillName }}</span>
                 <span style="color: var(--c-text-tertiary);">→</span>
                 <span class="truncate" style="color: var(--c-text-secondary);">{{ detail.agentName }}</span>
-                <span v-if="detail.message" class="truncate text-[10px] max-w-[120px]" :title="detail.message">
-                  ({{ detail.message }})
-                </span>
+                <span v-if="detail.message" class="truncate text-[10px] max-w-[120px]" :title="detail.message">({{ detail.message }})</span>
               </div>
               <div v-if="batchResult.details.length > 100" class="px-3 py-1.5 text-[10px]" style="color: var(--c-text-tertiary);">
                 ... {{ batchResult.details.length - 100 }} {{ t("manage.batch_detail_more") }}
