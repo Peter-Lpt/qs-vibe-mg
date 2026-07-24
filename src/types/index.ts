@@ -121,8 +121,6 @@ export type SmartViewId =
   | "attention"
   | "linked"
   | "unlinked"
-  | "missing_library"
-  | "library_only"
   | "plugins";
 
 export type ViewId = SmartViewId | "history";

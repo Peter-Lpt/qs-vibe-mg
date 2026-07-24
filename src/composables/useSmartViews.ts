@@ -23,8 +23,6 @@ export const SMART_VIEWS: readonly SmartViewDef[] = [
   { id: "attention", domain: "local", labelKey: "sidebar.view_attention", icon: "TriangleAlert", showBadge: true },
   { id: "linked", domain: "local", labelKey: "sidebar.view_linked", icon: "Link2" },
   { id: "unlinked", domain: "local", labelKey: "sidebar.view_unlinked", icon: "CircleDashed" },
-  { id: "missing_library", domain: "local", labelKey: "sidebar.view_missing_library", icon: "Package" },
-  { id: "library_only", domain: "local", labelKey: "sidebar.view_library_only", icon: "Box" },
   { id: "plugins", domain: "plugin", labelKey: "sidebar.plugins", icon: "Puzzle" },
 ];
 
@@ -44,10 +42,6 @@ export function viewToFilterPreset(view: SmartViewId): ViewFilterPreset {
       return { domain: "local", statusPreset: "linked_any" };
     case "unlinked":
       return { domain: "local", statusPreset: "unlinked_all" };
-    case "missing_library":
-      return { domain: "local", statusPreset: "all", libraryScope: new Set(["missing_library"]) };
-    case "library_only":
-      return { domain: "local", statusPreset: "all", libraryScope: new Set(["library_only"]) };
     case "plugins":
       return { domain: "plugin", statusPreset: "all" };
     case "all":
@@ -83,8 +77,6 @@ export function useSmartViews(
       attention: facets.status.needs_attention,
       linked: facets.status.linked_any,
       unlinked: facets.status.unlinked_all,
-      missing_library: facets.library.missing_library,
-      library_only: facets.library.library_only,
       plugins: pluginCount,
     };
   });

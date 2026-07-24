@@ -6,15 +6,14 @@ import { useAgentsStore } from "../../stores/agents";
 import { useAppStore } from "../../stores/app";
 import { useToast } from "../../composables/useToast";
 import { SMART_VIEWS, viewToFilterPreset } from "../../composables/useSmartViews";
-import type { RepairContext } from "../../composables/useBatchCellActions";
+import { useBatchActions, type BatchActionOption } from "../../composables/useBatchActions";
 import SkillRow from "./SkillRow.vue";
 import IssueRepairPanel, { type RepairGroupId } from "./IssueRepairPanel.vue";
-import FilterPopover from "./FilterPopover.vue";
-import BatchDrawer from "../batch/BatchDrawer.vue";
 import InstallDialog from "../skills/InstallDialog.vue";
 import AddAgentDialog from "../agents/AddAgentDialog.vue";
 import AgentCard from "../agents/AgentCard.vue";
 import SkeletonCard from "../common/SkeletonCard.vue";
+
 import {
   useManageFilters,
   useManageSelection,
@@ -64,9 +63,39 @@ const displaySkills = filterModel.filteredSkills;
 const totalSkills = computed(() => skillsStore.skills.length);
 
 const selectedSkills = selectionModel.selectedIds;
-const selectedSkillIds = computed(() => [...selectedSkills.value]);
 const allDisplayedSelected = selectionModel.allVisibleSelected;
 const someDisplayedSelected = selectionModel.partiallyVisibleSelected;
+
+// ── 批量操作 ──────────────────────────────────────
+const selectedSkillsList = computed(() =>
+  skillsStore.skills.filter((s) => selectedSkills.value.has(s.id))
+);
+const { availableActions, operating: batchOperating, result: batchResult, execute: executeBatchAction, clearResult } =
+  useBatchActions(selectedSkillsList, detectedAgents, t);
+
+const batchMenuOpen = ref(false);
+const batchMenuRef = ref<HTMLElement | null>(null);
+const batchConfirmAction = ref<BatchActionOption | null>(null);
+const batchShowResult = ref(false);
+
+function onBatchActionSelected(act: BatchActionOption) {
+  batchMenuOpen.value = false;
+  batchConfirmAction.value = act;
+}
+
+async function onBatchConfirm() {
+  const action = batchConfirmAction.value;
+  if (!action) return;
+  batchConfirmAction.value = null;
+  await executeBatchAction(action);
+  batchShowResult.value = true;
+  selectionModel.pruneMissing(skillsStore.skills);
+}
+
+function closeBatchResult() {
+  batchShowResult.value = false;
+  clearResult();
+}
 
 // ── 插件视图分组 ──────────────────────────────────
 const pluginGroups = computed(() => {
@@ -91,11 +120,9 @@ function isPluginGroupExpanded(source: string): boolean {
   return expandedPluginGroups.value.has(source);
 }
 
-// ── 工具栏：排序 / 筛选弹层 / 搜索 ──────────────────────
+// ── 工具栏：排序 / 搜索 ──────────────────────
 const sortMenuOpen = ref(false);
 const sortMenuRef = ref<HTMLElement | null>(null);
-const filterOpen = ref(false);
-const filterWrapRef = ref<HTMLElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 
 const sortOptions = computed(() =>
@@ -118,16 +145,12 @@ function chooseSort(value: "status" | "updated" | "name" | "linked_agents") {
 const userScopes = computed(() =>
   [...filterModel.libraryScope.value].filter((s) => !presetScopes.value.has(s))
 );
-const domainOverridden = computed(
-  () => filterModel.domain.value !== viewToFilterPreset(props.view).domain
-);
 const userFilterCount = computed(
   () =>
     Number(Boolean(filterModel.query.value.trim())) +
     filterModel.issues.value.size +
     userScopes.value.length +
-    Number(filterModel.agentIds.value.size > 0) +
-    Number(domainOverridden.value)
+    Number(filterModel.agentIds.value.size > 0)
 );
 const hasUserFilters = computed(() => userFilterCount.value > 0);
 
@@ -169,52 +192,31 @@ const tokens = computed<Token[]>(() => {
       onRemove: () => filterModel.removeAgent(agentId),
     });
   }
-  if (domainOverridden.value) {
-    list.push({
-      key: "domain",
-      label: t(filterModel.domain.value === "local" ? "filter.domain_local" : "filter.domain_plugin"),
-      onRemove: () => {
-        filterModel.domain.value = viewToFilterPreset(props.view).domain;
-      },
-    });
-  }
   return list;
 });
 
 function clearUserFilters() {
   filterModel.clearFilters();
-  // 视图持有字段按当前视图预设回填（清除用户条件，不动视图本身）
   applyViewPreset(props.view);
   selectionModel.clearSelection();
   expandedSkillId.value = null;
 }
 
-// ── 修复上下文（首次接线 repairContext） ──────────────────────
-const repairContext = ref<RepairContext | null>(null);
-
+// ── 修复中心 ──────────────────────────────────
 function handleFilterGroup(group: RepairGroupId) {
   if (group === "conflict") {
     filterModel.issues.value = new Set(["conflict"]);
-    repairContext.value = "conflict";
   } else if (group === "dangling") {
     filterModel.issues.value = new Set(["dangling"]);
-    repairContext.value = "dangling";
   } else {
     filterModel.libraryScope.value = new Set([...filterModel.libraryScope.value, "missing_library"]);
-    repairContext.value = "missing_lib";
+  }
+  // 自动全选 + 打开批量下拉
+  selectionModel.toggleAllVisible();
+  if (availableActions.value.length > 0) {
+    batchMenuOpen.value = true;
   }
 }
-
-// 修复上下文与其筛选条件同生共死：条件被移除/清除时上下文一并失效
-watch([filterModel.issues, filterModel.libraryScope], () => {
-  const ctx = repairContext.value;
-  if (!ctx) return;
-  const active =
-    (ctx === "conflict" && filterModel.issues.value.has("conflict")) ||
-    (ctx === "dangling" && filterModel.issues.value.has("dangling")) ||
-    (ctx === "missing_lib" && filterModel.libraryScope.value.has("missing_library"));
-  if (!active) repairContext.value = null;
-});
 
 // ── 详情展开 / 选择 ──────────────────────────────────
 const expandedSkillId = ref<string | null>(null);
@@ -226,33 +228,6 @@ function toggleAllDisplayedSkills() {
 }
 function deselectAllSkills() {
   selectionModel.clearSelection();
-}
-
-// ── 批量抽屉 ──────────────────────────────────
-const drawerOpen = ref(false);
-const drawerRef = ref<{ markContextStale: () => void } | null>(null);
-const isNarrow = ref(window.innerWidth < 960);
-
-function openBatchDrawer() {
-  if (selectedSkillIds.value.length === 0) return;
-  if (isNarrow.value) expandedSkillId.value = null; // 覆盖模式下收起行内详情（§15 Q5）
-  drawerOpen.value = true;
-}
-function closeBatchDrawer() {
-  drawerOpen.value = false;
-}
-function removeSkillFromSelection(skillId: string) {
-  const next = new Set(selectedSkills.value);
-  next.delete(skillId);
-  selectedSkills.value = next;
-}
-function resolveConflictFromDrawer(skillId: string) {
-  drawerOpen.value = false;
-  repairContext.value = "conflict";
-  expandedSkillId.value = skillId;
-}
-function onBatchApplied() {
-  selectionModel.pruneMissing(skillsStore.skills);
 }
 
 // ── Agent 管理 / 安装 ──────────────────────────────────
@@ -340,33 +315,24 @@ function handleKeydown(event: KeyboardEvent) {
     searchInput.value?.focus();
   }
   if (event.key === "Escape") {
-    if (sortMenuOpen.value) {
-      sortMenuOpen.value = false;
-      return;
-    }
-    if (filterOpen.value) {
-      filterOpen.value = false;
-      return;
-    }
+    if (sortMenuOpen.value) { sortMenuOpen.value = false; return; }
+    if (batchMenuOpen.value) { batchMenuOpen.value = false; return; }
   }
 }
 function handlePointerDown(event: PointerEvent) {
   const target = event.target as Node;
   if (sortMenuRef.value && !sortMenuRef.value.contains(target)) sortMenuOpen.value = false;
-  if (filterWrapRef.value && !filterWrapRef.value.contains(target)) filterOpen.value = false;
-}
-function handleWindowResize() {
-  isNarrow.value = window.innerWidth < 960;
+  if (batchMenuRef.value && !batchMenuRef.value.contains(target)) batchMenuOpen.value = false;
 }
 
-// ── 视图切换：应用预设 + 重置局部状态 ──────────────────────
+// ── 视图切换 ──────────────────────────────────
 watch(
   () => props.view,
   (view) => {
     applyViewPreset(view);
     expandedSkillId.value = null;
-    repairContext.value = null;
-    if (drawerOpen.value) drawerRef.value?.markContextStale();
+    batchMenuOpen.value = false;
+    batchConfirmAction.value = null;
   },
   { immediate: true }
 );
@@ -374,7 +340,6 @@ watch(
 onMounted(async () => {
   document.addEventListener("keydown", handleKeydown);
   document.addEventListener("pointerdown", handlePointerDown);
-  window.addEventListener("resize", handleWindowResize);
   setTimeout(() => {
     getScrollContainer()?.addEventListener("scroll", handleScroll);
   }, 100);
@@ -387,7 +352,6 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener("keydown", handleKeydown);
   document.removeEventListener("pointerdown", handlePointerDown);
-  window.removeEventListener("resize", handleWindowResize);
   getScrollContainer()?.removeEventListener("scroll", handleScroll);
 });
 
@@ -397,374 +361,494 @@ defineExpose({
 </script>
 
 <template>
-  <div class="flex items-start gap-4">
-    <div class="min-w-0 flex-1 space-y-4">
-      <!-- 工具栏 -->
-      <section class="workspace-panel !p-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <h2 class="text-sm font-semibold" style="color: var(--c-text-strong);">
-            {{ isPluginsView ? t("plugins.view_title") : viewTitle }}
-          </h2>
-          <span
-            class="rounded-full px-2 py-0.5 text-xs"
-            style="background: var(--c-primary-light); color: var(--c-primary);"
+  <div class="space-y-4">
+    <!-- 工具栏 -->
+    <section class="workspace-panel !p-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <h2 class="text-sm font-semibold" style="color: var(--c-text-strong);">
+          {{ isPluginsView ? t("plugins.view_title") : viewTitle }}
+        </h2>
+        <span
+          class="rounded-full px-2 py-0.5 text-xs"
+          style="background: var(--c-primary-light); color: var(--c-primary);"
+        >
+          {{ displaySkills.length }}/{{ totalSkills }}
+        </span>
+        <span class="hidden text-[11px] lg:inline" style="color: var(--c-text-secondary);">
+          {{ isPluginsView ? t("plugins.view_hint") : t("manage.workspace_hint") }}
+        </span>
+        <div class="action-toolbar ml-auto">
+          <button
+            class="action-toolbar-icon disabled:opacity-50 disabled:cursor-not-allowed"
+            :title="t('manage.refresh')"
+            :disabled="isRefreshing"
+            @click="refreshManageData"
           >
-            {{ displaySkills.length }}/{{ totalSkills }}
-          </span>
-          <span class="hidden text-[11px] lg:inline" style="color: var(--c-text-secondary);">
-            {{ isPluginsView ? t("plugins.view_hint") : t("manage.workspace_hint") }}
-          </span>
-          <div class="action-toolbar ml-auto">
+            <RefreshCw :size="15" :class="{ 'animate-spin': isRefreshing }" />
+          </button>
+          <button
+            class="action-toolbar-icon relative disabled:opacity-50 disabled:cursor-not-allowed"
+            :title="t('manage.check_all_updates')"
+            :disabled="checkingUpdates || isRefreshing || totalSkills === 0"
+            @click="checkAllUpdates"
+          >
+            <CloudDownload :size="15" :class="{ 'animate-spin': checkingUpdates }" />
+            <span
+              v-if="availableUpdateCount > 0"
+              class="absolute -right-1 -top-1 min-w-3.5 rounded-full px-1 text-[9px] leading-3.5"
+              style="background: var(--c-warning); color: white;"
+            >{{ availableUpdateCount }}</span>
+          </button>
+          <button
+            class="action-toolbar-icon"
+            :title="t('manage.agent_management')"
+            @click="showAgentManager = true"
+          >
+            <Settings :size="15" />
+          </button>
+          <button class="action-toolbar-primary" @click="showInstall = true">
+            <Plus :size="15" />
+            {{ t("skills.install") }}
+          </button>
+        </div>
+      </div>
+
+      <div class="manage-filter-toolbar mt-2.5">
+        <div class="relative min-w-0 flex-1">
+          <Search
+            :size="14"
+            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+            style="color: var(--c-text-secondary);"
+          />
+          <input
+            ref="searchInput"
+            v-model="filterModel.query.value"
+            :placeholder="t('skills.search') + ' (Ctrl+K)'"
+            class="toolbar-control w-full rounded-md py-2 pl-9 pr-9 text-xs outline-none transition-colors"
+          />
+          <button
+            v-if="filterModel.query.value"
+            type="button"
+            class="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center justify-center rounded-full p-1"
+            style="color: var(--c-text-secondary);"
+            :aria-label="t('manage.clear_query')"
+            @click="filterModel.clearQuery"
+          >
+            <X :size="13" />
+          </button>
+        </div>
+
+        <div ref="sortMenuRef" class="relative shrink-0" style="min-width: 118px;">
+          <button
+            class="toolbar-control inline-flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-[11px] outline-none transition-colors"
+            :class="{ 'border-[var(--c-primary)]': sortMenuOpen }"
+            type="button"
+            aria-haspopup="listbox"
+            :aria-expanded="sortMenuOpen"
+            :aria-label="t('manage.sort_label')"
+            @click.stop="sortMenuOpen = !sortMenuOpen"
+          >
+            <span class="truncate">{{ currentSortLabel }}</span>
+            <ChevronDown
+              :size="13"
+              class="shrink-0 transition-transform"
+              :style="{ transform: sortMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }"
+            />
+          </button>
+          <div
+            v-if="sortMenuOpen"
+            class="absolute left-0 top-full z-20 mt-1 w-full min-w-[138px] rounded-lg border p-1 shadow-lg"
+            style="background: var(--c-surface-raised); border-color: var(--c-border);"
+            role="listbox"
+          >
             <button
-              class="action-toolbar-icon disabled:opacity-50 disabled:cursor-not-allowed"
-              :title="t('manage.refresh')"
-              :disabled="isRefreshing"
-              @click="refreshManageData"
+              v-for="option in sortOptions"
+              :key="option.value"
+              class="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-[var(--c-surface-hover)]"
+              :style="{ color: option.value === filterModel.sort.value ? 'var(--c-primary)' : 'var(--c-text)' }"
+              type="button"
+              role="option"
+              :aria-selected="option.value === filterModel.sort.value"
+              @click="chooseSort(option.value as 'status' | 'updated' | 'name' | 'linked_agents')"
             >
-              <RefreshCw :size="15" :class="{ 'animate-spin': isRefreshing }" />
-            </button>
-            <button
-              class="action-toolbar-icon relative disabled:opacity-50 disabled:cursor-not-allowed"
-              :title="t('manage.check_all_updates')"
-              :disabled="checkingUpdates || isRefreshing || totalSkills === 0"
-              @click="checkAllUpdates"
-            >
-              <CloudDownload :size="15" :class="{ 'animate-spin': checkingUpdates }" />
-              <span
-                v-if="availableUpdateCount > 0"
-                class="absolute -right-1 -top-1 min-w-3.5 rounded-full px-1 text-[9px] leading-3.5"
-                style="background: var(--c-warning); color: white;"
-              >{{ availableUpdateCount }}</span>
-            </button>
-            <button
-              class="action-toolbar-icon"
-              :title="t('manage.agent_management')"
-              @click="showAgentManager = true"
-            >
-              <Settings :size="15" />
-            </button>
-            <button class="action-toolbar-primary" @click="showInstall = true">
-              <Plus :size="15" />
-              {{ t("skills.install") }}
+              <span>{{ option.label }}</span>
+              <Check v-if="option.value === filterModel.sort.value" :size="13" />
             </button>
           </div>
         </div>
 
-        <div class="manage-filter-toolbar mt-2.5">
-          <div class="relative min-w-0 flex-1">
-            <Search
-              :size="14"
-              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
-              style="color: var(--c-text-secondary);"
-            />
-            <input
-              ref="searchInput"
-              v-model="filterModel.query.value"
-              :placeholder="t('skills.search') + ' (Ctrl+K)'"
-              class="toolbar-control w-full rounded-md py-2 pl-9 pr-9 text-xs outline-none transition-colors"
-            />
-            <button
-              v-if="filterModel.query.value"
-              type="button"
-              class="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center justify-center rounded-full p-1"
-              style="color: var(--c-text-secondary);"
-              :aria-label="t('manage.clear_query')"
-              @click="filterModel.clearQuery"
-            >
-              <X :size="13" />
-            </button>
-          </div>
+        <button
+          class="manage-filter-clear"
+          :class="{ 'manage-filter-clear-active': hasUserFilters }"
+          :disabled="!hasUserFilters"
+          type="button"
+          @click="clearUserFilters"
+        >
+          <X :size="13" />
+          {{ t("manage.clear_filters") }}
+        </button>
+      </div>
 
-          <div ref="sortMenuRef" class="relative shrink-0" style="min-width: 118px;">
-            <button
-              class="toolbar-control inline-flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-[11px] outline-none transition-colors"
-              :class="{ 'border-[var(--c-primary)]': sortMenuOpen }"
-              type="button"
-              aria-haspopup="listbox"
-              :aria-expanded="sortMenuOpen"
-              :aria-label="t('manage.sort_label')"
-              @click.stop="sortMenuOpen = !sortMenuOpen"
-            >
-              <span class="truncate">{{ currentSortLabel }}</span>
-              <ChevronDown
-                :size="13"
-                class="shrink-0 transition-transform"
-                :style="{ transform: sortMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)' }"
-              />
-            </button>
-            <div
-              v-if="sortMenuOpen"
-              class="absolute left-0 top-full z-20 mt-1 w-full min-w-[138px] rounded-lg border p-1 shadow-lg"
-              style="background: var(--c-surface-raised); border-color: var(--c-border);"
-              role="listbox"
-            >
-              <button
-                v-for="option in sortOptions"
-                :key="option.value"
-                class="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-[var(--c-surface-hover)]"
-                :style="{ color: option.value === filterModel.sort.value ? 'var(--c-primary)' : 'var(--c-text)' }"
-                type="button"
-                role="option"
-                :aria-selected="option.value === filterModel.sort.value"
-                @click="chooseSort(option.value as 'status' | 'updated' | 'name' | 'linked_agents')"
-              >
-                <span>{{ option.label }}</span>
-                <Check v-if="option.value === filterModel.sort.value" :size="13" />
-              </button>
-            </div>
-          </div>
+      <!-- 已启用条件 Token -->
+      <div v-if="tokens.length > 0" class="manage-active-filter-row mt-2">
+        <span class="manage-active-filter-label">{{ t("manage.filter_active_summary") }}</span>
+        <button
+          v-for="token in tokens"
+          :key="token.key"
+          class="manage-filter-token"
+          type="button"
+          :title="token.key === 'view' ? t('sidebar.view_token_tip') : undefined"
+          @click="token.onRemove"
+        >
+          {{ token.label }} <X :size="11" />
+        </button>
+        <span class="manage-filter-result-count">{{ displaySkills.length }} / {{ totalSkills }}</span>
+      </div>
+    </section>
 
-          <div ref="filterWrapRef" class="relative shrink-0">
-            <button
-              class="inline-flex items-center justify-center gap-1 rounded-md border px-2.5 py-2 text-[11px] cursor-pointer transition-colors"
-              :style="{
-                borderColor: filterOpen || userFilterCount > 0 ? 'var(--c-primary)' : 'var(--c-border)',
-                color: filterOpen || userFilterCount > 0 ? 'var(--c-primary)' : 'var(--c-text-secondary)',
-              }"
-              type="button"
-              :aria-expanded="filterOpen"
-              @click.stop="filterOpen = !filterOpen"
-            >
-              <SlidersHorizontal :size="13" />
-              {{ t("filter.trigger") }}
-              <span
-                v-if="userFilterCount > 0"
-                class="rounded-full px-1.5 text-[9px]"
-                style="background: var(--c-primary-light);"
-              >{{ userFilterCount }}</span>
-            </button>
-            <FilterPopover
-              :open="filterOpen"
-              :filter-model="filterModel"
-              :facet-counts="filterModel.facetCounts.value"
-              :agents="detectedAgents"
-              :default-domain="viewDef?.domain ?? 'local'"
-              @close="filterOpen = false"
-            />
-          </div>
+    <!-- 待处理视图：修复分组卡 -->
+    <section v-if="view === 'attention'">
+      <IssueRepairPanel
+        :skills="skillsStore.skills"
+        :agents="detectedAgents"
+        compact
+        @filter-group="handleFilterGroup"
+      />
+    </section>
 
+    <!-- Loading -->
+    <div v-if="skillsStore.loading" class="space-y-3">
+      <SkeletonCard v-for="i in 4" :key="i" />
+    </div>
+
+    <!-- Error -->
+    <div v-else-if="skillsStore.error" class="text-sm" style="color: var(--c-danger);">
+      {{ skillsStore.error }}
+    </div>
+
+    <!-- Empty -->
+    <section v-else-if="displaySkills.length === 0" class="manage-empty-state">
+      <div class="manage-empty-icon">
+        <SearchX :size="28" />
+      </div>
+      <template v-if="isPluginsView">
+        <h3>{{ t("plugins.empty") }}</h3>
+        <p>{{ t("plugins.view_hint") }}</p>
+      </template>
+      <template v-else-if="totalSkills === 0">
+        <h3>{{ t("skills.no_skills") }}</h3>
+        <p>{{ t("skills.no_skills_hint") }}</p>
+        <div class="manage-empty-actions">
+          <button class="manage-empty-primary" type="button" @click="showInstall = true">
+            {{ t("skills.install") }}
+          </button>
+        </div>
+      </template>
+      <template v-else>
+        <h3>{{ t("manage.no_filter_results") }}</h3>
+        <p>{{ t("manage.no_filter_results_hint") }}</p>
+        <div class="manage-empty-actions">
           <button
-            class="manage-filter-clear"
-            :class="{ 'manage-filter-clear-active': hasUserFilters }"
-            :disabled="!hasUserFilters"
+            v-if="hasUserFilters"
+            class="manage-empty-secondary"
             type="button"
             @click="clearUserFilters"
           >
-            <X :size="13" />
+            <X :size="14" />
             {{ t("manage.clear_filters") }}
           </button>
-        </div>
-
-        <!-- 已启用条件 Token -->
-        <div v-if="tokens.length > 0" class="manage-active-filter-row mt-2">
-          <span class="manage-active-filter-label">{{ t("manage.filter_active_summary") }}</span>
-          <button
-            v-for="token in tokens"
-            :key="token.key"
-            class="manage-filter-token"
-            type="button"
-            :title="token.key === 'view' ? t('sidebar.view_token_tip') : undefined"
-            @click="token.onRemove"
-          >
-            {{ token.label }} <X :size="11" />
+          <button class="manage-empty-primary" type="button" @click="showInstall = true">
+            {{ t("skills.install") }}
           </button>
-          <span class="manage-filter-result-count">{{ displaySkills.length }} / {{ totalSkills }}</span>
-        </div>
-      </section>
-
-      <!-- 待处理视图：修复分组卡 -->
-      <section v-if="view === 'attention'">
-        <IssueRepairPanel
-          :skills="skillsStore.skills"
-          :agents="detectedAgents"
-          compact
-          @filter-group="handleFilterGroup"
-        />
-      </section>
-
-      <!-- Loading -->
-      <div v-if="skillsStore.loading" class="space-y-3">
-        <SkeletonCard v-for="i in 4" :key="i" />
-      </div>
-
-      <!-- Error -->
-      <div v-else-if="skillsStore.error" class="text-sm" style="color: var(--c-danger);">
-        {{ skillsStore.error }}
-      </div>
-
-      <!-- Empty -->
-      <section v-else-if="displaySkills.length === 0" class="manage-empty-state">
-        <div class="manage-empty-icon">
-          <SearchX :size="28" />
-        </div>
-        <template v-if="isPluginsView">
-          <h3>{{ t("plugins.empty") }}</h3>
-          <p>{{ t("plugins.view_hint") }}</p>
-        </template>
-        <template v-else-if="totalSkills === 0">
-          <h3>{{ t("skills.no_skills") }}</h3>
-          <p>{{ t("skills.no_skills_hint") }}</p>
-          <div class="manage-empty-actions">
-            <button class="manage-empty-primary" type="button" @click="showInstall = true">
-              {{ t("skills.install") }}
-            </button>
-          </div>
-        </template>
-        <template v-else>
-          <h3>{{ t("manage.no_filter_results") }}</h3>
-          <p>{{ t("manage.no_filter_results_hint") }}</p>
-          <div class="manage-empty-actions">
-            <button
-              v-if="hasUserFilters"
-              class="manage-empty-secondary"
-              type="button"
-              @click="clearUserFilters"
-            >
-              <X :size="14" />
-              {{ t("manage.clear_filters") }}
-            </button>
-            <button class="manage-empty-primary" type="button" @click="showInstall = true">
-              {{ t("skills.install") }}
-            </button>
-          </div>
-        </template>
-      </section>
-
-      <!-- 列表 -->
-      <template v-else>
-        <div
-          class="flex items-center gap-2 rounded-md border px-3 py-2"
-          style="background: var(--c-surface); border-color: var(--c-border);"
-        >
-          <input
-            type="checkbox"
-            :checked="allDisplayedSelected"
-            :indeterminate="someDisplayedSelected"
-            class="h-3.5 w-3.5 cursor-pointer rounded"
-            style="accent-color: var(--c-primary);"
-            :title="t('manage.workbench_select_filtered')"
-            :aria-label="t('manage.workbench_select_filtered')"
-            @change="toggleAllDisplayedSkills"
-          />
-          <span class="text-xs" style="color: var(--c-text-secondary);">
-            {{ t("manage.workbench_select_filtered") }}
-          </span>
-          <span class="ml-auto text-[11px]" style="color: var(--c-text-tertiary);">
-            {{ selectedSkills.size }}/{{ displaySkills.length }}
-          </span>
-        </div>
-
-        <!-- 本地视图：技能列表 -->
-        <div v-if="!isPluginsView" class="space-y-2">
-          <SkillRow
-            v-for="skill in displaySkills"
-            :key="skill.id"
-            :id="`skill-${skill.id}`"
-            :skill="skill"
-            :agents="agentsStore.agents"
-            :selected="selectedSkills.has(skill.id)"
-            :expanded="expandedSkillId === skill.id"
-            @toggle:select="toggleSkillSelect"
-            @update:expanded="expandedSkillId = $event ? skill.id : null"
-            @sync-plugin="handleSyncPlugin"
-          />
-        </div>
-
-        <!-- 插件视图：按市场分组 -->
-        <div v-else class="space-y-3">
-          <div v-for="group in pluginGroups" :key="group.source" class="plugin-group">
-            <div
-              class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 select-none hover:bg-[var(--c-surface-hover)]"
-              @click="togglePluginGroup(group.source)"
-            >
-              <ChevronRight
-                :size="13"
-                class="transition-transform"
-                :style="{
-                  color: 'var(--c-plugin, #8b5cf6)',
-                  transform: isPluginGroupExpanded(group.source) ? 'rotate(90deg)' : 'rotate(0deg)',
-                }"
-              />
-              <Puzzle :size="13" style="color: var(--c-plugin, #8b5cf6);" />
-              <span class="text-[11px] font-semibold uppercase tracking-wide" style="color: var(--c-plugin, #8b5cf6);">
-                {{ group.source }}
-              </span>
-              <span
-                class="rounded-full px-1.5 text-[9px]"
-                style="background: var(--c-plugin-light, rgba(139, 92, 246, 0.15)); color: var(--c-plugin, #8b5cf6);"
-              >{{ group.skills.length }}</span>
-            </div>
-            <div v-if="isPluginGroupExpanded(group.source)" class="mt-1.5 space-y-2">
-              <SkillRow
-                v-for="skill in group.skills"
-                :key="`plugin-${group.source}-${skill.id}`"
-                :id="`skill-${skill.id}`"
-                :skill="skill"
-                :agents="agentsStore.agents"
-                :selected="selectedSkills.has(skill.id)"
-                :expanded="expandedSkillId === skill.id"
-                @toggle:select="toggleSkillSelect"
-                @update:expanded="expandedSkillId = $event ? skill.id : null"
-                @sync-plugin="handleSyncPlugin"
-              />
-            </div>
-          </div>
-        </div>
-
-        <!-- 内联批量操作条（文档流，非 fixed 覆盖） -->
-        <div
-          v-if="selectedSkills.size > 0"
-          class="flex items-center gap-3 rounded-lg border px-4 py-2.5"
-          style="background: var(--c-primary-light); border-color: color-mix(in srgb, var(--c-primary) 30%, transparent);"
-        >
-          <input
-            type="checkbox"
-            :checked="allDisplayedSelected"
-            :indeterminate="someDisplayedSelected"
-            class="h-3.5 w-3.5 cursor-pointer rounded"
-            style="accent-color: var(--c-primary);"
-            :aria-label="t('manage.workbench_select_filtered')"
-            @change="toggleAllDisplayedSkills"
-          />
-          <span class="text-xs" style="color: var(--c-text);">
-            {{ t("manage.selected_scope_count", { selected: selectedSkills.size, total: displaySkills.length }) }}
-          </span>
-          <div class="ml-auto flex items-center gap-2">
-            <button
-              class="cursor-pointer rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors"
-              style="background: var(--c-primary); color: white;"
-              type="button"
-              @click="openBatchDrawer"
-            >
-              {{ t("manage.batch_panel_open") }}
-            </button>
-            <button
-              class="cursor-pointer rounded px-2 py-1 text-[11px]"
-              style="color: var(--c-text-secondary);"
-              type="button"
-              @click="deselectAllSkills"
-            >
-              {{ t("manage.deselect_all") }}
-            </button>
-          </div>
         </div>
       </template>
-    </div>
+    </section>
 
-    <!-- 批量抽屉（docked：flex 兄弟；overlay：组件内 Teleport 覆盖） -->
-    <BatchDrawer
-      v-if="drawerOpen"
-      ref="drawerRef"
-      :open="drawerOpen"
-      :selected-skill-ids="selectedSkillIds"
-      :repair-context="repairContext"
-      :overlay="isNarrow"
-      @close="closeBatchDrawer"
-      @remove-skill="removeSkillFromSelection"
-      @resolve-conflict="resolveConflictFromDrawer"
-      @applied="onBatchApplied"
-    />
+    <!-- 列表 -->
+    <template v-else>
+      <div
+        class="flex items-center gap-2 rounded-md border px-3 py-2"
+        style="background: var(--c-surface); border-color: var(--c-border);"
+      >
+        <input
+          type="checkbox"
+          :checked="allDisplayedSelected"
+          :indeterminate="someDisplayedSelected"
+          class="h-3.5 w-3.5 cursor-pointer rounded"
+          style="accent-color: var(--c-primary);"
+          :title="t('manage.workbench_select_filtered')"
+          :aria-label="t('manage.workbench_select_filtered')"
+          @change="toggleAllDisplayedSkills"
+        />
+        <span class="text-xs" style="color: var(--c-text-secondary);">
+          {{ t("manage.workbench_select_filtered") }}
+        </span>
+        <span class="ml-auto text-[11px]" style="color: var(--c-text-tertiary);">
+          {{ selectedSkills.size }}/{{ displaySkills.length }}
+        </span>
+      </div>
+
+      <!-- 本地视图：技能列表 -->
+      <div v-if="!isPluginsView" class="space-y-2">
+        <SkillRow
+          v-for="skill in displaySkills"
+          :key="skill.id"
+          :id="`skill-${skill.id}`"
+          :skill="skill"
+          :agents="agentsStore.agents"
+          :selected="selectedSkills.has(skill.id)"
+          :expanded="expandedSkillId === skill.id"
+          @toggle:select="toggleSkillSelect"
+          @update:expanded="expandedSkillId = $event ? skill.id : null"
+          @sync-plugin="handleSyncPlugin"
+        />
+      </div>
+
+      <!-- 插件视图：按市场分组 -->
+      <div v-else class="space-y-3">
+        <div v-for="group in pluginGroups" :key="group.source" class="plugin-group">
+          <div
+            class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 select-none hover:bg-[var(--c-surface-hover)]"
+            @click="togglePluginGroup(group.source)"
+          >
+            <ChevronRight
+              :size="13"
+              class="transition-transform"
+              :style="{
+                color: 'var(--c-plugin, #8b5cf6)',
+                transform: isPluginGroupExpanded(group.source) ? 'rotate(90deg)' : 'rotate(0deg)',
+              }"
+            />
+            <Puzzle :size="13" style="color: var(--c-plugin, #8b5cf6);" />
+            <span class="text-[11px] font-semibold uppercase tracking-wide" style="color: var(--c-plugin, #8b5cf6);">
+              {{ group.source }}
+            </span>
+            <span
+              class="rounded-full px-1.5 text-[9px]"
+              style="background: var(--c-plugin-light, rgba(139, 92, 246, 0.15)); color: var(--c-plugin, #8b5cf6);"
+            >{{ group.skills.length }}</span>
+          </div>
+          <div v-if="isPluginGroupExpanded(group.source)" class="mt-1.5 space-y-2">
+            <SkillRow
+              v-for="skill in group.skills"
+              :key="`plugin-${group.source}-${skill.id}`"
+              :id="`skill-${skill.id}`"
+              :skill="skill"
+              :agents="agentsStore.agents"
+              :selected="selectedSkills.has(skill.id)"
+              :expanded="expandedSkillId === skill.id"
+              @toggle:select="toggleSkillSelect"
+              @update:expanded="expandedSkillId = $event ? skill.id : null"
+              @sync-plugin="handleSyncPlugin"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 批量操作条 -->
+      <div
+        v-if="selectedSkills.size > 0"
+        class="flex items-center gap-3 rounded-lg border px-4 py-2.5"
+        style="background: var(--c-primary-light); border-color: color-mix(in srgb, var(--c-primary) 30%, transparent);"
+      >
+        <span class="text-xs" style="color: var(--c-text);">
+          {{ t("manage.selected_scope_count", { selected: selectedSkills.size, total: displaySkills.length }) }}
+        </span>
+        <div class="ml-auto flex items-center gap-2">
+          <!-- 操作下拉 -->
+          <div ref="batchMenuRef" class="relative">
+            <button
+              class="cursor-pointer rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors disabled:opacity-50"
+              style="background: var(--c-primary); color: white;"
+              type="button"
+              :disabled="batchOperating || availableActions.length === 0"
+              @click="batchMenuOpen = !batchMenuOpen"
+            >
+              {{ t("manage.batch_panel_open") }} ▾
+            </button>
+            <div
+              v-if="batchMenuOpen"
+              class="absolute right-0 bottom-full z-20 mb-1 w-56 rounded-lg border p-1 shadow-lg"
+              style="background: var(--c-surface-raised); border-color: var(--c-border);"
+            >
+              <button
+                v-for="act in availableActions"
+                :key="act.action"
+                class="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-[var(--c-surface-hover)]"
+                type="button"
+                @click="onBatchActionSelected(act)"
+              >
+                <span :style="{ color: act.color }">{{ act.label }}</span>
+                <span
+                  class="rounded-full px-1.5 text-[9px]"
+                  style="background: var(--c-surface-hover); color: var(--c-text-secondary);"
+                >{{ act.count }}</span>
+              </button>
+              <div
+                v-if="availableActions.length === 0"
+                class="px-2.5 py-2 text-[11px]"
+                style="color: var(--c-text-tertiary);"
+              >
+                {{ t("manage.no_batch_actions") }}
+              </div>
+            </div>
+          </div>
+          <button
+            class="cursor-pointer rounded px-2 py-1 text-[11px]"
+            style="color: var(--c-text-secondary);"
+            type="button"
+            @click="deselectAllSkills"
+          >
+            {{ t("manage.deselect_all") }}
+          </button>
+        </div>
+      </div>
+    </template>
   </div>
+
+  <!-- 批量确认弹窗 -->
+  <Teleport to="body">
+    <div
+      v-if="batchConfirmAction"
+      class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+      @click.self="batchConfirmAction = null"
+    >
+      <div class="modal-shell flex w-full max-w-lg flex-col" style="max-height: 80vh;">
+        <div class="modal-header shrink-0">
+          <h3 class="text-sm font-semibold" style="color: var(--c-text);">
+            {{ t('manage.batch_confirm_title') }}
+          </h3>
+          <button
+            class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md"
+            style="color: var(--c-text-secondary);"
+            type="button"
+            @click="batchConfirmAction = null"
+          >
+            &times;
+          </button>
+        </div>
+        <div class="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
+          <div class="flex items-center gap-2 text-xs">
+            <span :style="{ color: batchConfirmAction.color }">{{ batchConfirmAction.label }}</span>
+            <span class="rounded-full px-1.5 py-0.5 text-[10px]" style="background: var(--c-surface-hover); color: var(--c-text-secondary);">
+              {{ batchConfirmAction.count }} {{ t("manage.batch_detail_pairs") }}
+            </span>
+          </div>
+          <div class="rounded border text-[11px] overflow-hidden" style="border-color: var(--c-border);">
+            <div class="max-h-48 overflow-y-auto">
+              <div
+                v-for="(pair, i) in batchConfirmAction.pairs.slice(0, 50)"
+                :key="i"
+                class="flex items-center gap-2 px-3 py-1.5"
+                :style="{ background: i % 2 ? 'var(--c-surface)' : 'transparent' }"
+              >
+                <span class="truncate flex-1" style="color: var(--c-text);">
+                  {{ selectedSkillsList.find(s => s.id === pair[0])?.name || pair[0] }}
+                </span>
+                <span style="color: var(--c-text-tertiary);">→</span>
+                <span class="truncate" style="color: var(--c-text-secondary);">
+                  {{ detectedAgents.find(a => a.id === pair[1])?.name || pair[1] }}
+                </span>
+              </div>
+              <div v-if="batchConfirmAction.pairs.length > 50" class="px-3 py-1.5 text-[10px]" style="color: var(--c-text-tertiary);">
+                ... {{ batchConfirmAction.pairs.length - 50 }} {{ t("manage.batch_detail_more") }}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex shrink-0 items-center justify-end gap-2 border-t px-4 py-2.5" style="border-color: var(--c-border);">
+          <button
+            class="rounded-md px-3 py-1.5 text-[11px] cursor-pointer"
+            style="color: var(--c-text-secondary); border: 1px solid var(--c-border);"
+            @click="batchConfirmAction = null"
+          >
+            {{ t("common.cancel") }}
+          </button>
+          <button
+            class="rounded-md px-4 py-1.5 text-[11px] font-medium cursor-pointer disabled:opacity-50"
+            style="background: var(--c-primary); color: white;"
+            :disabled="batchOperating"
+            @click="onBatchConfirm"
+          >
+            {{ batchOperating ? "..." : t("manage.batch_panel_execute") }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- 批量结果弹窗 -->
+  <Teleport to="body">
+    <div
+      v-if="batchShowResult && batchResult"
+      class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+      @click.self="closeBatchResult"
+    >
+      <div class="modal-shell flex w-full max-w-lg flex-col" style="max-height: 80vh;">
+        <div class="modal-header shrink-0">
+          <h3 class="text-sm font-semibold" style="color: var(--c-text);">
+            {{ t("manage.batch_result_title") }}
+          </h3>
+          <button
+            class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md"
+            style="color: var(--c-text-secondary);"
+            type="button"
+            @click="closeBatchResult"
+          >
+            &times;
+          </button>
+        </div>
+        <div class="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
+          <!-- 汇总 -->
+          <div class="flex items-center gap-3 text-xs">
+            <span :style="{ color: batchConfirmAction?.color || 'var(--c-primary)' }">{{ batchResult.action }}</span>
+            <span class="rounded-full px-1.5 py-0.5 text-[10px]" style="background: var(--c-success-light, rgba(34,197,94,0.15)); color: var(--c-success);">
+              {{ batchResult.success }} {{ t("manage.batch_result_success_count") }}
+            </span>
+            <span v-if="batchResult.errors > 0" class="rounded-full px-1.5 py-0.5 text-[10px]" style="background: var(--c-danger-light, rgba(239,68,68,0.15)); color: var(--c-danger);">
+              {{ batchResult.errors }} {{ t("manage.batch_result_error_count") }}
+            </span>
+          </div>
+          <!-- 详情列表 -->
+          <div class="rounded border text-[11px] overflow-hidden" style="border-color: var(--c-border);">
+            <div class="max-h-64 overflow-y-auto">
+              <div
+                v-for="(detail, i) in batchResult.details.slice(0, 100)"
+                :key="i"
+                class="flex items-center gap-2 px-3 py-1.5"
+                :style="{
+                  background: i % 2 ? 'var(--c-surface)' : 'transparent',
+                  color: detail.status === 'success' ? 'var(--c-text)' : 'var(--c-danger)',
+                }"
+              >
+                <span class="shrink-0 w-3">
+                  {{ detail.status === "success" ? "✓" : "✗" }}
+                </span>
+                <span class="truncate flex-1">{{ detail.skillName }}</span>
+                <span style="color: var(--c-text-tertiary);">→</span>
+                <span class="truncate" style="color: var(--c-text-secondary);">{{ detail.agentName }}</span>
+                <span v-if="detail.message" class="truncate text-[10px] max-w-[120px]" :title="detail.message">
+                  ({{ detail.message }})
+                </span>
+              </div>
+              <div v-if="batchResult.details.length > 100" class="px-3 py-1.5 text-[10px]" style="color: var(--c-text-tertiary);">
+                ... {{ batchResult.details.length - 100 }} {{ t("manage.batch_detail_more") }}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex shrink-0 items-center justify-end border-t px-4 py-2.5" style="border-color: var(--c-border);">
+          <button
+            class="rounded-md px-4 py-1.5 text-[11px] font-medium cursor-pointer"
+            style="background: var(--c-primary); color: white;"
+            @click="closeBatchResult"
+          >
+            {{ t("common.confirm") }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- Agent 管理浮层 -->
   <Teleport to="body">

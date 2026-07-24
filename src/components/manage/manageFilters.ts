@@ -302,8 +302,7 @@ export function useManageFilters(
     Number(statusPreset.value !== "all") +
     issues.value.size +
     libraryScope.value.size +
-    Number(agentIds.value.size > 0) +
-    Number(defaultDomain ? domain.value !== defaultDomain.value : false)
+    Number(agentIds.value.size > 0)
   );
   const hasActiveFilters = computed(() => activeFilterCount.value > 0);
 

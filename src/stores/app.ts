@@ -24,8 +24,6 @@ export const useAppStore = defineStore("app", () => {
     "attention",
     "linked",
     "unlinked",
-    "missing_library",
-    "library_only",
     "plugins",
     "history",
   ];

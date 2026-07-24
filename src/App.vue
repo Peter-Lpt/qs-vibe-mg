@@ -149,6 +149,9 @@ onUnmounted(() => {
       <AppSidebar
         :active-view="appStore.activeView"
         :counts="viewCounts"
+        :filter-model="filterModel"
+        :agents="detectedAgents"
+        :facet-counts="filterModel.facetCounts.value"
         @select="appStore.setActiveView"
         @open-settings="appStore.showSettings = true"
       />
