@@ -316,6 +316,9 @@ pub fn adopt_plugin_skill(skill_id: String) -> Result<Skill, VibeError> {
     );
     origin.method = SOURCE_METHOD_MARKETPLACE.to_string();
     origin.installed_by = Some("qs-vibe-adopt".to_string());
+    // 清除 command 和 update_command，因为 marketplace 来源不支持命令更新
+    origin.command = None;
+    origin.update_command = None;
     let _ = write_skill_origin(&skill_path, &origin);
 
     // 返回新创建的 library skill
@@ -1226,6 +1229,13 @@ pub fn update_skill(skill_id: String, force: bool) -> Result<Skill, VibeError> {
             }
         }
         SOURCE_METHOD_NPM | SOURCE_METHOD_NPX | SOURCE_METHOD_MARKETPLACE => {
+            // Marketplace 来源由插件系统管理，不支持手动更新
+            if method == SOURCE_METHOD_MARKETPLACE {
+                return Err(VibeError::Path(format!(
+                    "Skill {} 来自 Plugin 市场，由插件系统管理，不支持手动更新",
+                    skill_id
+                )));
+            }
             if origin
                 .update_command
                 .as_ref()
