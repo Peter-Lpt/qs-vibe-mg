@@ -26,10 +26,7 @@
     "section_source": "来源",
     "plugins": "插件技能",
     "view_token_tip": "点击回到「全部」",
-    "filters": "筛选",
-    "issues": "异常",
-    "scope": "范围",
-    "agents": "Agent"
+    "filters": "筛选"
   },
   "filter": {
     "trigger": "筛选",
@@ -75,8 +72,8 @@
     "status_all": "全部",
     "view_list": "Skill 工作台",
     "view_tree": "来源/目录",
-    "status_conflict": "有冲突",
-    "status_dangling": "有断链",
+    "status_conflict": "冲突",
+    "status_dangling": "断链",
     "status_plugin": "Plugin",
     "status_unlinked": "未链接",
     "status_linked": "已链接",

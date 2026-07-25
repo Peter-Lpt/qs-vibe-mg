@@ -26,10 +26,7 @@
     "section_source": "來源",
     "plugins": "外掛技能",
     "view_token_tip": "點擊回到「全部」",
-    "filters": "篩選",
-    "issues": "異常",
-    "scope": "範圍",
-    "agents": "Agent"
+    "filters": "篩選"
   },
   "filter": {
     "trigger": "篩選",
@@ -75,8 +72,8 @@
     "status_all": "全部",
     "view_list": "Skill 工作台",
     "view_tree": "來源/目錄",
-    "status_conflict": "有衝突",
-    "status_dangling": "有斷鏈",
+    "status_conflict": "衝突",
+    "status_dangling": "斷鏈",
     "status_plugin": "Plugin",
     "status_unlinked": "未連結",
     "status_linked": "已連結",

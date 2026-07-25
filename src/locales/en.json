@@ -26,10 +26,7 @@
     "section_source": "Sources",
     "plugins": "Plugin Skills",
     "view_token_tip": "Click to go back to \"All\"",
-    "filters": "Filters",
-    "issues": "Issues",
-    "scope": "Scope",
-    "agents": "Agents"
+    "filters": "Filters"
   },
   "filter": {
     "trigger": "Filters",

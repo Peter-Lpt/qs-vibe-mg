@@ -60,6 +60,21 @@ const detectedAgents = computed(() => agentsStore.agents.filter((a) => a.detecte
 const displaySkills = filterModel.filteredSkills;
 const totalSkills = computed(() => skillsStore.skills.length);
 
+// ── 统计概览 ──────────────────────────────────
+const stats = computed(() => {
+  const all = skillsStore.skills;
+  const linked = all.filter((s) => s.linked_agents.length > 0);
+  const unlinked = all.filter((s) => s.linked_agents.length === 0);
+  const issues = all.filter((s) => s.has_conflict || s.has_dangling || s.is_duplicate);
+  return {
+    total: all.length,
+    linked: linked.length,
+    unlinked: unlinked.length,
+    issues: issues.length,
+    plugins: all.filter((s) => s.from_plugin).length,
+  };
+});
+
 const selectedSkills = selectionModel.selectedIds;
 const allDisplayedSelected = selectionModel.allVisibleSelected;
 const someDisplayedSelected = selectionModel.partiallyVisibleSelected;
@@ -360,6 +375,36 @@ defineExpose({
 
 <template>
   <div class="space-y-4">
+    <!-- 顶部统计概览 -->
+    <section class="workspace-panel !p-3">
+      <div class="stats-overview">
+        <div class="stats-overview__item">
+          <span class="stats-overview__value">{{ stats.total }}</span>
+          <span class="stats-overview__label">{{ t("sidebar.view_all") }}</span>
+        </div>
+        <div class="stats-overview__divider" />
+        <div class="stats-overview__item">
+          <span class="stats-overview__value stats-overview__value--linked">{{ stats.linked }}</span>
+          <span class="stats-overview__label">{{ t("sidebar.view_linked") }}</span>
+        </div>
+        <div class="stats-overview__divider" />
+        <div class="stats-overview__item">
+          <span class="stats-overview__value stats-overview__value--unlinked">{{ stats.unlinked }}</span>
+          <span class="stats-overview__label">{{ t("sidebar.view_unlinked") }}</span>
+        </div>
+        <div class="stats-overview__divider" />
+        <div class="stats-overview__item">
+          <span class="stats-overview__value stats-overview__value--issues">{{ stats.issues }}</span>
+          <span class="stats-overview__label">{{ t("sidebar.view_attention") }}</span>
+        </div>
+        <div class="stats-overview__divider" />
+        <div class="stats-overview__item">
+          <span class="stats-overview__value stats-overview__value--plugins">{{ stats.plugins }}</span>
+          <span class="stats-overview__label">{{ t("sidebar.plugins") }}</span>
+        </div>
+      </div>
+    </section>
+
     <!-- 工具栏 -->
     <section class="workspace-panel !p-3">
       <div class="flex flex-wrap items-center gap-2">
@@ -864,3 +909,55 @@ defineExpose({
     </button>
   </Transition>
 </template>
+
+<style scoped>
+.stats-overview {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.stats-overview__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.stats-overview__value {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--c-text-strong);
+}
+
+.stats-overview__value--linked {
+  color: var(--c-primary);
+}
+
+.stats-overview__value--unlinked {
+  color: var(--c-text-tertiary);
+}
+
+.stats-overview__value--issues {
+  color: var(--c-warning, #f59e0b);
+}
+
+.stats-overview__value--plugins {
+  color: var(--c-plugin, #8b5cf6);
+}
+
+.stats-overview__label {
+  font-size: 10px;
+  color: var(--c-text-tertiary);
+  white-space: nowrap;
+}
+
+.stats-overview__divider {
+  width: 1px;
+  height: 28px;
+  background: var(--c-border);
+  flex-shrink: 0;
+}
+</style>
