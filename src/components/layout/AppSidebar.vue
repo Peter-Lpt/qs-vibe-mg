@@ -64,8 +64,9 @@ onUnmounted(() => {
 });
 
 // --- navigation ---
-const libraryViews = computed(() => SMART_VIEWS.filter((v) => v.domain === "local"));
-const pluginViews = computed(() => SMART_VIEWS.filter((v) => v.domain === "plugin"));
+// Plugin view 现在是独立的，从 SMART_VIEWS 中单独提取
+const libraryViews = computed(() => SMART_VIEWS.filter((v) => v.id !== "plugins"));
+const pluginView = computed(() => SMART_VIEWS.find((v) => v.id === "plugins"));
 
 function isActive(view: SmartViewDef): boolean {
   return props.activeView === view.id;
@@ -186,21 +187,20 @@ const activeFilterCount = computed(() =>
       </div>
 
       <button
-        v-for="view in pluginViews"
-        :key="view.id"
+        v-if="pluginView"
         type="button"
         class="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs cursor-pointer transition-colors hover:bg-[var(--c-surface-hover)]"
         :style="
-          isActive(view)
+          isActive(pluginView)
             ? { background: 'var(--c-plugin-light, rgba(139, 92, 246, 0.15))', color: 'var(--c-plugin, #8b5cf6)' }
             : { color: 'var(--c-text-secondary)' }
         "
-        :aria-current="isActive(view) ? 'page' : undefined"
-        @click="emit('select', view.id)"
+        :aria-current="isActive(pluginView) ? 'page' : undefined"
+        @click="emit('select', pluginView.id)"
       >
-        <component :is="view.icon" :size="14" class="shrink-0" />
-        <span class="flex-1 truncate text-left">{{ t(view.labelKey) }}</span>
-        <span class="text-[10px]" style="color: var(--c-text-tertiary);">{{ counts[view.id] }}</span>
+        <component :is="pluginView.icon" :size="14" class="shrink-0" />
+        <span class="flex-1 truncate text-left">{{ t(pluginView.labelKey) }}</span>
+        <span class="text-[10px]" style="color: var(--c-text-tertiary);">{{ counts[pluginView.id] }}</span>
       </button>
 
       <!-- 筛选区（可折叠） -->

@@ -92,7 +92,9 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
 
     scan_project_sources(&mut map, &mut hash_cache)?;
 
-    scan_plugin_marketplace_skills(&mut map, &mut hash_cache)?;
+    // 注意：不在这里扫描 plugin marketplace
+    // Plugin skills 由独立的 list_plugin_skills() 处理
+    // 这样可以避免 plugin sources 与 regular sources 合并
 
     crate::utils::hash::save_hash_cache(&vibe_dir, &hash_cache);
 
@@ -101,31 +103,13 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
         .map(|(id, entry)| {
             let linked_agents = find_linked_agents(&id, &agents);
 
-            // 检查是否来自 plugin
-            let from_plugin = entry.sources.iter().any(|s| {
-                s.source_kind == "marketplace" || s.from.starts_with("claude-plugin:") || s.from.starts_with("codex-plugin:")
-            });
-            let plugin_source = if from_plugin {
-                entry.sources.iter()
-                    .find(|s| s.source_kind == "marketplace" || s.from.starts_with("claude-plugin:") || s.from.starts_with("codex-plugin:"))
-                    .and_then(|s| {
-                        if s.from.starts_with("claude-plugin:") {
-                            Some(s.from.strip_prefix("claude-plugin:").unwrap_or(&s.from).to_string())
-                        } else if s.from.starts_with("codex-plugin:") {
-                            Some(s.from.strip_prefix("codex-plugin:").unwrap_or(&s.from).to_string())
-                        } else {
-                            None
-                        }
-                    })
-            } else {
-                None
-            };
+            // list_skills() 不再扫描 plugin marketplace，所以这里不会有 plugin sources
+            let from_plugin = false;
+            let plugin_source = None;
 
-            // 检测冲突：多个 source 的 content_hash 不完全相同（排除 plugin 来源）
-            let non_plugin_sources: Vec<&SkillSource> = entry.sources.iter()
-                .filter(|s| s.source_kind != "marketplace" && !s.from.starts_with("claude-plugin:") && !s.from.starts_with("codex-plugin:"))
-                .collect();
-            let unique_hashes: Vec<&str> = non_plugin_sources
+            // 检测冲突：多个 source 的 content_hash 不完全相同
+            // 注意：list_skills() 不再扫描 plugin marketplace，所以不会有 plugin sources
+            let unique_hashes: Vec<&str> = entry.sources
                 .iter()
                 .map(|s| s.content_hash.as_str())
                 .filter(|h| !h.is_empty())
@@ -134,8 +118,8 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
                 .collect();
             let has_conflict = unique_hashes.len() > 1;
 
-            // 检测断链：is_symlink 为 true 但 symlink_target 不存在（排除 plugin 来源）
-            let has_dangling = non_plugin_sources.iter().any(|s| {
+            // 检测断链：is_symlink 为 true 但 symlink_target 不存在
+            let has_dangling = entry.sources.iter().any(|s| {
                 if !s.is_symlink {
                     return false;
                 }
@@ -145,12 +129,10 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
                 }
             });
 
-            // 检测重复：同文件夹名但 SKILL.md name 不同，或 plugin 与中心库/本地副本同时存在
+            // 检测重复：同文件夹名但 SKILL.md name 不同
             let unique_names: std::collections::HashSet<&str> =
-                non_plugin_sources.iter().map(|s| s.name.as_str()).collect();
-            let has_plugin_source = from_plugin;
-            let has_local_copy = !non_plugin_sources.is_empty();
-            let is_duplicate = unique_names.len() > 1 || (has_plugin_source && has_local_copy);
+                entry.sources.iter().map(|s| s.name.as_str()).collect();
+            let is_duplicate = unique_names.len() > 1;
 
             // 检测 name 是否为空
             let missing_name = entry.name.is_empty();
@@ -179,19 +161,171 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
         })
         .collect();
 
-    // 排序：冲突和断链置顶，plugin 置底，其余按字母排序
+    // 排序：冲突和断链置顶，其余按字母排序
     skills.sort_by(|a, b| {
         let a_issue = a.has_conflict || a.has_dangling;
         let b_issue = b.has_conflict || b.has_dangling;
-        let a_plugin = a.from_plugin;
-        let b_plugin = b.from_plugin;
         b_issue
             .cmp(&a_issue)
-            .then_with(|| a_plugin.cmp(&b_plugin))
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+
+    // 分离：只返回 regular skills（非 plugin）
+    let regular_skills: Vec<Skill> = skills.into_iter()
+        .filter(|s| !s.from_plugin)
+        .collect();
+
+    Ok(regular_skills)
+}
+
+/// 列出所有 plugin skills（独立于 regular skills）
+/// Plugin skills 由 plugin 市场管理，不在中心库中
+#[tauri::command]
+pub fn list_plugin_skills() -> Result<Vec<Skill>, VibeError> {
+    let mut map: HashMap<String, SkillEntry> = HashMap::new();
+
+    let config = load_config()?;
+    let agents = build_agents_from_config(&config)?;
+
+    let vibe_dir = vibe_skills_dir()?;
+    let mut hash_cache = crate::utils::hash::load_hash_cache(&vibe_dir);
+
+    // 只扫描 plugin 市场
+    scan_plugin_marketplace_skills(&mut map, &mut hash_cache)?;
+
+    crate::utils::hash::save_hash_cache(&vibe_dir, &hash_cache);
+
+    // 过滤掉已认领的 skill（已在中心库中的）
+    let mut skills: Vec<Skill> = map
+        .into_iter()
+        .map(|(id, entry)| {
+            let linked_agents = find_linked_agents(&id, &agents);
+
+            // 提取 plugin 来源信息
+            let from_plugin = true; // 这里只处理 plugin skills
+            let plugin_source = entry.sources.iter()
+                .find(|s| s.source_kind == "marketplace" || s.from.starts_with("claude-plugin:") || s.from.starts_with("codex-plugin:"))
+                .and_then(|s| {
+                    if s.from.starts_with("claude-plugin:") {
+                        Some(s.from.strip_prefix("claude-plugin:").unwrap_or(&s.from).to_string())
+                    } else if s.from.starts_with("codex-plugin:") {
+                        Some(s.from.strip_prefix("codex-plugin:").unwrap_or(&s.from).to_string())
+                    } else {
+                        None
+                    }
+                });
+
+            // Plugin skills 不检测冲突、断链、重复（由 plugin 系统管理）
+            let missing_name = entry.name.is_empty();
+
+            Skill {
+                id,
+                name: entry.name,
+                description: entry.description,
+                path: entry.path,
+                linked_agents,
+                sources: entry.sources,
+                license: entry.license,
+                compatibility: entry.compatibility,
+                metadata: entry.metadata,
+                has_scripts: entry.has_scripts,
+                has_references: entry.has_references,
+                has_assets: entry.has_assets,
+                modified_at: entry.modified_at,
+                has_conflict: false,
+                has_dangling: false,
+                is_duplicate: false,
+                missing_name,
+                from_plugin,
+                plugin_source,
+            }
+        })
+        .collect();
+
+    // 标记已认领的 skill（已在中心库中的）
+    for skill in &mut skills {
+        let skill_path = vibe_dir.join(&skill.id);
+        // 通过 metadata 标记是否已认领
+        if skill.metadata.is_none() {
+            skill.metadata = Some(std::collections::HashMap::new());
+        }
+        if let Some(meta) = &mut skill.metadata {
+            meta.insert("adopted".to_string(), skill_path.exists().to_string());
+        }
+    }
+
+    // 按 plugin_source 分组，然后按名称排序
+    skills.sort_by(|a, b| {
+        a.plugin_source.as_deref().unwrap_or("")
+            .cmp(b.plugin_source.as_deref().unwrap_or(""))
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
 
     Ok(skills)
+}
+
+/// 认领 plugin skill 到中心库
+/// 将 plugin skill 复制到 ~/.vibe-skills/，使其成为 library-managed skill
+/// 如果已存在，先快照到 .trash/ 再覆盖
+#[tauri::command]
+pub fn adopt_plugin_skill(skill_id: String) -> Result<Skill, VibeError> {
+    let vibe_dir = vibe_skills_dir()?;
+    let skill_path = vibe_dir.join(&skill_id);
+
+    // 查找 plugin skill
+    let plugin_skills = list_plugin_skills()?;
+    let plugin_skill = plugin_skills.iter().find(|s| s.id == skill_id).ok_or_else(|| {
+        VibeError::SkillNotFound {
+            skill_id: skill_id.clone(),
+        }
+    })?;
+
+    // 查找 plugin 来源路径
+    let plugin_source = plugin_skill.sources.iter().find(|s| {
+        s.source_kind == "marketplace"
+            || s.from.starts_with("claude-plugin:")
+            || s.from.starts_with("codex-plugin:")
+    }).ok_or_else(|| {
+        VibeError::Path(format!("No plugin source found for skill {}", skill_id))
+    })?;
+
+    let source_path = Path::new(&plugin_source.path);
+    if !source_path.exists() {
+        return Err(VibeError::Path(format!(
+            "Plugin source path does not exist: {}",
+            source_path.display()
+        )));
+    }
+
+    // 如果已存在，先快照到 .trash/ 再删除
+    if skill_path.exists() {
+        let trash_dir = vibe_dir.join(".trash");
+        let _ = std::fs::create_dir_all(&trash_dir);
+        let timestamp = crate::utils::datetime::chrono_now().replace("-", "").replace(":", "").replace(" ", "_");
+        let trash_path = trash_dir.join(format!("{}_{}", skill_id, timestamp));
+        let _ = copy_dir_all(&skill_path, &trash_path);
+        let _ = std::fs::remove_dir_all(&skill_path);
+    }
+
+    // 复制到中心库
+    copy_skill_dir_all(source_path, &skill_path)?;
+
+    // 写入 origin 记录，标记来源为 marketplace
+    let mut origin = crate::utils::origin::build_install_origin(
+        Path::new(&plugin_source.path),
+    );
+    origin.method = SOURCE_METHOD_MARKETPLACE.to_string();
+    origin.installed_by = Some("qs-vibe-adopt".to_string());
+    let _ = write_skill_origin(&skill_path, &origin);
+
+    // 返回新创建的 library skill
+    let skills = list_skills()?;
+    skills.into_iter().find(|s| s.id == skill_id).ok_or_else(|| {
+        VibeError::Path(format!(
+            "Failed to find adopted skill '{}' in library",
+            skill_id
+        ))
+    })
 }
 
 #[tauri::command]

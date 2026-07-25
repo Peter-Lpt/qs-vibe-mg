@@ -54,6 +54,11 @@ const legendStyle = ref<Record<string, string>>({});
 let legendHideTimer: ReturnType<typeof setTimeout> | null = null;
 const hasLibrarySource = computed(() => props.skill.sources.some((s) => s.from === "vibe-lib"));
 
+// 检查是否从 Plugin 认领过来的
+const isAdoptedFromPlugin = computed(() => {
+  return props.skill.sources.some((s) => s.origin?.method === "marketplace");
+});
+
 async function toggleExpand() {
   isExpanded.value = !isExpanded.value;
 }
@@ -239,6 +244,13 @@ onUnmounted(() => {
         style="background: var(--c-plugin-light, rgba(139, 92, 246, 0.15)); color: var(--c-plugin, #8b5cf6);"
       >
         {{ skill.plugin_source }}
+      </span>
+      <span
+        v-else-if="isAdoptedFromPlugin"
+        class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+        style="background: var(--c-plugin-light, rgba(139, 92, 246, 0.15)); color: var(--c-plugin, #8b5cf6);"
+      >
+        {{ t("plugins.from_plugin") }}
       </span>
 
       <span

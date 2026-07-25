@@ -61,10 +61,15 @@
   },
   "plugins": {
     "view_title": "外掛技能",
-    "view_hint": "來自外掛市場的技能副本，收進技能庫後才能統一管理和連結。",
+    "view_hint": "來自外掛市場的技能副本，由外掛系統管理。",
     "sync_one": "收進技能庫",
     "group_sync_all": "全部收進技能庫",
-    "empty": "沒有外掛來源的技能"
+    "empty": "沒有外掛來源的技能",
+    "adopt": "認領",
+    "adopt_to_library": "認領到中心庫",
+    "adopt_success": "已認領到中心庫",
+    "adopted": "已認領",
+    "from_plugin": "來自 Plugin"
   },
   "manage": {
     "title": "軟連結管理",

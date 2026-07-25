@@ -3,7 +3,6 @@ import type { Agent, Skill, SmartViewId, ViewId } from "../types";
 import type { DomainScope, LibraryScope, ManageFilterState } from "../components/manage/manageFilters";
 import {
   computeFacetCounts,
-  filterSkills,
   matchesDomain,
 } from "../components/manage/manageFilters";
 
@@ -18,12 +17,13 @@ export interface SmartViewDef {
 }
 
 // ── 视图注册表（侧边栏与快捷键的单一真源，替代 App.vue 硬编码 tabs） ──
+// Plugin skills 现在由独立的 PluginSkillsView 处理
 export const SMART_VIEWS: readonly SmartViewDef[] = [
   { id: "all", domain: "local", labelKey: "sidebar.view_all", icon: "List" },
   { id: "attention", domain: "local", labelKey: "sidebar.view_attention", icon: "TriangleAlert", showBadge: true },
   { id: "linked", domain: "local", labelKey: "sidebar.view_linked", icon: "Link2" },
   { id: "unlinked", domain: "local", labelKey: "sidebar.view_unlinked", icon: "CircleDashed" },
-  { id: "plugins", domain: "plugin", labelKey: "sidebar.plugins", icon: "Puzzle" },
+  { id: "plugins", domain: "local", labelKey: "sidebar.plugins", icon: "Puzzle" },
 ];
 
 export interface ViewFilterPreset {
@@ -43,7 +43,8 @@ export function viewToFilterPreset(view: SmartViewId): ViewFilterPreset {
     case "unlinked":
       return { domain: "local", statusPreset: "unlinked_all" };
     case "plugins":
-      return { domain: "plugin", statusPreset: "all" };
+      // Plugin view 由独立组件处理，这里返回默认预设
+      return { domain: "local", statusPreset: "all" };
     case "all":
     default:
       return { domain: "local", statusPreset: "all" };
@@ -67,17 +68,15 @@ export function useSmartViews(
     };
 
     const localScoped = skills.value.filter((s) => matchesDomain(s, "local"));
-    const pluginScoped = skills.value.filter((s) => matchesDomain(s, "plugin"));
 
     const facets = computeFacetCounts(localScoped, { ...baseState, domain: "local" }, agents.value);
-    const pluginCount = filterSkills(pluginScoped, { ...baseState, domain: "plugin" }, agents.value).length;
 
     return {
       all: facets.status.all,
       attention: facets.status.needs_attention,
       linked: facets.status.linked_any,
       unlinked: facets.status.unlinked_all,
-      plugins: pluginCount,
+      plugins: 0, // Plugin skills 由独立 API 处理，这里返回 0
     };
   });
 

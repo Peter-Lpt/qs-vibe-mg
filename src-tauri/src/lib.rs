@@ -39,6 +39,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::skills::list_skills,
+            commands::skills::list_plugin_skills,
+            commands::skills::adopt_plugin_skill,
             commands::skills::check_skill_update,
             commands::skills::check_all_skill_updates,
             commands::skills::preview_skill,

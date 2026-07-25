@@ -61,10 +61,15 @@
   },
   "plugins": {
     "view_title": "Plugin Skills",
-    "view_hint": "Skill copies from plugin marketplaces. Import them into the library to manage and link them centrally.",
+    "view_hint": "Skill copies from plugin marketplaces, managed by the plugin system.",
     "sync_one": "Import to Library",
     "group_sync_all": "Import All to Library",
-    "empty": "No skills from plugin sources"
+    "empty": "No skills from plugin sources",
+    "adopt": "Adopt",
+    "adopt_to_library": "Adopt to Library",
+    "adopt_success": "Adopted to library",
+    "adopted": "Adopted",
+    "from_plugin": "From Plugin"
   },
   "manage": {
     "title": "Symlink Management",

@@ -61,10 +61,15 @@
   },
   "plugins": {
     "view_title": "插件技能",
-    "view_hint": "来自插件市场的技能副本，收进技能库后才能统一管理和链接。",
+    "view_hint": "来自插件市场的技能副本，由插件系统管理。",
     "sync_one": "收进技能库",
     "group_sync_all": "全部收进技能库",
-    "empty": "没有插件来源的技能"
+    "empty": "没有插件来源的技能",
+    "adopt": "认领",
+    "adopt_to_library": "认领到中心库",
+    "adopt_success": "已认领到中心库",
+    "adopted": "已认领",
+    "from_plugin": "来自 Plugin"
   },
   "manage": {
     "title": "软连接管理",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAgentsStore } from "./stores/agents";
@@ -9,10 +9,11 @@ import { useAppStore } from "./stores/app";
 import { useToast } from "./composables/useToast";
 import { useSmartViews, viewToFilterPreset } from "./composables/useSmartViews";
 import { useManageFilters } from "./components/manage/manageFilters";
-import type { SmartViewId } from "./types";
+import type { SmartViewId, Skill } from "./types";
 import AppLayout from "./components/layout/AppLayout.vue";
 import AppSidebar from "./components/layout/AppSidebar.vue";
 import SkillsView from "./components/manage/SkillsView.vue";
+import PluginSkillsView from "./components/manage/PluginSkillsView.vue";
 import HistoryTab from "./components/history/HistoryTab.vue";
 import SettingsPage from "./components/settings/SettingsPage.vue";
 import ToastContainer from "./components/common/ToastContainer.vue";
@@ -36,6 +37,23 @@ const skillsViewId = computed<SmartViewId>(() =>
 const defaultDomain = computed(() => viewToFilterPreset(skillsViewId.value).domain);
 const filterModel = useManageFilters(skillList, detectedAgents, defaultDomain);
 const { viewCounts } = useSmartViews(skillList, detectedAgents, filterModel.state);
+
+// ── Plugin skills 计数 ──
+const pluginSkillsCount = ref(0);
+async function fetchPluginSkillsCount() {
+  try {
+    const pluginSkills: Skill[] = await skillsStore.fetchPluginSkills();
+    pluginSkillsCount.value = pluginSkills.length;
+  } catch {
+    pluginSkillsCount.value = 0;
+  }
+}
+
+// 合并视图计数（包含 plugin 计数）
+const mergedViewCounts = computed(() => ({
+  ...viewCounts.value,
+  plugins: pluginSkillsCount.value,
+}));
 
 watch(
   () => appStore.locale,
@@ -125,6 +143,7 @@ onMounted(async () => {
   locale.value = appStore.locale;
   await agentsStore.fetchAgents();
   await skillsStore.fetchSkills();
+  await fetchPluginSkillsCount();
   await historyStore.fetchHistory();
   historyStore.updateUndoRedoState();
   document.addEventListener("keydown", handleGlobalKeydown);
@@ -150,7 +169,7 @@ onUnmounted(() => {
     <template #sidebar>
       <AppSidebar
         :active-view="appStore.activeView"
-        :counts="viewCounts"
+        :counts="mergedViewCounts"
         :filter-model="filterModel"
         :agents="detectedAgents"
         :facet-counts="filterModel.facetCounts.value"
@@ -159,8 +178,12 @@ onUnmounted(() => {
     </template>
 
     <KeepAlive>
+      <PluginSkillsView
+        v-if="appStore.activeView === 'plugins'"
+        :key="'plugin-skills'"
+      />
       <SkillsView
-        v-if="appStore.activeView !== 'history' && appStore.activeView !== 'settings'"
+        v-else-if="appStore.activeView !== 'history' && appStore.activeView !== 'settings'"
         :key="'skills'"
         :view="skillsViewId"
         :filter-model="filterModel"

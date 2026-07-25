@@ -6,7 +6,7 @@ export type IssueFilter = "conflict" | "dangling" | "duplicate";
 export type LibraryScope = "missing_library" | "library_only";
 export type AgentMatch = "any" | "exclude";
 export type SortMode = "status" | "updated" | "name" | "linked_agents";
-export type DomainScope = "local" | "plugin";
+export type DomainScope = "local"; // Plugin skills 现在由独立 API 处理
 
 export interface ManageFilterState {
   query: string;
@@ -30,28 +30,24 @@ export interface SourceClassification {
   hasLinkedElsewhere: boolean;
 }
 
-// Plugin 类型到 Agent ID 的映射
+// Plugin 类型到 Agent ID 的映射（保留用于兼容性）
 export const PLUGIN_AGENT_MAP: Record<string, string> = {
   "claude-plugin": "claude-code",
   "codex-plugin": "codex",
 };
 
-// 是否存在非 plugin 来源（自 ManageTab.vue 上提，实现不变）
-export function hasNonPluginSource(skill: Skill): boolean {
-  return skill.sources.some(
-    (source) =>
-      source.from === "vibe-lib" ||
-      source.source_kind === "agent" ||
-      (!source.source_kind &&
-        !source.from.startsWith("claude-plugin:") &&
-        !source.from.startsWith("codex-plugin:"))
-  );
+// 是否存在非 plugin 来源（简化：regular skills 不含 plugin 来源）
+export function hasNonPluginSource(_skill: Skill): boolean {
+  // 由于 list_skills() 只返回 regular skills，这里总是返回 true
+  // 保留函数签名以维持兼容性
+  return true;
 }
 
-// domain 互斥分区：每个 skill 恰好属于一个域
-export function matchesDomain(skill: Skill, domain: DomainScope): boolean {
-  if (domain === "local") return !skill.from_plugin || hasNonPluginSource(skill);
-  return skill.from_plugin && !hasNonPluginSource(skill);
+// domain 互斥分区：简化为只处理 local 域
+export function matchesDomain(_skill: Skill, _domain: DomainScope): boolean {
+  // Plugin skills 由独立 API (list_plugin_skills) 处理
+  // 这里只处理 regular skills，总是返回 true
+  return true;
 }
 
 function sourceKind(source: SkillSource, agentIds: ReadonlySet<string>): "library" | "agent" | "project" | "external" | "marketplace" {
@@ -128,14 +124,13 @@ export function matchesStatusPreset(
   agents: readonly Agent[] = []
 ): boolean {
   if (preset === "all") return true;
-  // v0.3：移除 from_plugin 硬排除——状态谓词对本地/插件统一语义，
-  // 纯插件副本由 matchesDomain("local") = false 挡在本地视图之外（domain 原子交付）。
+  // Plugin skills 由独立 API 处理，这里只处理 regular skills
   const sources = classifySkillSources(skill, agents);
   if (preset === "needs_attention") {
     return skill.has_conflict || skill.has_dangling || sources.hasLinkedElsewhere;
   }
-  if (preset === "linked_any") return sources.hasAgentSymlink || sources.hasMarketplace;
-  return !sources.hasAgentSymlink && !sources.hasMarketplace;
+  if (preset === "linked_any") return sources.hasAgentSymlink;
+  return !sources.hasAgentSymlink;
 }
 
 export function matchesIssues(skill: Skill, issues: ReadonlySet<IssueFilter>): boolean {
@@ -154,9 +149,10 @@ export function matchesLibraryScope(
 ): boolean {
   if (scopes.size === 0) return true;
   const sourceInfo = classifySkillSources(skill, agents);
+  // Plugin skills 由独立 API 处理，hasMarketplace 总是 false
   return (
     (scopes.has("missing_library") && !sourceInfo.hasLibrary) ||
-    (scopes.has("library_only") && sourceInfo.hasLibrary && !sourceInfo.hasAgent && !sourceInfo.hasProject && !sourceInfo.hasExternal && !sourceInfo.hasMarketplace)
+    (scopes.has("library_only") && sourceInfo.hasLibrary && !sourceInfo.hasAgent && !sourceInfo.hasProject && !sourceInfo.hasExternal)
   );
 }
 

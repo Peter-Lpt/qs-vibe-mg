@@ -956,9 +956,9 @@ fn sync_from_plugin_impl(skill_id: &str, _agent: &Agent) -> Result<LinkCreationR
         return Ok(action_report("sync_from_plugin"));
     }
 
-    // 查找 plugin 来源的路径
-    let skills = crate::commands::skills::list_skills()?;
-    let skill = skills.iter().find(|s| s.id == skill_id).ok_or_else(|| {
+    // 查找 plugin 来源的路径（从 plugin skills 列表中查找）
+    let plugin_skills = crate::commands::skills::list_plugin_skills()?;
+    let skill = plugin_skills.iter().find(|s| s.id == skill_id).ok_or_else(|| {
         VibeError::SkillNotFound {
             skill_id: skill_id.to_string(),
         }

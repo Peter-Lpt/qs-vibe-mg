@@ -38,7 +38,6 @@ const selectionModel = useManageSelection(filterModel.filteredSkills);
 // ── 视图与预设 ──────────────────────────────────────
 const viewDef = computed(() => SMART_VIEWS.find((v) => v.id === props.view));
 const viewTitle = computed(() => (viewDef.value ? t(viewDef.value.labelKey) : props.view));
-const isPluginsView = computed(() => props.view === "plugins");
 const presetScopes = computed<Set<LibraryScope>>(
   () => viewToFilterPreset(props.view).libraryScope ?? new Set()
 );
@@ -71,7 +70,6 @@ const stats = computed(() => {
     linked: linked.length,
     unlinked: unlinked.length,
     issues: issues.length,
-    plugins: all.filter((s) => s.from_plugin).length,
   };
 });
 
@@ -119,29 +117,6 @@ function onBatchConfirm() {
 function closeBatchResult() {
   batchShowResult.value = false;
   clearResult();
-}
-
-// ── 插件视图分组 ──────────────────────────────────
-const pluginGroups = computed(() => {
-  if (!isPluginsView.value) return [];
-  const groups = new Map<string, typeof displaySkills.value>();
-  for (const skill of displaySkills.value) {
-    const source = skill.plugin_source || "unknown";
-    const group = groups.get(source) || [];
-    group.push(skill);
-    groups.set(source, group);
-  }
-  return Array.from(groups.entries()).map(([source, skills]) => ({ source, skills }));
-});
-const expandedPluginGroups = ref<Set<string>>(new Set());
-function togglePluginGroup(source: string) {
-  const next = new Set(expandedPluginGroups.value);
-  if (next.has(source)) next.delete(source);
-  else next.add(source);
-  expandedPluginGroups.value = next;
-}
-function isPluginGroupExpanded(source: string): boolean {
-  return expandedPluginGroups.value.has(source);
 }
 
 // ── 工具栏：排序 / 搜索 ──────────────────────
@@ -253,20 +228,6 @@ function deselectAllSkills() {
 
 // ── 安装 ──────────────────────────────────
 const showInstall = ref(false);
-
-// ── 插件同步 ──────────────────────────────────
-async function handleSyncPlugin(skillId: string) {
-  try {
-    const skill = skillsStore.skills.find((s) => s.id === skillId);
-    if (!skill) return;
-    const pluginSource = skill.sources.find((s) => s.source_kind === "marketplace");
-    if (!pluginSource) return;
-    await skillsStore.installSkill(pluginSource.path, false);
-    toast.show(t("manage.sync_to_library_success"), "success");
-  } catch (e: unknown) {
-    toast.show(String(e), "error");
-  }
-}
 
 // ── 刷新 / 更新检查 ──────────────────────────────────
 async function refreshManageData() {
@@ -397,11 +358,6 @@ defineExpose({
           <span class="stats-overview__value stats-overview__value--issues">{{ stats.issues }}</span>
           <span class="stats-overview__label">{{ t("sidebar.view_attention") }}</span>
         </div>
-        <div class="stats-overview__divider" />
-        <div class="stats-overview__item">
-          <span class="stats-overview__value stats-overview__value--plugins">{{ stats.plugins }}</span>
-          <span class="stats-overview__label">{{ t("sidebar.plugins") }}</span>
-        </div>
       </div>
     </section>
 
@@ -409,7 +365,7 @@ defineExpose({
     <section class="workspace-panel !p-3">
       <div class="flex flex-wrap items-center gap-2">
         <h2 class="text-sm font-semibold" style="color: var(--c-text-strong);">
-          {{ isPluginsView ? t("plugins.view_title") : viewTitle }}
+          {{ viewTitle }}
         </h2>
         <span
           class="rounded-full px-2 py-0.5 text-xs"
@@ -418,7 +374,7 @@ defineExpose({
           {{ displaySkills.length }}/{{ totalSkills }}
         </span>
         <span class="hidden text-[11px] lg:inline" style="color: var(--c-text-secondary);">
-          {{ isPluginsView ? t("plugins.view_hint") : t("manage.workspace_hint") }}
+          {{ t("manage.workspace_hint") }}
         </span>
         <div class="action-toolbar ml-auto">
           <button
@@ -567,11 +523,7 @@ defineExpose({
       <div class="manage-empty-icon">
         <SearchX :size="28" />
       </div>
-      <template v-if="isPluginsView">
-        <h3>{{ t("plugins.empty") }}</h3>
-        <p>{{ t("plugins.view_hint") }}</p>
-      </template>
-      <template v-else-if="totalSkills === 0">
+      <template v-if="totalSkills === 0">
         <h3>{{ t("skills.no_skills") }}</h3>
         <p>{{ t("skills.no_skills_hint") }}</p>
         <div class="manage-empty-actions">
@@ -624,8 +576,8 @@ defineExpose({
         </span>
       </div>
 
-      <!-- 本地视图：技能列表 -->
-      <div v-if="!isPluginsView" class="space-y-2">
+      <!-- 技能列表 -->
+      <div class="space-y-2">
         <SkillRow
           v-for="skill in displaySkills"
           :key="skill.id"
@@ -636,49 +588,7 @@ defineExpose({
           :expanded="expandedSkillId === skill.id"
           @toggle:select="toggleSkillSelect"
           @update:expanded="expandedSkillId = $event ? skill.id : null"
-          @sync-plugin="handleSyncPlugin"
         />
-      </div>
-
-      <!-- 插件视图：按市场分组 -->
-      <div v-else class="space-y-3">
-        <div v-for="group in pluginGroups" :key="group.source" class="plugin-group">
-          <div
-            class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 select-none hover:bg-[var(--c-surface-hover)]"
-            @click="togglePluginGroup(group.source)"
-          >
-            <ChevronRight
-              :size="13"
-              class="transition-transform"
-              :style="{
-                color: 'var(--c-plugin, #8b5cf6)',
-                transform: isPluginGroupExpanded(group.source) ? 'rotate(90deg)' : 'rotate(0deg)',
-              }"
-            />
-            <Puzzle :size="13" style="color: var(--c-plugin, #8b5cf6);" />
-            <span class="text-[11px] font-semibold uppercase tracking-wide" style="color: var(--c-plugin, #8b5cf6);">
-              {{ group.source }}
-            </span>
-            <span
-              class="rounded-full px-1.5 text-[9px]"
-              style="background: var(--c-plugin-light, rgba(139, 92, 246, 0.15)); color: var(--c-plugin, #8b5cf6);"
-            >{{ group.skills.length }}</span>
-          </div>
-          <div v-if="isPluginGroupExpanded(group.source)" class="mt-1.5 space-y-2">
-            <SkillRow
-              v-for="skill in group.skills"
-              :key="`plugin-${group.source}-${skill.id}`"
-              :id="`skill-${skill.id}`"
-              :skill="skill"
-              :agents="agentsStore.agents"
-              :selected="selectedSkills.has(skill.id)"
-              :expanded="expandedSkillId === skill.id"
-              @toggle:select="toggleSkillSelect"
-              @update:expanded="expandedSkillId = $event ? skill.id : null"
-              @sync-plugin="handleSyncPlugin"
-            />
-          </div>
-        </div>
       </div>
 
       <!-- 浮动批量操作条（sticky 底部） -->
@@ -942,10 +852,6 @@ defineExpose({
 
 .stats-overview__value--issues {
   color: var(--c-warning, #f59e0b);
-}
-
-.stats-overview__value--plugins {
-  color: var(--c-plugin, #8b5cf6);
 }
 
 .stats-overview__label {

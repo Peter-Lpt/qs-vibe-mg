@@ -224,6 +224,17 @@ export const useSkillsStore = defineStore("skills", () => {
     return result;
   }
 
+  async function fetchPluginSkills(): Promise<Skill[]> {
+    return invoke<Skill[]>("list_plugin_skills");
+  }
+
+  async function adoptPluginSkill(skillId: string): Promise<Skill> {
+    const adoptedSkill = await invoke<Skill>("adopt_plugin_skill", { skillId });
+    // 刷新 regular skills 列表以包含新认领的 skill
+    await refreshSkills();
+    return adoptedSkill;
+  }
+
   return {
     skills,
     loading,
@@ -256,5 +267,7 @@ export const useSkillsStore = defineStore("skills", () => {
     relink,
     replaceWithLibrary,
     batchSkillAction,
+    fetchPluginSkills,
+    adoptPluginSkill,
   };
 });
