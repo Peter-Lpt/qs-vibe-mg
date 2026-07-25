@@ -10,8 +10,6 @@ import { useBatchActions, type BatchIntent } from "../../composables/useBatchAct
 import SkillRow from "./SkillRow.vue";
 import IssueRepairPanel, { type RepairGroupId } from "./IssueRepairPanel.vue";
 import InstallDialog from "../skills/InstallDialog.vue";
-import AddAgentDialog from "../agents/AddAgentDialog.vue";
-import AgentCard from "../agents/AgentCard.vue";
 import SkeletonCard from "../common/SkeletonCard.vue";
 
 import {
@@ -238,15 +236,8 @@ function deselectAllSkills() {
   selectionModel.clearSelection();
 }
 
-// ── Agent 管理 / 安装 ──────────────────────────────────
-const showAgentManager = ref(false);
-const showAddAgent = ref(false);
+// ── 安装 ──────────────────────────────────
 const showInstall = ref(false);
-function agentSkillCount(agentId: string): number {
-  return skillsStore.skills.filter((skill) =>
-    skill.sources.some((s) => s.from === agentId)
-  ).length;
-}
 
 // ── 插件同步 ──────────────────────────────────
 async function handleSyncPlugin(skillId: string) {
@@ -405,13 +396,6 @@ defineExpose({
               class="absolute -right-1 -top-1 min-w-3.5 rounded-full px-1 text-[9px] leading-3.5"
               style="background: var(--c-warning); color: white;"
             >{{ availableUpdateCount }}</span>
-          </button>
-          <button
-            class="action-toolbar-icon"
-            :title="t('manage.agent_management')"
-            @click="showAgentManager = true"
-          >
-            <Settings :size="15" />
           </button>
           <button class="action-toolbar-primary" @click="showInstall = true">
             <Plus :size="15" />
@@ -858,58 +842,6 @@ defineExpose({
     </div>
   </Teleport>
 
-  <!-- Agent 管理浮层 -->
-  <Teleport to="body">
-    <div
-      v-if="showAgentManager"
-      class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
-      @click.self="showAgentManager = false"
-    >
-      <div class="modal-shell flex w-full max-w-3xl flex-col">
-        <div class="modal-header shrink-0">
-          <div>
-            <h3 class="text-sm font-semibold" style="color: var(--c-text);">
-              {{ t("manage.agent_management") }}
-            </h3>
-            <p class="mt-0.5 text-[11px]" style="color: var(--c-text-secondary);">
-              {{ t("manage.agent_management_hint") }}
-            </p>
-          </div>
-          <div class="flex items-center gap-2">
-            <button
-              class="inline-flex cursor-pointer items-center gap-1 rounded-md px-3 py-1.5 text-xs"
-              style="background: var(--c-primary); color: white;"
-              type="button"
-              @click="showAddAgent = true"
-            >
-              <Plus :size="14" />
-              {{ t("agents.add") }}
-            </button>
-            <button
-              class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md"
-              style="color: var(--c-text-secondary);"
-              type="button"
-              @click="showAgentManager = false"
-            >
-              &times;
-            </button>
-          </div>
-        </div>
-        <div class="overflow-y-auto p-4">
-          <div class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
-            <AgentCard
-              v-for="agent in agentsStore.agents"
-              :key="agent.id"
-              :agent="agent"
-              :skill-count="agentSkillCount(agent.id)"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  </Teleport>
-
-  <AddAgentDialog v-if="showAddAgent" @close="showAddAgent = false" @added="showAddAgent = false" />
   <InstallDialog v-if="showInstall" @close="showInstall = false" />
 
   <!-- 回到顶部 -->

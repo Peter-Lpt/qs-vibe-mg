@@ -176,6 +176,104 @@ async function handleImport() {
 
 const projectRootsCount = computed(() => projectRootsList.value.length);
 
+// ── Agent 管理 ──
+const showAddAgent = ref(false);
+const addAgentName = ref("");
+const addAgentPath = ref("");
+const editingAgentId = ref<string | null>(null);
+const editName = ref("");
+const editPath = ref("");
+
+function startAddAgent() {
+  showAddAgent.value = true;
+  addAgentName.value = "";
+  addAgentPath.value = "";
+}
+
+function cancelAddAgent() {
+  showAddAgent.value = false;
+}
+
+async function confirmAddAgent() {
+  if (!addAgentName.value.trim() || !addAgentPath.value.trim()) return;
+  try {
+    await agentsStore.addCustomAgent(addAgentName.value.trim(), addAgentPath.value.trim());
+    showAddAgent.value = false;
+    toast.show(t("settings.save") + " ✓", "success");
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
+
+async function pickAddAgentDir() {
+  try {
+    const selected = await open({ directory: true, multiple: false, title: t("settings.agent_pick_dir") });
+    if (selected) {
+      const path = Array.isArray(selected) ? selected[0] : selected;
+      addAgentPath.value = String(path).replace(/\\/g, "/");
+    }
+  } catch (e: unknown) {
+    console.error(e);
+  }
+}
+
+function startEditAgent(agent: { id: string; name: string; skills_dir: string }) {
+  editingAgentId.value = agent.id;
+  editName.value = agent.name;
+  editPath.value = agent.skills_dir;
+}
+
+function cancelEditAgent() {
+  editingAgentId.value = null;
+}
+
+async function saveEditAgent(agentId: string) {
+  if (!editName.value.trim() || !editPath.value.trim()) return;
+  try {
+    await agentsStore.updateAgent(agentId, {
+      name: editName.value.trim(),
+      skillsDir: editPath.value.trim(),
+    });
+    editingAgentId.value = null;
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
+
+async function pickEditAgentDir() {
+  try {
+    const selected = await open({ directory: true, multiple: false, title: t("settings.agent_pick_dir") });
+    if (selected) {
+      const path = Array.isArray(selected) ? selected[0] : selected;
+      editPath.value = String(path).replace(/\\/g, "/");
+    }
+  } catch (e: unknown) {
+    console.error(e);
+  }
+}
+
+async function removeAgent(agentId: string) {
+  try {
+    await agentsStore.removeCustomAgent(agentId);
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
+
+async function toggleAgentEnabled(agent: { id: string; enabled: boolean; name: string }) {
+  try {
+    await agentsStore.updateAgent(agent.id, { enabled: !agent.enabled });
+    toast.show(
+      agent.enabled
+        ? t("settings.agent_disabled_toast", { name: agent.name })
+        : t("settings.agent_enabled_toast", { name: agent.name }),
+      "success"
+    );
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
+
 onMounted(() => {
   void loadProjectRoots();
 });
@@ -344,6 +442,169 @@ onMounted(() => {
           </button>
         </div>
         <p v-if="!projectRootsLoaded" class="text-[11px] mt-1" style="color: var(--c-text-tertiary);">{{ t('settings.project_roots_loading') }}</p>
+      </div>
+
+      <!-- Agents -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <label class="text-xs font-medium" style="color: var(--c-text);">{{ t('settings.agents') }}</label>
+            <p class="text-[11px] mt-0.5" style="color: var(--c-text-secondary);">{{ t('settings.agents_hint') }}</p>
+          </div>
+          <button
+            v-if="!showAddAgent"
+            class="px-2.5 py-1 text-[11px] rounded-md border cursor-pointer hover:opacity-80 transition-colors"
+            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
+            @click="startAddAgent"
+          >
+            + {{ t('agents.add') }}
+          </button>
+        </div>
+
+        <div v-if="agentsStore.agents.length > 0 || showAddAgent" class="space-y-1.5">
+          <!-- 已有 agent 行 -->
+          <div
+            v-for="agent in agentsStore.agents"
+            :key="agent.id"
+            class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-[11px]"
+            style="border-color: var(--c-border); background: var(--c-surface);"
+          >
+            <!-- 查看态 -->
+            <template v-if="editingAgentId !== agent.id">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span
+                    class="font-medium"
+                    style="color: var(--c-text);"
+                    :title="agent.name"
+                  >{{ agent.name }}</span>
+                  <span
+                    class="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
+                    :style="{
+                      background: agent.detected ? 'var(--c-success-light)' : 'var(--c-danger-light)',
+                      color: agent.detected ? 'var(--c-success)' : 'var(--c-danger)',
+                    }"
+                  >{{ agent.detected ? '●' : '○' }}</span>
+                  <span
+                    v-if="!agent.auto_detected"
+                    class="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
+                    style="background: var(--c-warning-light); color: var(--c-warning);"
+                  >{{ t('agents.custom') }}</span>
+                </div>
+                <div class="truncate mt-0.5" style="color: var(--c-text-tertiary);" :title="agent.skills_dir">{{ agent.skills_dir }}</div>
+              </div>
+              <div class="flex gap-1 shrink-0">
+                <button
+                  class="text-[11px] px-2 py-1 rounded-md cursor-pointer hover:opacity-80 transition-colors"
+                  style="color: var(--c-primary);"
+                  :title="t('agents.edit')"
+                  @click="startEditAgent(agent)"
+                ><Wrench :size="13" /></button>
+                <button
+                  class="text-[11px] px-2 py-1 rounded-md cursor-pointer hover:opacity-80 transition-colors"
+                  :style="{ color: agent.enabled ? 'var(--c-warning)' : 'var(--c-success)' }"
+                  :title="agent.enabled ? t('settings.agent_disable') : t('settings.agent_enable')"
+                  @click="toggleAgentEnabled(agent)"
+                ><Circle :size="13" /></button>
+                <button
+                  v-if="!agent.auto_detected"
+                  class="text-[11px] px-2 py-1 rounded-md cursor-pointer hover:opacity-80 transition-colors"
+                  style="color: var(--c-danger);"
+                  :title="t('agents.remove')"
+                  @click="removeAgent(agent.id)"
+                ><Trash2 :size="13" /></button>
+              </div>
+            </template>
+
+            <!-- 编辑态 -->
+            <template v-else>
+              <div class="flex-1 space-y-1.5">
+                <input
+                  v-model="editName"
+                  class="w-full px-2.5 py-1.5 text-[11px] rounded-md border outline-none transition-colors"
+                  style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+                  :placeholder="t('settings.agent_name_placeholder')"
+                  @keydown.enter="saveEditAgent(agent.id)"
+                  @keydown.escape="cancelEditAgent"
+                />
+                <div class="flex gap-1.5">
+                  <input
+                    v-model="editPath"
+                    class="flex-1 px-2.5 py-1.5 text-[11px] rounded-md border outline-none transition-colors"
+                    style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+                    :placeholder="t('settings.agent_path_placeholder')"
+                    @keydown.enter="saveEditAgent(agent.id)"
+                    @keydown.escape="cancelEditAgent"
+                  />
+                  <button
+                    class="px-2 py-1 text-[11px] rounded-md border cursor-pointer shrink-0 hover:opacity-80 transition-colors"
+                    style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
+                    @click="pickEditAgentDir"
+                  >{{ t('settings.agent_pick_dir') }}</button>
+                </div>
+                <div class="flex gap-1.5">
+                  <button
+                    class="text-[11px] px-2.5 py-1 rounded-md cursor-pointer font-medium"
+                    style="background: var(--c-primary); color: white;"
+                    @click="saveEditAgent(agent.id)"
+                  >{{ t('settings.save') }}</button>
+                  <button
+                    class="text-[11px] px-2.5 py-1 rounded-md border cursor-pointer hover:opacity-80 transition-colors"
+                    style="border-color: var(--c-border); color: var(--c-text);"
+                    @click="cancelEditAgent"
+                  >{{ t('settings.cancel') }}</button>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- 添加新 agent 行 -->
+          <div
+            v-if="showAddAgent"
+            class="flex items-center gap-3 rounded-md border px-3 py-2 text-[11px]"
+            style="border-color: var(--c-primary); background: var(--c-surface);"
+          >
+            <div class="flex-1 space-y-1.5">
+              <input
+                v-model="addAgentName"
+                class="w-full px-2.5 py-1.5 text-[11px] rounded-md border outline-none transition-colors"
+                style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+                :placeholder="t('settings.agent_name_placeholder')"
+                autofocus
+                @keydown.enter="confirmAddAgent"
+                @keydown.escape="cancelAddAgent"
+              />
+              <div class="flex gap-1.5">
+                <input
+                  v-model="addAgentPath"
+                  class="flex-1 px-2.5 py-1.5 text-[11px] rounded-md border outline-none transition-colors"
+                  style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+                  :placeholder="t('settings.agent_path_placeholder')"
+                  @keydown.enter="confirmAddAgent"
+                  @keydown.escape="cancelAddAgent"
+                />
+                <button
+                  class="px-2 py-1 text-[11px] rounded-md border cursor-pointer shrink-0 hover:opacity-80 transition-colors"
+                  style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
+                  @click="pickAddAgentDir"
+                >{{ t('settings.agent_pick_dir') }}</button>
+              </div>
+              <div class="flex gap-1.5">
+                <button
+                  class="text-[11px] px-2.5 py-1 rounded-md cursor-pointer font-medium"
+                  style="background: var(--c-primary); color: white;"
+                  @click="confirmAddAgent"
+                >{{ t('settings.agent_add_confirm') }}</button>
+                <button
+                  class="text-[11px] px-2.5 py-1 rounded-md border cursor-pointer hover:opacity-80 transition-colors"
+                  style="border-color: var(--c-border); color: var(--c-text);"
+                  @click="cancelAddAgent"
+                >{{ t('settings.agent_add_cancel') }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p v-else class="text-[11px]" style="color: var(--c-text-tertiary);">{{ t('agents.no_agents') }}</p>
       </div>
 
       <!-- 数据管理 -->

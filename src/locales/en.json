@@ -375,7 +375,8 @@
     "pick_folder": "Pick Folder",
     "name_required": "Agent name is required",
     "skills_dir_required": "Skills directory path is required",
-    "custom": "Custom"
+    "custom": "Custom",
+    "no_agents": "No agents detected yet"
   },
   "history": {
     "tab_title": "History",
@@ -467,6 +468,19 @@
     "project_roots_suggestion_hint": "Detected by current folder and project conventions",
     "project_roots_advanced_show": "Advanced",
     "project_roots_advanced_hide": "Basic",
-    "project_roots_advanced_title": "Raw editor"
+    "project_roots_advanced_title": "Raw editor",
+    "agents": "Agents",
+    "agents_hint": "Manage detected and custom AI agent configurations",
+    "agent_name": "Name",
+    "agent_skills_dir": "Skills directory",
+    "agent_pick_dir": "Pick folder",
+    "agent_add_confirm": "Confirm add",
+    "agent_add_cancel": "Cancel add",
+    "agent_name_placeholder": "Agent name",
+    "agent_path_placeholder": "Skills directory path",
+    "agent_enable": "Enable",
+    "agent_disable": "Disable",
+    "agent_enabled_toast": "Enabled {name}",
+    "agent_disabled_toast": "Disabled {name}"
   }
 }

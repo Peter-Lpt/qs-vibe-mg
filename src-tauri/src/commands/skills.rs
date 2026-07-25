@@ -56,7 +56,7 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
     )?;
 
     for agent in &agents {
-        if !agent.detected {
+        if !agent.detected || !agent.enabled {
             continue;
         }
         let agent_dir = Path::new(&agent.skills_dir);

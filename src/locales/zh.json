@@ -375,7 +375,8 @@
     "pick_folder": "选择文件夹",
     "name_required": "请输入 Agent 名称",
     "skills_dir_required": "请输入 Skills 目录路径",
-    "custom": "自定义"
+    "custom": "自定义",
+    "no_agents": "暂无已识别的 agent"
   },
   "history": {
     "tab_title": "操作历史",
@@ -467,6 +468,19 @@
     "project_roots_suggestion_hint": "根据当前目录和项目约定自动建议",
     "project_roots_advanced_show": "高级",
     "project_roots_advanced_hide": "基础",
-    "project_roots_advanced_title": "原始编辑"
+    "project_roots_advanced_title": "原始编辑",
+    "agents": "Agents",
+    "agents_hint": "管理已识别和自定义的 AI agent 配置",
+    "agent_name": "名称",
+    "agent_skills_dir": "技能目录",
+    "agent_pick_dir": "选择文件夹",
+    "agent_add_confirm": "确认添加",
+    "agent_add_cancel": "取消添加",
+    "agent_name_placeholder": "Agent 名称",
+    "agent_path_placeholder": "技能目录路径",
+    "agent_enable": "启用",
+    "agent_disable": "禁用",
+    "agent_enabled_toast": "已启用 {name}",
+    "agent_disabled_toast": "已禁用 {name}"
   }
 }

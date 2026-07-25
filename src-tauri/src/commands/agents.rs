@@ -76,6 +76,7 @@ pub fn update_agent(
     skills_dir: Option<String>,
     detect_dir: Option<String>,
     additional_scan_dirs: Option<Vec<String>>,
+    enabled: Option<bool>,
 ) -> Result<Agent, VibeError> {
     let mut config = load_config()?;
 
@@ -102,6 +103,9 @@ pub fn update_agent(
             .map(|dir| dir.trim().to_string())
             .filter(|dir| !dir.is_empty())
             .collect();
+    }
+    if let Some(e) = enabled {
+        agent_config.enabled = e;
     }
 
     save_config(&config)?;

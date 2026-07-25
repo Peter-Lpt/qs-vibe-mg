@@ -23,7 +23,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 
-const detectedAgents = computed(() => props.agents.filter((agent) => agent.detected));
+const detectedAgents = computed(() => props.agents.filter((agent) => agent.detected && agent.enabled));
 const agentCount = computed(() => detectedAgents.value.length);
 const layoutMode = computed<"empty" | "single" | "matrix" | "wide">(() => {
   if (agentCount.value === 0) return "empty";

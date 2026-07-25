@@ -72,7 +72,7 @@ export const useAgentsStore = defineStore("agents", () => {
 
   async function updateAgent(
     agentId: string,
-    updates: { name?: string; skillsDir?: string; detectDir?: string | null; additionalScanDirs?: string[] }
+    updates: { name?: string; skillsDir?: string; detectDir?: string | null; additionalScanDirs?: string[]; enabled?: boolean }
   ): Promise<Agent> {
     try {
       const agent = await invoke<Agent>("update_agent", {
@@ -81,6 +81,7 @@ export const useAgentsStore = defineStore("agents", () => {
         skillsDir: updates.skillsDir ?? null,
         detectDir: updates.detectDir === undefined ? null : updates.detectDir,
         additionalScanDirs: updates.additionalScanDirs ?? null,
+        enabled: updates.enabled ?? null,
       });
       await fetchAgents();
       await useSkillsStore().fetchSkills();

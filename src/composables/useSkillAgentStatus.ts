@@ -302,7 +302,7 @@ function normalizePath(path: string): string {
 
 // 纯函数：获取 skill 对所有 agent 的状态（非 composable，可在循环中调用）
 export function getAgentStatuses(skill: Skill, agents: Agent[], t: TFunc): AgentStatus[] {
-  const detected = agents.filter((a) => a.detected);
+  const detected = agents.filter((a) => a.detected && a.enabled);
   const vibeSource = skill.sources.find((s) => s.from === "vibe-lib");
   const result: AgentStatus[] = [];
 

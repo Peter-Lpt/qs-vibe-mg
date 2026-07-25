@@ -16,7 +16,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 
-const detectedAgents = computed(() => props.agents.filter((a) => a.detected));
+const detectedAgents = computed(() => props.agents.filter((a) => a.detected && a.enabled));
 
 interface CellInfo {
   status: "origin" | "synced" | "independent" | "linked_elsewhere" | "dangling" | "unlinked";

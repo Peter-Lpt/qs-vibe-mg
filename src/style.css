@@ -1650,3 +1650,27 @@ input:focus, textarea:focus, select:focus {
     margin-bottom: 4px;
   }
 }
+
+/* Scroll-to-top floating button */
+.scroll-to-top-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 40;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.scroll-to-top-btn:hover {
+  background: var(--c-surface-hover);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}

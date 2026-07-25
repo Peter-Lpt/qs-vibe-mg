@@ -375,7 +375,8 @@
     "pick_folder": "選擇資料夾",
     "name_required": "請輸入 Agent 名稱",
     "skills_dir_required": "請輸入 Skills 目錄路徑",
-    "custom": "自訂"
+    "custom": "自訂",
+    "no_agents": "暫無已識別的 agent"
   },
   "history": {
     "tab_title": "操作歷史",
@@ -467,6 +468,19 @@
     "project_roots_suggestion_hint": "根據目前目錄與專案慣例自動建議",
     "project_roots_advanced_show": "進階",
     "project_roots_advanced_hide": "基礎",
-    "project_roots_advanced_title": "原始編輯"
+    "project_roots_advanced_title": "原始編輯",
+    "agents": "Agents",
+    "agents_hint": "管理已識別和自訂的 AI agent 配置",
+    "agent_name": "名稱",
+    "agent_skills_dir": "技能目錄",
+    "agent_pick_dir": "選擇資料夾",
+    "agent_add_confirm": "確認新增",
+    "agent_add_cancel": "取消新增",
+    "agent_name_placeholder": "Agent 名稱",
+    "agent_path_placeholder": "技能目錄路徑",
+    "agent_enable": "啟用",
+    "agent_disable": "停用",
+    "agent_enabled_toast": "已啟用 {name}",
+    "agent_disabled_toast": "已停用 {name}"
   }
 }

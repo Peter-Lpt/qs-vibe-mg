@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::VibeError;
 use crate::models::agent::Agent;
-use crate::utils::path::{expand_tilde, vibe_skills_dir};
+use crate::utils::path::{display_path, expand_tilde, vibe_skills_dir};
 
 const CONFIG_FILE: &str = ".vibe-config.json";
 
@@ -314,10 +314,6 @@ pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VibeError
     let mut agents = Vec::new();
 
     for ac in &config.agents {
-        if !ac.enabled {
-            continue;
-        }
-
         let skills_dir = expand_tilde(&ac.skills_dir)?;
         let detected = skills_dir.exists();
         let detect_dir = ac.detect_dir.as_ref().and_then(|dir| expand_tilde(dir).ok());
@@ -342,9 +338,9 @@ pub fn build_agents_from_config(config: &Config) -> Result<Vec<Agent>, VibeError
         agents.push(Agent {
             id: ac.id.clone(),
             name: ac.name.clone(),
-            skills_dir: skills_dir.to_string_lossy().to_string(),
+            skills_dir: display_path(&skills_dir),
             kind: normalize_agent_kind(&ac.id, &ac.kind),
-            detect_dir: detect_dir.map(|dir| dir.to_string_lossy().to_string()),
+            detect_dir: detect_dir.map(|dir| display_path(&dir)),
             additional_scan_dirs,
             tool_detected,
             detected,

@@ -40,6 +40,11 @@ fn default_vibe_skills_dir() -> Result<PathBuf, VibeError> {
     Ok(home.join(".vibe-skills"))
 }
 
+/// 将路径中的反斜杠替换为正斜杠，用于 UI 显示
+pub fn display_path(path: &std::path::Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 /// 展开 ~ 为用户主目录
 pub fn expand_tilde(path: &str) -> Result<PathBuf, VibeError> {
     if path.starts_with("~/") || path.starts_with("~\\") {
