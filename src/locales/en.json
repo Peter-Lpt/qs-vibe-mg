@@ -72,7 +72,14 @@
     "from_plugin": "From Plugin",
     "enabled": "Enabled",
     "disabled": "Disabled",
-    "enabled_default": "Enabled by default"
+    "enabled_default": "Enabled by default",
+    "check_all_updates": "Check all plugin updates",
+    "updates_found": "Found {count} plugin(s) with updates",
+    "no_updates_found": "No plugin updates found",
+    "update_available": "Update available",
+    "update": "Update",
+    "update_marketplace": "Update all plugins from this marketplace",
+    "marketplace_updated": "Updated {count} plugin(s) from {marketplace}"
   },
   "manage": {
     "title": "Symlink Management",

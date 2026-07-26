@@ -72,7 +72,14 @@
     "from_plugin": "來自 Plugin",
     "enabled": "已啟用",
     "disabled": "已停用",
-    "enabled_default": "預設啟用"
+    "enabled_default": "預設啟用",
+    "check_all_updates": "檢查全部外掛更新",
+    "updates_found": "發現 {count} 個外掛有更新",
+    "no_updates_found": "未發現外掛更新",
+    "update_available": "有更新",
+    "update": "更新",
+    "update_marketplace": "更新此外掛市場的所有外掛",
+    "marketplace_updated": "已更新 {marketplace} 的 {count} 個外掛"
   },
   "manage": {
     "title": "軟連結管理",

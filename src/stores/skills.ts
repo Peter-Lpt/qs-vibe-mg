@@ -10,6 +10,25 @@ export interface SyncActionResult {
   warnings: string[];
 }
 
+// TTL 缓存：避免频繁检测更新
+const UPDATE_CHECK_TTL_MS = 60 * 60 * 1000; // 60 分钟
+const updateCheckCache = new Map<string, { timestamp: number; result: SkillUpdateCheck }>();
+
+function getCachedCheck(skillId: string): SkillUpdateCheck | null {
+  const cached = updateCheckCache.get(skillId);
+  if (!cached) return null;
+  const now = Date.now();
+  if (now - cached.timestamp > UPDATE_CHECK_TTL_MS) {
+    updateCheckCache.delete(skillId);
+    return null;
+  }
+  return cached.result;
+}
+
+function setCachedCheck(skillId: string, result: SkillUpdateCheck) {
+  updateCheckCache.set(skillId, { timestamp: Date.now(), result });
+}
+
 export const useSkillsStore = defineStore("skills", () => {
   const skills = ref<Skill[]>([]);
   const loading = ref(false);
@@ -141,8 +160,56 @@ export const useSkillsStore = defineStore("skills", () => {
     return skill;
   }
 
-  async function checkSkillUpdate(skillId: string): Promise<SkillUpdateCheck> {
+  async function updatePluginSkillsFromMarketplace(marketplace: string): Promise<string[]> {
+    const updatedIds = await invoke<string[]>("update_plugin_skills_from_marketplace", { marketplace });
+    // 清除已更新 skill 的缓存
+    for (const id of updatedIds) {
+      updateCheckCache.delete(id);
+    }
+    await refreshSkills();
+    return updatedIds;
+  }
+
+  // 检查插件更新（带 TTL 保护，进入页面时自动调用）
+  async function checkPluginUpdates(skillIds: string[]): Promise<Record<string, { available: boolean; error?: string }>> {
+    const results: Record<string, { available: boolean; error?: string }> = {};
+    const needsCheck: string[] = [];
+
+    // 先检查缓存
+    for (const id of skillIds) {
+      const cached = getCachedCheck(id);
+      if (cached) {
+        results[id] = { available: cached.available, error: cached.error };
+        updateChecks.value = { ...updateChecks.value, [id]: cached };
+      } else {
+        needsCheck.push(id);
+      }
+    }
+
+    // 对没有缓存的 skill 进行检测
+    for (const id of needsCheck) {
+      try {
+        const check = await checkSkillUpdate(id);
+        results[id] = { available: check.available, error: check.error };
+      } catch (e) {
+        results[id] = { available: false, error: String(e) };
+      }
+    }
+
+    return results;
+  }
+
+  async function checkSkillUpdate(skillId: string, force = false): Promise<SkillUpdateCheck> {
+    // 检查缓存（除非强制刷新）
+    if (!force) {
+      const cached = getCachedCheck(skillId);
+      if (cached) {
+        updateChecks.value = { ...updateChecks.value, [skillId]: cached };
+        return cached;
+      }
+    }
     const result = await invoke<SkillUpdateCheck>("check_skill_update", { skillId });
+    setCachedCheck(skillId, result);
     updateChecks.value = { ...updateChecks.value, [skillId]: result };
     return result;
   }
@@ -257,8 +324,10 @@ export const useSkillsStore = defineStore("skills", () => {
     installSkill,
     installSkillFromSource,
     updateSkill,
+    updatePluginSkillsFromMarketplace,
     checkSkillUpdate,
     checkAllSkillUpdates,
+    checkPluginUpdates,
     updateChecks,
     deleteSkill,
     previewSkill,

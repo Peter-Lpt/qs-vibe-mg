@@ -72,7 +72,14 @@
     "from_plugin": "来自 Plugin",
     "enabled": "已启用",
     "disabled": "已禁用",
-    "enabled_default": "默认启用"
+    "enabled_default": "默认启用",
+    "check_all_updates": "检查全部插件更新",
+    "updates_found": "发现 {count} 个插件有更新",
+    "no_updates_found": "未发现插件更新",
+    "update_available": "有更新",
+    "update": "更新",
+    "update_marketplace": "更新此市场的所有插件",
+    "marketplace_updated": "已更新 {marketplace} 的 {count} 个插件"
   },
   "manage": {
     "title": "软连接管理",

@@ -41,6 +41,7 @@ pub fn run() {
             commands::skills::list_skills,
             commands::skills::list_plugin_skills,
             commands::skills::adopt_plugin_skill,
+            commands::skills::update_plugin_skills_from_marketplace,
             commands::skills::check_skill_update,
             commands::skills::check_all_skill_updates,
             commands::skills::preview_skill,

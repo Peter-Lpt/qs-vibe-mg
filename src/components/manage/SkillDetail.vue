@@ -100,7 +100,14 @@ async function loadConflictSources() {
 
 async function checkForUpdate() {
   const source = props.skill.sources.find((item) => item.from === "vibe-lib");
-  if (!source?.origin || source.origin.method !== "git") {
+  if (!source?.origin) {
+    updateCheck.value = null;
+    return;
+  }
+  // 支持 git、npx、npm、marketplace 来源的更新检测
+  const method = source.origin.method;
+  const supportedMethods = ["git", "npx", "npm", "marketplace"];
+  if (!supportedMethods.includes(method)) {
     updateCheck.value = null;
     return;
   }
@@ -248,11 +255,17 @@ function updateStatusLabel(status?: string): string {
 }
 
 function canUpdateSource(source: SkillSource): boolean {
-  return (
-    source.from === "vibe-lib" &&
-    source.origin !== undefined &&
-    (source.origin.method === "git" || !!source.origin.update_command?.trim())
-  );
+  if (source.from !== "vibe-lib" || !source.origin) return false;
+  const method = source.origin.method;
+  // git 来源：始终支持更新
+  if (method === "git") return true;
+  // marketplace 来源：支持更新
+  if (method === "marketplace") return true;
+  // npx/npm 来源：有 update_command 时支持
+  if ((method === "npx" || method === "npm") && source.origin.update_command?.trim()) return true;
+  // local-folder 来源：有 update_command 时支持
+  if (method === "local-folder" && source.origin.update_command?.trim()) return true;
+  return false;
 }
 
 function sourceMethodLabel(method?: string): string {

@@ -12,6 +12,9 @@ const toast = useToast();
 const pluginSkills = ref<typeof skillsStore.skills>([]);
 const loading = ref(false);
 const searchQuery = ref("");
+const checkingUpdates = ref(false);
+const updateResults = ref<Record<string, { available: boolean; error?: string }>>({});
+const updatingMarketplace = ref<string | null>(null);
 
 // 获取插件类型标签（Claude / Codex / 其他）
 function getPluginTypeLabel(skill: typeof pluginSkills.value[0]): string {
@@ -82,10 +85,24 @@ async function fetchPluginSkills() {
     pluginSkills.value = await skillsStore.fetchPluginSkills();
     // 默认展开所有分组
     expandedGroups.value = new Set(pluginGroups.value.map((g) => g.key));
+    // 自动检查已认领 plugin 的更新（使用 TTL 缓存）
+    await autoCheckUpdates();
   } catch (e: unknown) {
     toast.show(String(e), "error");
   } finally {
     loading.value = false;
+  }
+}
+
+// 自动检查更新（使用 TTL 缓存，进入页面时调用）
+async function autoCheckUpdates() {
+  const adoptedSkills = pluginSkills.value.filter((s) => s.metadata?.adopted === "true");
+  if (adoptedSkills.length === 0) return;
+  try {
+    const results = await skillsStore.checkPluginUpdates(adoptedSkills.map((s) => s.id));
+    updateResults.value = results;
+  } catch {
+    // 静默失败，不打扰用户
   }
 }
 
@@ -100,6 +117,64 @@ async function handleAdopt(skillId: string) {
     expandedGroups.value = new Set([...expandedGroups.value].filter((k) => nonEmptyGroups.has(k)));
   } catch (e: unknown) {
     toast.show(String(e), "error");
+  }
+}
+
+// 手动检查已认领的 plugin skills 是否有更新（强制刷新，忽略 TTL）
+async function checkAllPluginUpdates() {
+  checkingUpdates.value = true;
+  try {
+    const adoptedSkills = pluginSkills.value.filter((s) => s.metadata?.adopted === "true");
+    const results: Record<string, { available: boolean; error?: string }> = {};
+    for (const skill of adoptedSkills) {
+      try {
+        const check = await skillsStore.checkSkillUpdate(skill.id, true); // force = true
+        results[skill.id] = { available: check.available, error: check.error };
+      } catch (e) {
+        results[skill.id] = { available: false, error: String(e) };
+      }
+    }
+    updateResults.value = results;
+    const availableCount = Object.values(results).filter((r) => r.available).length;
+    if (availableCount > 0) {
+      toast.show(t("plugins.updates_found", { count: availableCount }), "info");
+    } else {
+      toast.show(t("plugins.no_updates_found"), "success");
+    }
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  } finally {
+    checkingUpdates.value = false;
+  }
+}
+
+// 获取 marketplace 名称
+function getMarketplaceName(skill: typeof pluginSkills.value[0]): string | null {
+  const source = skill.sources.find(
+    (s) => s.from.startsWith("claude-plugin:") || s.from.startsWith("codex-plugin:")
+  );
+  if (!source) return null;
+  if (source.from.startsWith("claude-plugin:")) return source.from.replace("claude-plugin:", "");
+  if (source.from.startsWith("codex-plugin:")) return source.from.replace("codex-plugin:", "");
+  return null;
+}
+
+// 更新同一 marketplace 的所有 plugin skills
+async function handleUpdateMarketplace(marketplace: string) {
+  updatingMarketplace.value = marketplace;
+  try {
+    const updatedIds = await skillsStore.updatePluginSkillsFromMarketplace(marketplace);
+    toast.show(t("plugins.marketplace_updated", { count: updatedIds.length, marketplace }), "success");
+    // 清除已更新的 skill 的更新状态
+    const newResults = { ...updateResults.value };
+    for (const id of updatedIds) {
+      delete newResults[id];
+    }
+    updateResults.value = newResults;
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  } finally {
+    updatingMarketplace.value = null;
   }
 }
 
@@ -128,7 +203,15 @@ onMounted(() => {
         <span class="text-[11px]" style="color: var(--c-text-secondary);">
           {{ t("plugins.view_hint") }}
         </span>
-        <div class="ml-auto">
+        <div class="ml-auto flex items-center gap-1">
+          <button
+            class="action-toolbar-icon disabled:opacity-50 disabled:cursor-not-allowed"
+            :title="t('plugins.check_all_updates')"
+            :disabled="loading || checkingUpdates"
+            @click="checkAllPluginUpdates"
+          >
+            <CloudDownload :size="15" :class="{ 'animate-spin': checkingUpdates }" />
+          </button>
           <button
             class="action-toolbar-icon disabled:opacity-50 disabled:cursor-not-allowed"
             :title="t('manage.refresh')"
@@ -239,6 +322,15 @@ onMounted(() => {
               >
                 {{ t("manage.status_plugin") }}
               </span>
+              <!-- 更新可用状态 -->
+              <span
+                v-if="isAdopted(skill) && updateResults[skill.id]?.available"
+                class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 flex items-center gap-1"
+                style="background: var(--c-warning-light, rgba(234, 179, 8, 0.15)); color: var(--c-warning, #eab308);"
+              >
+                <CloudDownload :size="10" />
+                {{ t("plugins.update_available") }}
+              </span>
               <button
                 v-if="!isAdopted(skill)"
                 class="h-6 px-2 flex items-center justify-center rounded cursor-pointer transition-colors text-[10px] font-medium"
@@ -248,6 +340,18 @@ onMounted(() => {
               >
                 <DownloadCloud :size="12" class="mr-1" />
                 {{ t("plugins.adopt") }}
+              </button>
+              <!-- 更新按钮（已认领且有更新可用时显示） -->
+              <button
+                v-if="isAdopted(skill) && updateResults[skill.id]?.available && getMarketplaceName(skill)"
+                class="h-6 px-2 flex items-center justify-center rounded cursor-pointer transition-colors text-[10px] font-medium"
+                style="background: var(--c-warning-light, rgba(234, 179, 8, 0.15)); color: var(--c-warning, #eab308);"
+                :title="t('plugins.update_marketplace')"
+                :disabled="updatingMarketplace === getMarketplaceName(skill)"
+                @click.stop="handleUpdateMarketplace(getMarketplaceName(skill)!)"
+              >
+                <RefreshCw :size="12" class="mr-1" :class="{ 'animate-spin': updatingMarketplace === getMarketplaceName(skill) }" />
+                {{ t("plugins.update") }}
               </button>
             </div>
             <div v-if="skill.description" class="px-3.5 pb-3 text-[11px] line-clamp-2" style="color: var(--c-text-secondary);">

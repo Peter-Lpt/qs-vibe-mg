@@ -391,19 +391,25 @@ fn check_skill_update_for_skill(skill: &Skill) -> Result<SkillUpdateCheck, VibeE
         });
     };
 
-    if normalize_source_method(&origin.method) != SOURCE_METHOD_GIT {
-        return Ok(SkillUpdateCheck {
+    let method = normalize_source_method(&origin.method);
+    match method.as_str() {
+        SOURCE_METHOD_GIT => check_git_source_update(&skill_id, origin, checked_at),
+        SOURCE_METHOD_NPX | SOURCE_METHOD_NPM => {
+            check_npm_package_update(&skill_id, origin, checked_at)
+        }
+        SOURCE_METHOD_MARKETPLACE => {
+            check_plugin_update(&skill_id, origin, checked_at)
+        }
+        _ => Ok(SkillUpdateCheck {
             skill_id,
             method: origin.method.clone(),
             available: false,
             current_commit: None,
             remote_commit: None,
             checked_at,
-            error: Some("Only Git sources support remote update detection".to_string()),
-        });
+            error: Some(format!("来源 {} 暂不支持远程更新检测", origin.method)),
+        }),
     }
-
-    check_git_source_update(&skill_id, origin, checked_at)
 }
 
 fn check_git_source_update(
@@ -503,6 +509,263 @@ fn git_output(path: &Path, args: &[&str]) -> Option<String> {
     if !output.status.success() { return None; }
     let value = String::from_utf8(output.stdout).ok()?.trim().to_string();
     (!value.is_empty()).then_some(value)
+}
+
+/// 从 npx/npm 命令中提取包名
+/// 例如: "npx @anthropic-ai/claude-code-skills@latest install foo" → Some("@anthropic-ai/claude-code-skills")
+///        "npm exec skills -- install foo" → Some("skills")
+fn extract_package_name_from_command(command: &str) -> Option<String> {
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    if parts.len() < 2 {
+        return None;
+    }
+
+    // 跳过 npx/npm 部分
+    let cmd_part = if parts[0] == "npx" || parts[0] == "npm" {
+        if parts[0] == "npm" && parts.len() > 1 && (parts[1] == "exec" || parts[1] == "run") {
+            if parts.len() < 3 { return None; }
+            parts[2]
+        } else {
+            parts[1]
+        }
+    } else {
+        return None;
+    };
+
+    // 去除 @scope/ 和 @version 后缀
+    let name = if cmd_part.starts_with('@') {
+        // scoped package: @scope/name@version → @scope/name
+        let at_idx = cmd_part[1..].find('@').map(|i| i + 1);
+        match at_idx {
+            Some(idx) => &cmd_part[..idx],
+            None => cmd_part,
+        }
+    } else {
+        // unscoped: name@version → name
+        cmd_part.split('@').next().unwrap_or(cmd_part)
+    };
+
+    Some(name.to_string())
+}
+
+/// 检查 npm 包是否有更新
+/// 执行 `npm view <package> version` 获取远程最新版本
+/// 与 origin.version 比较
+fn check_npm_package_update(
+    skill_id: &str,
+    origin: &crate::models::origin::SkillOrigin,
+    checked_at: String,
+) -> Result<SkillUpdateCheck, VibeError> {
+    let method = origin.method.clone();
+
+    // 获取包名：优先使用 origin.package_name，否则从命令中提取
+    let package_name = origin.package_name.clone()
+        .or_else(|| origin.command.as_ref().and_then(|cmd| extract_package_name_from_command(cmd)));
+
+    let Some(package_name) = package_name else {
+        return Ok(SkillUpdateCheck {
+            skill_id: skill_id.to_string(),
+            method,
+            available: false,
+            current_commit: None,
+            remote_commit: None,
+            checked_at,
+            error: Some("无法从命令中提取包名".to_string()),
+        });
+    };
+
+    // 执行 npm view <package> version
+    let output = Command::new("npm")
+        .args(["view", &package_name, "version"])
+        .env("CI", "1")
+        .env("NPM_CONFIG_YES", "true")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let latest_version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let current_version = origin.version.clone().unwrap_or_default();
+
+            let available = !latest_version.is_empty()
+                && !current_version.is_empty()
+                && latest_version != current_version;
+
+            Ok(SkillUpdateCheck {
+                skill_id: skill_id.to_string(),
+                method,
+                available,
+                current_commit: if current_version.is_empty() { None } else { Some(current_version) },
+                remote_commit: if latest_version.is_empty() { None } else { Some(latest_version) },
+                checked_at,
+                error: None,
+            })
+        }
+        Ok(output) => {
+            let error = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            Ok(SkillUpdateCheck {
+                skill_id: skill_id.to_string(),
+                method,
+                available: false,
+                current_commit: origin.version.clone(),
+                remote_commit: None,
+                checked_at,
+                error: Some(if error.is_empty() { "npm view failed".to_string() } else { error }),
+            })
+        }
+        Err(e) => Ok(SkillUpdateCheck {
+            skill_id: skill_id.to_string(),
+            method,
+            available: false,
+            current_commit: origin.version.clone(),
+            remote_commit: None,
+            checked_at,
+            error: Some(format!("npm 命令执行失败: {}", e)),
+        }),
+    }
+}
+
+/// 检查 Plugin skill 是否有更新
+/// 比较 plugin cache 目录的内容哈希与中心库中的内容哈希
+fn check_plugin_update(
+    skill_id: &str,
+    origin: &crate::models::origin::SkillOrigin,
+    checked_at: String,
+) -> Result<SkillUpdateCheck, VibeError> {
+    let method = origin.method.clone();
+
+    // Plugin 来源需要有 source_path（plugin cache 中的路径）
+    let Some(source_path) = origin.source_path.as_deref() else {
+        return Ok(SkillUpdateCheck {
+            skill_id: skill_id.to_string(),
+            method,
+            available: false,
+            current_commit: None,
+            remote_commit: None,
+            checked_at,
+            error: Some("Plugin 来源缺少 source_path".to_string()),
+        });
+    };
+
+    let plugin_dir = Path::new(source_path);
+    if !plugin_dir.exists() {
+        return Ok(SkillUpdateCheck {
+            skill_id: skill_id.to_string(),
+            method,
+            available: false,
+            current_commit: None,
+            remote_commit: None,
+            checked_at,
+            error: Some("Plugin 来源目录不存在".to_string()),
+        });
+    }
+
+    // 计算 plugin cache 目录的内容哈希
+    let plugin_hash = crate::utils::hash::dir_hash(plugin_dir);
+
+    // 获取中心库中的内容哈希
+    let vibe_dir = vibe_skills_dir()?;
+    let skill_path = vibe_dir.join(skill_id);
+    let library_hash = if skill_path.exists() {
+        crate::utils::hash::dir_hash(&skill_path)
+    } else {
+        String::new()
+    };
+
+    let available = !plugin_hash.is_empty() && !library_hash.is_empty() && plugin_hash != library_hash;
+
+    Ok(SkillUpdateCheck {
+        skill_id: skill_id.to_string(),
+        method,
+        available,
+        current_commit: if library_hash.is_empty() { None } else { Some(library_hash) },
+        remote_commit: if plugin_hash.is_empty() { None } else { Some(plugin_hash) },
+        checked_at,
+        error: None,
+    })
+}
+
+/// 更新 Plugin skill
+/// 重新扫描 plugin cache，将最新文件复制到中心库
+/// 如果同一 marketplace 有多个 plugin，一起更新
+fn update_plugin_skill(
+    skill_path: &Path,
+    skill_id: &str,
+    origin: &mut crate::models::origin::SkillOrigin,
+) -> Result<(), VibeError> {
+    let Some(source_path) = origin.source_path.clone() else {
+        return Err(VibeError::Path(format!(
+            "Skill {} 缺少 Plugin 来源路径，无法更新",
+            skill_id
+        )));
+    };
+    let plugin_source_path = Path::new(&source_path);
+    if !plugin_source_path.exists() {
+        return Err(VibeError::Path(format!(
+            "Plugin 来源路径不存在：{}",
+            plugin_source_path.display()
+        )));
+    }
+
+    // 清空中心库内容并复制最新文件
+    if vibe_fs::is_link(skill_path) {
+        vibe_fs::remove_symlink(skill_path)?;
+    } else if skill_path.exists() {
+        vibe_fs::clear_skill_dir_contents(skill_path)?;
+    }
+
+    copy_skill_dir_all(plugin_source_path, skill_path)?;
+
+    // 更新 origin 的 last_checked_at
+    origin.last_checked_at = Some(datetime::chrono_now());
+    write_skill_origin(skill_path, origin)?;
+
+    Ok(())
+}
+
+/// 批量更新同一 marketplace 的所有 plugin skills
+/// 当一个 plugin 更新时，同一来源的其他 plugin 也会被更新
+#[tauri::command]
+pub fn update_plugin_skills_from_marketplace(marketplace: String) -> Result<Vec<String>, VibeError> {
+    let vibe_dir = vibe_skills_dir()?;
+    let all_skills = list_skills()?;
+    let mut updated_ids = Vec::new();
+
+    // 找到所有来自该 marketplace 的 plugin skills
+    let marketplace_skills: Vec<&Skill> = all_skills.iter().filter(|s| {
+        s.sources.iter().any(|source| {
+            source.origin.as_ref().map_or(false, |o| {
+                normalize_source_method(&o.method) == SOURCE_METHOD_MARKETPLACE
+                    && o.source_path.as_ref().map_or(false, |p| {
+                        // 检查 source_path 是否包含 marketplace 名称
+                        p.contains(&marketplace)
+                    })
+            })
+        })
+    }).collect();
+
+    for skill in marketplace_skills {
+        let skill_path = vibe_dir.join(&skill.id);
+        let Some(source) = skill.sources.iter().find(|s| s.from == "vibe-lib") else {
+            continue;
+        };
+        let Some(origin) = source.origin.as_ref() else {
+            continue;
+        };
+
+        let mut origin_clone = origin.clone();
+        match update_plugin_skill(&skill_path, &skill.id, &mut origin_clone) {
+            Ok(()) => {
+                updated_ids.push(skill.id.clone());
+            }
+            Err(e) => {
+                warn!(skill = %skill.id, error = %e, "Plugin skill update failed");
+            }
+        }
+    }
+
+    Ok(updated_ids)
 }
 
 #[tauri::command]
@@ -1246,14 +1509,7 @@ pub fn update_skill(skill_id: String, force: bool) -> Result<Skill, VibeError> {
                 )));
             }
         }
-        SOURCE_METHOD_NPM | SOURCE_METHOD_NPX | SOURCE_METHOD_MARKETPLACE => {
-            // Marketplace 来源由插件系统管理，不支持手动更新
-            if method == SOURCE_METHOD_MARKETPLACE {
-                return Err(VibeError::Path(format!(
-                    "Skill {} 来自 Plugin 市场，由插件系统管理，不支持手动更新",
-                    skill_id
-                )));
-            }
+        SOURCE_METHOD_NPM | SOURCE_METHOD_NPX => {
             if origin
                 .update_command
                 .as_ref()
@@ -1266,6 +1522,9 @@ pub fn update_skill(skill_id: String, force: bool) -> Result<Skill, VibeError> {
                     skill_id, method
                 )));
             }
+        }
+        SOURCE_METHOD_MARKETPLACE => {
+            update_plugin_skill(&skill_path, &skill_id, &mut origin)?;
         }
         _ => {
             return Err(VibeError::Path(format!(
