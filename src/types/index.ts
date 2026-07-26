@@ -58,6 +58,8 @@ export interface Skill {
   missing_name: boolean;
   from_plugin: boolean;
   plugin_source?: string;
+  /** Plugin 启用状态：true=已启用, false=已禁用, undefined=未配置（默认启用） */
+  plugin_enabled?: boolean;
 }
 
 export interface Agent {

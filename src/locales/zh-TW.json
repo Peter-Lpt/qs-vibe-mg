@@ -69,7 +69,10 @@
     "adopt_to_library": "認領到中心庫",
     "adopt_success": "已認領到中心庫",
     "adopted": "已認領",
-    "from_plugin": "來自 Plugin"
+    "from_plugin": "來自 Plugin",
+    "enabled": "已啟用",
+    "disabled": "已停用",
+    "enabled_default": "預設啟用"
   },
   "manage": {
     "title": "軟連結管理",

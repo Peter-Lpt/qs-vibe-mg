@@ -55,6 +55,10 @@ pub struct Skill {
     /// plugin 来源名称（如 claude-plugin:ruflo 中的 ruflo）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plugin_source: Option<String>,
+    /// plugin 启用状态（仅对 plugin skills 有效）
+    /// Some(true) = 已启用, Some(false) = 已禁用, None = 未配置（默认启用）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugin_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

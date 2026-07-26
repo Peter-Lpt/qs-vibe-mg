@@ -157,6 +157,7 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
                 missing_name,
                 from_plugin,
                 plugin_source,
+                plugin_enabled: None, // regular skills 不需要这个字段
             }
         })
         .collect();
@@ -218,6 +219,21 @@ pub fn list_plugin_skills() -> Result<Vec<Skill>, VibeError> {
             // Plugin skills 不检测冲突、断链、重复（由 plugin 系统管理）
             let missing_name = entry.name.is_empty();
 
+            // 获取 plugin 启用状态
+            let plugin_enabled = entry.sources.iter()
+                .find(|s| s.source_kind == "marketplace" || s.from.starts_with("claude-plugin:") || s.from.starts_with("codex-plugin:"))
+                .and_then(|s| {
+                    if s.from.starts_with("claude-plugin:") {
+                        let plugin_name = s.from.strip_prefix("claude-plugin:").unwrap_or("");
+                        get_plugin_enabled("claude-plugin", plugin_name)
+                    } else if s.from.starts_with("codex-plugin:") {
+                        let plugin_name = s.from.strip_prefix("codex-plugin:").unwrap_or("");
+                        get_plugin_enabled("codex-plugin", plugin_name)
+                    } else {
+                        None
+                    }
+                });
+
             Skill {
                 id,
                 name: entry.name,
@@ -238,6 +254,7 @@ pub fn list_plugin_skills() -> Result<Vec<Skill>, VibeError> {
                 missing_name,
                 from_plugin,
                 plugin_source,
+                plugin_enabled,
             }
         })
         .collect();
@@ -1110,6 +1127,7 @@ fn install_skill_from_materialized_source(
         missing_name: false,
         from_plugin: false,
         plugin_source: None,
+        plugin_enabled: None,
     })
 }
 
@@ -1523,6 +1541,103 @@ fn scan_project_sources(
         }
     }
     Ok(())
+}
+
+/// 读取 Claude Code 的 enabledPlugins 配置
+/// 从 ~/.claude/settings.json 读取 enabledPlugins 字段
+/// 返回 Map<plugin_key, enabled>，plugin_key 格式为 "name@marketplace"
+fn read_claude_enabled_plugins() -> Result<HashMap<String, bool>, VibeError> {
+    let home_dir = dirs::home_dir().ok_or_else(|| VibeError::Path("Home directory not found".to_string()))?;
+    let settings_path = home_dir.join(".claude").join("settings.json");
+
+    if !settings_path.exists() {
+        return Ok(HashMap::new());
+    }
+
+    let content = fs::read_to_string(&settings_path)?;
+    let settings: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| VibeError::Path(format!("Failed to parse Claude settings.json: {}", e)))?;
+
+    let mut result = HashMap::new();
+
+    if let Some(enabled_plugins) = settings.get("enabledPlugins").and_then(|v| v.as_object()) {
+        for (key, value) in enabled_plugins {
+            if let Some(enabled) = value.as_bool() {
+                result.insert(key.clone(), enabled);
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// 读取 Codex 的 plugin enabled 配置
+/// 从 ~/.codex/config.toml 读取 [plugins."name@marketplace"] 段落
+/// 返回 Map<plugin_key, enabled>
+fn read_codex_plugin_enabled() -> Result<HashMap<String, bool>, VibeError> {
+    let home_dir = dirs::home_dir().ok_or_else(|| VibeError::Path("Home directory not found".to_string()))?;
+    let config_path = home_dir.join(".codex").join("config.toml");
+
+    if !config_path.exists() {
+        return Ok(HashMap::new());
+    }
+
+    let content = fs::read_to_string(&config_path)?;
+    let config: toml::Value = toml::from_str(&content)
+        .map_err(|e| VibeError::Path(format!("Failed to parse Codex config.toml: {}", e)))?;
+
+    let mut result = HashMap::new();
+
+    if let Some(plugins) = config.get("plugins").and_then(|v| v.as_table()) {
+        for (key, value) in plugins {
+            if let Some(enabled) = value.get("enabled").and_then(|v| v.as_bool()) {
+                result.insert(key.clone(), enabled);
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+/// 获取 plugin 的启用状态
+/// 根据 plugin_type 和 plugin_name 查询对应配置
+/// 返回 Some(true) = 已启用, Some(false) = 已禁用, None = 未配置
+fn get_plugin_enabled(plugin_type: &str, plugin_name: &str) -> Option<bool> {
+    match plugin_type {
+        "claude-plugin" => {
+            // Claude Code: 查询 ~/.claude/settings.json 的 enabledPlugins
+            // plugin_key 格式为 "name@marketplace"
+            if let Ok(enabled_map) = read_claude_enabled_plugins() {
+                // 遍历所有 key，查找匹配的 plugin
+                for (key, enabled) in &enabled_map {
+                    // key 格式: "name@marketplace"
+                    if let Some(at_pos) = key.find('@') {
+                        let name = &key[..at_pos];
+                        if name == plugin_name {
+                            return Some(*enabled);
+                        }
+                    }
+                }
+            }
+            // 未配置时返回 None（默认启用）
+            None
+        }
+        "codex-plugin" => {
+            // Codex: 查询 ~/.codex/config.toml 的 [plugins."name@marketplace"]
+            if let Ok(enabled_map) = read_codex_plugin_enabled() {
+                for (key, enabled) in &enabled_map {
+                    if let Some(at_pos) = key.find('@') {
+                        let name = &key[..at_pos];
+                        if name == plugin_name {
+                            return Some(*enabled);
+                        }
+                    }
+                }
+            }
+            None
+        }
+        _ => None,
+    }
 }
 
 /// 扫描 Claude Plugin 和 Codex Plugin 市场安装的 skill

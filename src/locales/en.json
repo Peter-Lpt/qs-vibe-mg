@@ -69,7 +69,10 @@
     "adopt_to_library": "Adopt to Library",
     "adopt_success": "Adopted to library",
     "adopted": "Adopted",
-    "from_plugin": "From Plugin"
+    "from_plugin": "From Plugin",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "enabled_default": "Enabled by default"
   },
   "manage": {
     "title": "Symlink Management",

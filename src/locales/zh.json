@@ -69,7 +69,10 @@
     "adopt_to_library": "认领到中心库",
     "adopt_success": "已认领到中心库",
     "adopted": "已认领",
-    "from_plugin": "来自 Plugin"
+    "from_plugin": "来自 Plugin",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "enabled_default": "默认启用"
   },
   "manage": {
     "title": "软连接管理",

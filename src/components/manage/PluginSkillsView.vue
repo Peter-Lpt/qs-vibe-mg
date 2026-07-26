@@ -215,6 +215,16 @@ onMounted(() => {
               <span class="text-sm font-semibold truncate flex-1" style="color: var(--c-text-strong);">
                 {{ skill.name || skill.id }}
               </span>
+              <!-- Plugin 启用/禁用状态 -->
+              <span
+                v-if="skill.plugin_enabled === false"
+                class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 flex items-center gap-1"
+                style="background: var(--c-danger-light, rgba(239, 68, 68, 0.15)); color: var(--c-danger, #ef4444);"
+              >
+                <XCircle :size="10" />
+                {{ t("plugins.disabled") }}
+              </span>
+              <!-- 已认领状态 -->
               <span
                 v-if="isAdopted(skill)"
                 class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
