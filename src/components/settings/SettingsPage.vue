@@ -24,6 +24,21 @@ const locales: { value: Locale; label: string }[] = [
   { value: "zh-TW", label: "繁體中文" },
 ];
 
+const closeBehaviorOptions: { value: string; labelKey: string }[] = [
+  { value: "ask", labelKey: "settings.close_behavior_ask" },
+  { value: "minimize_to_tray", labelKey: "settings.close_behavior_minimize" },
+  { value: "close", labelKey: "settings.close_behavior_close" },
+];
+
+const currentCloseBehavior = ref<string>(
+  localStorage.getItem("vibe-close-behavior") || "ask"
+);
+
+function handleCloseBehaviorChange(behavior: string) {
+  currentCloseBehavior.value = behavior;
+  localStorage.setItem("vibe-close-behavior", behavior);
+}
+
 const showMigrateConfirm = ref(false);
 const pendingPath = ref("");
 const savingPath = ref(false);
@@ -337,6 +352,27 @@ onMounted(() => {
             @click="handleLocaleChange(loc.value)"
           >
             {{ loc.label }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 关闭按钮行为 -->
+      <div>
+        <label class="text-xs font-medium block mb-2" style="color: var(--c-text);">{{ t('settings.close_behavior') }}</label>
+        <p class="text-[11px] mb-2" style="color: var(--c-text-secondary);">{{ t('settings.close_behavior_hint') }}</p>
+        <div class="flex gap-2">
+          <button
+            v-for="opt in closeBehaviorOptions"
+            :key="opt.value"
+            class="px-3 py-1.5 text-xs rounded-md border cursor-pointer transition-colors"
+            :style="{
+              background: currentCloseBehavior === opt.value ? 'var(--c-primary)' : 'var(--c-surface)',
+              color: currentCloseBehavior === opt.value ? 'white' : 'var(--c-text)',
+              borderColor: currentCloseBehavior === opt.value ? 'var(--c-primary)' : 'var(--c-border)',
+            }"
+            @click="handleCloseBehaviorChange(opt.value)"
+          >
+            {{ t(opt.labelKey) }}
           </button>
         </div>
       </div>

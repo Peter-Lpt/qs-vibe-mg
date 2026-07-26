@@ -32,6 +32,9 @@ pub struct UiConfig {
     pub theme: String,
     #[serde(default = "default_locale")]
     pub locale: String,
+    /// 关闭按钮行为：minimize_to_tray 或 close
+    #[serde(default = "default_close_behavior")]
+    pub close_behavior: String,
 }
 
 impl Default for UiConfig {
@@ -39,8 +42,13 @@ impl Default for UiConfig {
         Self {
             theme: default_theme(),
             locale: default_locale(),
+            close_behavior: default_close_behavior(),
         }
     }
+}
+
+fn default_close_behavior() -> String {
+    "ask".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

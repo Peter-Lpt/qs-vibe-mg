@@ -35,7 +35,8 @@ const skillsViewId = computed<SmartViewId>(() =>
     : appStore.activeView
 );
 const defaultDomain = computed(() => viewToFilterPreset(skillsViewId.value).domain);
-const filterModel = useManageFilters(skillList, detectedAgents, defaultDomain);
+const updateChecks = computed(() => skillsStore.updateChecks);
+const filterModel = useManageFilters(skillList, detectedAgents, defaultDomain, updateChecks);
 const { viewCounts } = useSmartViews(skillList, detectedAgents, filterModel.state);
 
 // ── Plugin skills 计数 ──
@@ -137,6 +138,14 @@ function handleGlobalContextMenu(e: MouseEvent) {
 
 let unlistenResize: (() => void) | null = null;
 let unlistenScaleChange: (() => void) | null = null;
+let unlistenTrayFilterErrors: (() => void) | null = null;
+
+// 切换到异常筛选视图
+function switchToErrorFilter() {
+  appStore.setActiveView("all");
+  filterModel.clearFilters();
+  filterModel.issues.value = new Set(["update_error"]);
+}
 
 onMounted(async () => {
   appStore.init();
@@ -154,6 +163,10 @@ onMounted(async () => {
   unlistenScaleChange = await appWindow.onScaleChanged(() => {
     window.dispatchEvent(new Event("resize"));
   });
+  // 监听系统托盘的「更新异常」菜单点击事件
+  unlistenTrayFilterErrors = await appWindow.listen("tray-filter-update-errors", () => {
+    switchToErrorFilter();
+  });
 });
 
 onUnmounted(() => {
@@ -161,6 +174,7 @@ onUnmounted(() => {
   document.removeEventListener("contextmenu", handleGlobalContextMenu);
   unlistenResize?.();
   unlistenScaleChange?.();
+  unlistenTrayFilterErrors?.();
 });
 </script>
 

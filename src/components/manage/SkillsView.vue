@@ -266,6 +266,13 @@ async function checkAllUpdates() {
   }
 }
 
+// ── 筛选更新异常 ──────────────────────────────────
+function filterToErrors() {
+  // 清除其他筛选条件，只显示更新异常
+  filterModel.clearFilters();
+  filterModel.issues.value = new Set(["update_error"]);
+}
+
 // ── 回到顶部 ──────────────────────────────────
 const showScrollToTop = ref(false);
 let scrollContainer: HTMLElement | null = null;
@@ -397,6 +404,19 @@ defineExpose({
               class="absolute -right-1 -top-1 min-w-3.5 rounded-full px-1 text-[9px] leading-3.5"
               style="background: var(--c-warning); color: white;"
             >{{ availableUpdateCount }}</span>
+          </button>
+          <!-- 更新异常徽章 -->
+          <button
+            v-if="skillsStore.updateErrorCount > 0"
+            class="action-toolbar-icon relative"
+            :title="t('manage.update_errors', { count: skillsStore.updateErrorCount })"
+            @click="filterToErrors"
+          >
+            <TriangleAlert :size="15" style="color: var(--c-danger);" />
+            <span
+              class="absolute -right-1 -top-1 min-w-3.5 rounded-full px-1 text-[9px] leading-3.5"
+              style="background: var(--c-danger); color: white;"
+            >{{ skillsStore.updateErrorCount }}</span>
           </button>
           <button class="action-toolbar-primary" @click="showInstall = true">
             <Plus :size="15" />

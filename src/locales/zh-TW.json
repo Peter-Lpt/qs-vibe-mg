@@ -12,7 +12,15 @@
     "version": "v0.3",
     "window_minimize": "最小化",
     "window_maximize": "最大化",
-    "window_close": "關閉"
+    "window_close": "最小化到系統匣",
+    "tray_show": "顯示視窗",
+    "tray_quit": "結束",
+    "tray_tooltip": "QS-Vibe - AI Skills Manager",
+    "close_dialog_title": "關閉選項",
+    "close_dialog_message": "您希望如何處理視窗關閉？",
+    "minimize_to_tray": "最小化到系統匣",
+    "close_app": "直接關閉應用",
+    "remember_choice": "記住我的選擇（可在設定中修改）"
   },
   "tabs": {
     "history": "操作歷史"
@@ -156,6 +164,8 @@
     "check_all_updates": "檢查全部 Skill 更新",
     "updates_found": "發現 {count} 個 Skill 有更新",
     "no_updates_found": "未發現 Skill 更新",
+    "update_errors": "有 {count} 個更新檢測異常",
+    "filter_update_errors": "篩選更新異常",
     "workbench_scroll_drag": "拖曳控制 Agent 橫向捲動",
     "source_update_unknown": "更新未知",
     "source_update_hint": "更新邊界：只有 provenance 中存在可回放更新路由時才允許自動更新，否則只能 best-effort 或未知。",
@@ -449,6 +459,11 @@
     "theme_light": "亮色",
     "theme_dark": "暗色",
     "language": "語言",
+    "close_behavior": "關閉按鈕",
+    "close_behavior_hint": "點擊視窗關閉按鈕時的行為",
+    "close_behavior_ask": "每次詢問",
+    "close_behavior_minimize": "最小化到系統匣",
+    "close_behavior_close": "直接關閉",
     "vibe_skills_path": "資料目錄路徑",
     "vibe_skills_path_hint": "skill 資料儲存位置，預設為 ~/.vibe-skills/",
     "pick_vibe_path": "選擇目錄",

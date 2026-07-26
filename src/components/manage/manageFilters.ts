@@ -1,8 +1,8 @@
 import { computed, ref, type ComputedRef, type Ref, watch } from "vue";
-import type { Agent, Skill, SkillSource } from "../../types";
+import type { Agent, Skill, SkillSource, SkillUpdateCheck } from "../../types";
 
 export type StatusPreset = "all" | "needs_attention" | "linked_any" | "unlinked_all";
-export type IssueFilter = "conflict" | "dangling" | "duplicate";
+export type IssueFilter = "conflict" | "dangling" | "duplicate" | "update_error";
 export type LibraryScope = "missing_library" | "library_only";
 export type AgentMatch = "any" | "exclude";
 export type SortMode = "status" | "updated" | "name" | "linked_agents";
@@ -133,12 +133,13 @@ export function matchesStatusPreset(
   return !sources.hasAgentSymlink;
 }
 
-export function matchesIssues(skill: Skill, issues: ReadonlySet<IssueFilter>): boolean {
+export function matchesIssues(skill: Skill, issues: ReadonlySet<IssueFilter>, updateChecks?: Record<string, SkillUpdateCheck>): boolean {
   if (issues.size === 0) return true;
   return (
     (issues.has("conflict") && skill.has_conflict) ||
     (issues.has("dangling") && skill.has_dangling) ||
-    (issues.has("duplicate") && skill.is_duplicate)
+    (issues.has("duplicate") && skill.is_duplicate) ||
+    (issues.has("update_error") && updateChecks?.[skill.id]?.error != null)
   );
 }
 
@@ -221,12 +222,17 @@ export function sortSkills(skills: readonly Skill[], sort: SortMode, agents: rea
   });
 }
 
-export function filterSkills(skills: readonly Skill[], state: ManageFilterState, agents: readonly Agent[]): Skill[] {
+export function filterSkills(
+  skills: readonly Skill[],
+  state: ManageFilterState,
+  agents: readonly Agent[],
+  updateChecks?: Record<string, SkillUpdateCheck>
+): Skill[] {
   const filtered = skills.filter((skill) =>
     matchesDomain(skill, state.domain) &&
     matchesQuery(skill, state.query) &&
     matchesStatusPreset(skill, state.statusPreset, agents) &&
-    matchesIssues(skill, state.issues) &&
+    matchesIssues(skill, state.issues, updateChecks) &&
     matchesLibraryScope(skill, state.libraryScope, agents) &&
     matchesAgentScope(skill, state.agentIds, state.agentMatch)
   );
@@ -242,12 +248,13 @@ export interface FacetCounts {
 export function computeFacetCounts(
   skills: readonly Skill[],
   state: ManageFilterState,
-  agents: readonly Agent[]
+  agents: readonly Agent[],
+  updateChecks?: Record<string, SkillUpdateCheck>
 ): FacetCounts {
   const withoutStatus = { ...state, statusPreset: "all" as const };
   const withoutIssues = { ...state, issues: new Set<IssueFilter>() };
   const withoutLibrary = { ...state, libraryScope: new Set<LibraryScope>() };
-  const count = (candidate: ManageFilterState): number => filterSkills(skills, candidate, agents).length;
+  const count = (candidate: ManageFilterState): number => filterSkills(skills, candidate, agents, updateChecks).length;
   return {
     status: {
       all: count(withoutStatus),
@@ -259,6 +266,7 @@ export function computeFacetCounts(
       conflict: count({ ...withoutIssues, issues: new Set(["conflict"]) }),
       dangling: count({ ...withoutIssues, issues: new Set(["dangling"]) }),
       duplicate: count({ ...withoutIssues, issues: new Set(["duplicate"]) }),
+      update_error: count({ ...withoutIssues, issues: new Set(["update_error"]) }),
     },
     library: {
       missing_library: count({ ...withoutLibrary, libraryScope: new Set(["missing_library"]) }),
@@ -270,7 +278,8 @@ export function computeFacetCounts(
 export function useManageFilters(
   skills: ComputedRef<Skill[]> | Ref<Skill[]>,
   agents: ComputedRef<Agent[]> | Ref<Agent[]>,
-  defaultDomain?: ComputedRef<DomainScope> | Ref<DomainScope>
+  defaultDomain?: ComputedRef<DomainScope> | Ref<DomainScope>,
+  updateChecks?: ComputedRef<Record<string, SkillUpdateCheck>> | Ref<Record<string, SkillUpdateCheck>>
 ) {
   const query = ref("");
   const statusPreset = ref<StatusPreset>("all");
@@ -291,8 +300,8 @@ export function useManageFilters(
     sort: sort.value,
     domain: domain.value,
   }));
-  const filteredSkills = computed(() => filterSkills(skills.value, state.value, agents.value));
-  const facetCounts = computed(() => computeFacetCounts(skills.value, state.value, agents.value));
+  const filteredSkills = computed(() => filterSkills(skills.value, state.value, agents.value, updateChecks?.value));
+  const facetCounts = computed(() => computeFacetCounts(skills.value, state.value, agents.value, updateChecks?.value));
   const activeFilterCount = computed(() =>
     Number(Boolean(query.value.trim())) +
     Number(statusPreset.value !== "all") +

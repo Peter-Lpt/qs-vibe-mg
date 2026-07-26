@@ -94,6 +94,7 @@ export interface AppConfig {
   ui: {
     theme: string;
     locale: string;
+    close_behavior: "ask" | "minimize_to_tray" | "close";
   };
   history: {
     max_entries: number;

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAppStore } from "../../stores/app";
@@ -6,6 +7,13 @@ import { useAppStore } from "../../stores/app";
 const { t } = useI18n();
 const appStore = useAppStore();
 const appWindow = getCurrentWindow();
+
+// 关闭行为：ask | minimize_to_tray | close
+const closeBehavior = ref<string>(
+  localStorage.getItem("vibe-close-behavior") || "ask"
+);
+const showCloseDialog = ref(false);
+const rememberChoice = ref(false);
 
 async function minimizeWindow() {
   await appWindow.minimize();
@@ -15,8 +23,41 @@ async function toggleMaximizeWindow() {
   await appWindow.toggleMaximize();
 }
 
+async function hideWindow() {
+  await appWindow.hide();
+}
+
 async function closeWindow() {
   await appWindow.close();
+}
+
+async function handleCloseClick() {
+  const behavior = closeBehavior.value;
+  if (behavior === "minimize_to_tray") {
+    await hideWindow();
+  } else if (behavior === "close") {
+    await closeWindow();
+  } else {
+    // "ask" - 显示选择对话框
+    showCloseDialog.value = true;
+  }
+}
+
+async function handleDialogChoice(choice: "minimize_to_tray" | "close") {
+  showCloseDialog.value = false;
+  if (rememberChoice.value) {
+    closeBehavior.value = choice;
+    localStorage.setItem("vibe-close-behavior", choice);
+  }
+  if (choice === "minimize_to_tray") {
+    await hideWindow();
+  } else {
+    await closeWindow();
+  }
+}
+
+function cancelDialog() {
+  showCloseDialog.value = false;
 }
 
 async function handleTitlebarMouseDown(event: MouseEvent) {
@@ -71,7 +112,7 @@ async function handleTitlebarMouseDown(event: MouseEvent) {
         <button class="window-button" :title="t('app.window_maximize')" @click.stop="toggleMaximizeWindow">
           <Square :size="12" />
         </button>
-        <button class="window-button window-button-close" :title="t('app.window_close')" @click.stop="closeWindow">
+        <button class="window-button window-button-close" :title="t('app.window_close')" @click.stop="handleCloseClick">
           <X :size="15" />
         </button>
       </div>
@@ -83,5 +124,96 @@ async function handleTitlebarMouseDown(event: MouseEvent) {
         <slot />
       </div>
     </div>
+
+    <!-- 关闭行为选择对话框 -->
+    <Teleport to="body">
+      <div
+        v-if="showCloseDialog"
+        class="dialog-overlay"
+        @click.self="cancelDialog"
+      >
+        <div class="dialog-content" style="background: var(--c-surface); border: 1px solid var(--c-border);">
+          <h3 class="text-sm font-semibold mb-3" style="color: var(--c-text-strong);">
+            {{ t('app.close_dialog_title') }}
+          </h3>
+          <p class="text-xs mb-4" style="color: var(--c-text-secondary);">
+            {{ t('app.close_dialog_message') }}
+          </p>
+          <div class="flex flex-col gap-2 mb-4">
+            <button
+              class="dialog-button primary"
+              @click="handleDialogChoice('minimize_to_tray')"
+            >
+              <Minimize2 :size="14" class="mr-2" />
+              {{ t('app.minimize_to_tray') }}
+            </button>
+            <button
+              class="dialog-button secondary"
+              @click="handleDialogChoice('close')"
+            >
+              <X :size="14" class="mr-2" />
+              {{ t('app.close_app') }}
+            </button>
+          </div>
+          <label class="flex items-center gap-2 text-xs cursor-pointer" style="color: var(--c-text-secondary);">
+            <input v-model="rememberChoice" type="checkbox" class="rounded" />
+            {{ t('app.remember_choice') }}
+          </label>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.dialog-content {
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 300px;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.dialog-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dialog-button.primary {
+  background: var(--c-primary);
+  color: white;
+}
+
+.dialog-button.primary:hover {
+  opacity: 0.9;
+}
+
+.dialog-button.secondary {
+  background: var(--c-surface-hover);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+}
+
+.dialog-button.secondary:hover {
+  background: var(--c-border);
+}
+</style>

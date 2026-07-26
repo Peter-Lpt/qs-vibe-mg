@@ -4,7 +4,17 @@ mod models;
 mod parsers;
 mod utils;
 
+use std::sync::atomic::{AtomicU32, Ordering};
+
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Emitter, Manager, Runtime,
+};
 use tracing_subscriber::{fmt, EnvFilter};
+
+// 全局更新异常计数
+static UPDATE_ERROR_COUNT: AtomicU32 = AtomicU32::new(0);
 
 fn init_logger() {
     let log_dir = dirs::data_local_dir()
@@ -31,12 +41,102 @@ fn init_logger() {
     tracing::info!("Logger initialized, log dir: {:?}", log_dir);
 }
 
+/// 构建托盘菜单
+fn build_tray_menu<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
+    let error_count = UPDATE_ERROR_COUNT.load(Ordering::Relaxed);
+
+    let update_error_i = if error_count > 0 {
+        MenuItem::with_id(
+            app,
+            "update_errors",
+            format!("更新异常 ({})", error_count),
+            true,
+            None::<&str>,
+        )?
+    } else {
+        MenuItem::with_id(app, "update_errors", "更新异常", false, None::<&str>)?
+    };
+
+    let show_i = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+    let quit_i = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+
+    Menu::with_items(app, &[&update_error_i, &show_i, &quit_i])
+}
+
+/// 更新托盘菜单（当前端检测到异常数量变化时调用）
+#[tauri::command]
+fn update_tray_menu<R: Runtime>(app: tauri::AppHandle<R>, error_count: u32) -> Result<(), String> {
+    UPDATE_ERROR_COUNT.store(error_count, Ordering::Relaxed);
+
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let menu = build_tray_menu(&app).map_err(|e| e.to_string())?;
+        tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logger();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            // 创建系统托盘菜单
+            let menu = build_tray_menu(app.handle())?;
+
+            // 创建系统托盘图标
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("QS-Vibe - AI Skills Manager")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, event| {
+                    match event {
+                        // 左键点击托盘图标：显示/聚焦窗口
+                        TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } => {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        _ => {}
+                    }
+                })
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "update_errors" => {
+                        // 显示窗口并通知前端筛选异常
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            // 发送事件到前端，触发异常筛选
+                            let _ = window.emit("tray-filter-update-errors", ());
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .build(app)?;
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::skills::list_skills,
             commands::skills::list_plugin_skills,
@@ -89,6 +189,7 @@ pub fn run() {
             commands::config::write_file_to_path,
             commands::config::read_file_from_path,
             commands::logger::log_message,
+            update_tray_menu,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

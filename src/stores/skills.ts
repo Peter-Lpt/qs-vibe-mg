@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { Skill, DashboardData, SkillIssue, SkillUpdateCheck } from "../types";
 import { useAgentsStore } from "./agents";
@@ -220,6 +220,29 @@ export const useSkillsStore = defineStore("skills", () => {
     return results;
   }
 
+  // 更新异常：有 error 的检测结果
+  const updateErrors = computed(() => {
+    const errors: Record<string, string> = {};
+    for (const [skillId, check] of Object.entries(updateChecks.value)) {
+      if (check.error) {
+        errors[skillId] = check.error;
+      }
+    }
+    return errors;
+  });
+
+  // 更新异常数量
+  const updateErrorCount = computed(() => Object.keys(updateErrors.value).length);
+
+  // 监听异常数量变化，更新系统托盘菜单
+  watch(updateErrorCount, async (count) => {
+    try {
+      await invoke("update_tray_menu", { errorCount: count });
+    } catch {
+      // 静默失败，不影响主流程
+    }
+  });
+
   async function deleteSkill(skillId: string) {
     await invoke("delete_library_skill", { skillId });
     refreshSkills();
@@ -329,6 +352,8 @@ export const useSkillsStore = defineStore("skills", () => {
     checkAllSkillUpdates,
     checkPluginUpdates,
     updateChecks,
+    updateErrors,
+    updateErrorCount,
     deleteSkill,
     previewSkill,
     previewSkillAtPath,

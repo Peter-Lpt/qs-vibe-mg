@@ -12,7 +12,15 @@
     "version": "v0.3",
     "window_minimize": "Minimize",
     "window_maximize": "Maximize",
-    "window_close": "Close"
+    "window_close": "Minimize to Tray",
+    "tray_show": "Show Window",
+    "tray_quit": "Quit",
+    "tray_tooltip": "QS-Vibe - AI Skills Manager",
+    "close_dialog_title": "Close Options",
+    "close_dialog_message": "How would you like to handle the window close?",
+    "minimize_to_tray": "Minimize to System Tray",
+    "close_app": "Close Application",
+    "remember_choice": "Remember my choice (can be changed in Settings)"
   },
   "tabs": {
     "history": "History"
@@ -160,6 +168,8 @@
     "check_all_updates": "Check all skill updates",
     "updates_found": "{count} skill updates available",
     "no_updates_found": "No skill updates found",
+    "update_errors": "{count} update check errors",
+    "filter_update_errors": "Filter update errors",
     "workbench_scroll_drag": "Drag to scroll agents",
     "source_update_unknown": "Update unknown",
     "source_update_hint": "Update boundary: automatic only when provenance contains a replayable update route; otherwise best-effort or unknown.",
@@ -449,6 +459,11 @@
     "theme_light": "Light",
     "theme_dark": "Dark",
     "language": "Language",
+    "close_behavior": "Close Button",
+    "close_behavior_hint": "Action when clicking the window close button",
+    "close_behavior_ask": "Ask each time",
+    "close_behavior_minimize": "Minimize to tray",
+    "close_behavior_close": "Close app",
     "vibe_skills_path": "Data Directory",
     "vibe_skills_path_hint": "Where skill data is stored, default: ~/.vibe-skills/",
     "pick_vibe_path": "Browse",
