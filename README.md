@@ -1,109 +1,108 @@
-# QS-Vibe
+# QS-Vibe-MG
 
-跨平台桌面应用，用于统一管理多个 AI Coding Agent 的 Skills。
+> Cross-platform AI agent skills manager — Tauri 2 + Vue 3 + Rust
 
-基于 **Tauri 2 + Rust + Vue 3** 构建，以 `~/.vibe-skills/` 作为统一技能库，通过符号链接实现多 Agent 共享。
+Manage and sync skills across Claude Code, Codex CLI, Hermes, OpenCode, MiMo Code, Pi Agent and more via a unified library.
 
-> 遵循 [Agent Skills](https://agentskills.io/) 开放标准。
+[简体中文](./README.zh.md) | English
 
-## 功能特性
+---
 
-### Skill 管理
+## Features
 
-- 统一查看所有 Agent 的 Skills，按来源、状态、Agent 关系筛选
-- 从 Agent 目录同步到统一技能库，或从技能库关联到 Agent
-- 支持批量操作：同步、关联、修复冲突和断链
-- Skill 工作台视图，自适应单 Agent / 多 Agent 布局
+### Skill Management
 
-### Plugin 支持
+- Unified view of all agent skills, filter by source, status, and agent relationship
+- Sync from agent directory to unified library, or link from library to agent
+- Batch operations: sync, link, repair conflicts and broken links
+- Skill workbench view with adaptive single/multi-agent layout
 
-- 扫描 Claude Code 和 Codex 的 Plugin 市场缓存
-- 显示 Plugin 启用/禁用状态
-- 认领 Plugin Skills 到统一技能库
-- 检测 Plugin 更新（内容哈希比较）
-- 同一市场的 Plugin 批量更新
+### Plugin Support
 
-### Skill 更新检测
+- Scan Claude Code and Codex plugin marketplace cache
+- Show plugin enable/disable status
+- Claim plugin skills into unified library
+- Detect plugin updates (content hash comparison)
+- Batch update plugins from the same marketplace
 
-- **Git 来源**：`git fetch` + commit 比对，`git pull --ff-only` 执行更新
-- **NPX/NPM 来源**：`npm view` 检查远程版本，重新执行安装命令更新
-- **Plugin 来源**：内容哈希比较，从缓存目录同步最新文件
-- TTL 缓存机制，避免频繁检测
+### Update Detection
 
-### 来源溯源
+- **Git**: `git fetch` + commit diff, `git pull --ff-only` for updates
+- **NPX/NPM**: `npm view` for remote version check, re-run install command
+- **Plugin**: content hash comparison, sync latest files from cache
+- TTL cache to avoid frequent checks
 
-- 记录每个 Skill 的安装来源（Git / 本地目录 / NPM / NPX / Plugin 市场）
-- 支持 Git 远程 URL、commit SHA、branch 等元数据
-- 来源可信度推断和更新状态标记
+### Source Provenance
 
-### Agent 管理
+- Track installation source for each skill (Git / local folder / NPM / NPX / plugin marketplace)
+- Record Git remote URL, commit SHA, branch metadata
+- Source trust level inference and update status marking
 
-- 自动检测常见 Agent 的技能目录
-- 支持自定义 Agent 配置
-- Agent 启用/禁用控制
+### Agent Management
 
-### 其他
+- Auto-detect skill directories for common agents
+- Custom agent configuration support
+- Agent enable/disable control
 
-- 操作历史记录，支持撤销/重做
-- 浅色/深色主题切换
-- 简体中文 / English / 繁體中文
+### Others
 
-## 技术栈
+- Operation history with undo/redo
+- Light / dark theme
+- Simplified Chinese / English / Traditional Chinese
 
-| 层级 | 技术 |
-|------|------|
-| 桌面容器 | Tauri 2 |
-| 后端 | Rust |
-| 前端 | Vue 3 + TypeScript |
-| 构建工具 | Vite |
-| 样式 | Tailwind CSS 4 |
-| 状态管理 | Pinia |
-| 国际化 | vue-i18n |
-| 图标 | Lucide |
+## Supported Agents
 
-## 快速开始
-
-### 环境要求
-
-- Node.js 18+
-- pnpm
-- Rust stable
-- Tauri 2 系统依赖（[官方文档](https://v2.tauri.app/start/prerequisites/)）
-
-### 安装与运行
-
-```bash
-# 安装依赖
-pnpm install
-
-# 启动开发服务器（仅前端）
-pnpm dev
-
-# 启动完整 Tauri 应用
-pnpm tauri dev
-
-# 构建生产版本
-pnpm tauri build
-```
-
-### Windows 注意事项
-
-- 创建符号链接需要开启开发者模式或以管理员权限运行
-- 如使用非默认 Rust 路径，需设置 `RUSTUP_HOME` 和 `CARGO_HOME` 环境变量
-
-## 支持的 Agent
-
-| Agent | 默认技能目录 |
-|-------|-------------|
+| Agent | Default Skills Directory |
+|-------|-------------------------|
 | Claude Code | `~/.claude/skills/` |
 | Hermes | `%LOCALAPPDATA%/hermes/skills/` |
 | Pi Agent | `~/.pi/agent/skills/` |
 | OpenCode | `~/.config/opencode/skills/` |
 | Codex CLI | `~/.codex/skills/` |
 | MiMo Code | `~/.config/mimocode/skills/` |
-| 公共目录 | `~/.agents/skills/` |
+| Shared | `~/.agents/skills/` |
 
-可在设置中自定义路径。
+Custom paths can be configured in Settings.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Desktop | Tauri 2 |
+| Backend | Rust |
+| Frontend | Vue 3 + TypeScript |
+| Build | Vite |
+| State | Pinia |
+| Styling | Tailwind CSS 4 |
+| i18n | vue-i18n |
+| Icons | Lucide |
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- pnpm
+- Rust stable
+- Tauri 2 system dependencies ([official docs](https://v2.tauri.app/start/prerequisites/))
+
+### Install & Run
+
+```bash
+pnpm install
+pnpm tauri dev
+```
+
+### Build
+
+```bash
+pnpm tauri build
+```
+
+### Windows Notes
+
+- Symlink requires Developer Mode or Administrator privileges
+- If using non-default Rust paths, set `RUSTUP_HOME` and `CARGO_HOME` environment variables
 
 ## License
 
