@@ -176,6 +176,8 @@
     "update_skill": "Update Skill",
     "updating_skill": "Updating",
     "skill_updated": "Updated {skill}",
+    "skill_update_failed": "Failed to update {skill}: {error}",
+    "status_update_error": "Update check error",
     "library": "Skill Library",
     "already_exists_at_agent": "This Agent already has this Skill",
     "total_skills": "Total",

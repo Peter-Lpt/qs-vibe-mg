@@ -507,7 +507,7 @@ async function handleUpdateSkill() {
     await skillsStore.updateSkill(props.skill.id);
     toast.show(t("manage.skill_updated", { skill: props.skill.name || props.skill.id }), "success");
   } catch (e: unknown) {
-    toast.show(String(e), "error");
+    toast.show(t("manage.skill_update_failed", { skill: props.skill.name || props.skill.id, error: String(e) }), "error");
   } finally {
     updatingSkill.value = false;
   }

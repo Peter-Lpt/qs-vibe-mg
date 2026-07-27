@@ -1284,24 +1284,147 @@ fn install_skill_from_git_url(git_url: &str, reference: bool) -> Result<Skill, V
 }
 
 fn install_skill_from_command(command: &str, reference: bool) -> Result<Skill, VibeError> {
-    let source_root = managed_install_source_dir("command")?;
-    let result = (|| {
-        if let Some(parent) = source_root.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::create_dir_all(&source_root)?;
-        run_update_command(command, Some(&source_root))?;
-
-        let install_root = locate_skill_root(&source_root)?;
-        let origin = build_command_origin(&source_root, command);
-        install_skill_from_materialized_source(&install_root, reference, origin)
-    })();
-
-    if result.is_err() {
-        let _ = remove_path(&source_root);
+    // 如果是 `skills add <git-url>` 模式，走原生 git clone 流程（参考 skills-manager），
+    // 避免依赖 skills CLI 的交互式环境
+    if let Some(git_url) = extract_git_url_from_skills_cli(command) {
+        return install_skill_from_git_url(&git_url, reference);
     }
 
-    result
+    // 其他命令：在项目根目录运行，自动注入 -y 跳过交互确认
+    let cwd = find_command_run_cwd()?;
+    let command = ensure_non_interactive_flag(command);
+
+    run_update_command(&command, Some(&cwd))?;
+
+    // 在项目根目录的已知技能目录中搜索安装结果
+    let install_root = find_installed_skill_root(&cwd, &command)?;
+    let origin = build_command_origin(&install_root, &command);
+    install_skill_from_materialized_source(&install_root, reference, origin)
+}
+
+/// 从 skills CLI 命令中提取 git URL，用于原生安装
+/// 支持: "npx skills add https://github.com/owner/repo --skill x"
+///        "skills add owner/repo --skill x"
+///        "skills add https://github.com/owner/repo.git"
+fn extract_git_url_from_skills_cli(command: &str) -> Option<String> {
+    let parts: Vec<&str> = command.split_whitespace().collect();
+    // 跳过 npx/npm 前缀，找到 "skills" + "add"
+    let skills_pos = parts.iter().position(|&p| p == "skills")?;
+    let add_pos = skills_pos + 1;
+    if parts.get(add_pos) != Some(&"add") {
+        return None;
+    }
+    // add 后面的第一个参数是 URL 或 owner/repo
+    let arg = parts.get(add_pos + 1)?;
+    if arg.starts_with('-') {
+        return None;
+    }
+    let url = if arg.starts_with("http") || arg.starts_with("git@") {
+        arg.to_string()
+    } else if arg.contains('/') && !arg.contains(' ') {
+        // owner/repo 格式 → GitHub URL
+        format!("https://github.com/{}.git", arg)
+    } else {
+        return None;
+    };
+    Some(url)
+}
+
+/// 为 skills CLI 自动注入 -y 标志，避免非交互环境下卡在确认提示
+fn ensure_non_interactive_flag(command: &str) -> String {
+    let trimmed = command.trim();
+    let is_skills_cli = trimmed.starts_with("skills ")
+        || trimmed.starts_with("npx skills ")
+        || trimmed.starts_with("npx -y skills ")
+        || trimmed.starts_with("npx --yes skills ");
+    if !is_skills_cli || trimmed.contains(" -y") || trimmed.contains(" --yes") {
+        return command.to_string();
+    }
+    // 在子命令（add/remove/update）后面插入 -y
+    // 例: "npx skills add ..." → "npx skills add -y ..."
+    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+    // 找到 "skills" 后面的子命令位置
+    if let Some(skills_pos) = parts.iter().position(|&p| p == "skills") {
+        if skills_pos + 1 < parts.len() {
+            let mut new_parts: Vec<String> = parts[..=skills_pos + 1].iter().map(|s| s.to_string()).collect();
+            new_parts.push("-y".to_string());
+            new_parts.extend(parts[skills_pos + 2..].iter().map(|s| s.to_string()));
+            return new_parts.join(" ");
+        }
+    }
+    format!("{} -y", trimmed)
+}
+
+/// 从给定路径向上查找项目根目录（包含 .git 或 package.json 的最近祖先）
+fn find_project_root_from(start: &Path) -> Option<std::path::PathBuf> {
+    let mut dir = start;
+    loop {
+        if dir.join(".git").exists() || dir.join("package.json").exists() {
+            return Some(dir.to_path_buf());
+        }
+        match dir.parent() {
+            Some(parent) => dir = parent,
+            None => return None,
+        }
+    }
+}
+
+/// 确定外部命令的工作目录：优先使用配置的项目根目录，否则使用当前工作目录
+fn find_command_run_cwd() -> Result<std::path::PathBuf, VibeError> {
+    // 优先使用配置的项目根目录（第一个有 .git 或 package.json 的）
+    if let Ok(config) = load_config() {
+        for root in project_skill_roots(&config) {
+            if root.join(".git").exists() || root.join("package.json").exists() {
+                return Ok(root);
+            }
+        }
+    }
+
+    // 回退到当前工作目录
+    std::env::current_dir().map_err(|e| VibeError::Path(format!("无法获取当前工作目录: {}", e)))
+}
+
+/// 在项目根目录的已知技能子目录中搜索命令安装的结果
+fn find_installed_skill_root(project_root: &Path, command: &str) -> Result<std::path::PathBuf, VibeError> {
+    let search_bases = [
+        project_root.join(".agents").join("skills"),
+        project_root.join(".claude").join("skills"),
+        project_root.join(".codex").join("skills"),
+        project_root.join(".github").join("skills"),
+        project_root.join("skills"),
+    ];
+
+    // 在各候选目录中搜索包含 SKILL.md 的子目录（按修改时间倒序）
+    let mut found: Vec<(std::time::SystemTime, std::path::PathBuf)> = Vec::new();
+    for base in &search_bases {
+        if !base.is_dir() {
+            continue;
+        }
+        if let Ok(entries) = fs::read_dir(base) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.join("SKILL.md").exists() {
+                    let modified = fs::metadata(&path)
+                        .and_then(|m| m.modified())
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                    found.push((modified, path));
+                }
+            }
+        }
+    }
+
+    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found
+        .into_iter()
+        .map(|(_, path)| path)
+        .next()
+        .ok_or_else(|| VibeError::InvalidSkillMd {
+            reason: format!(
+                "命令执行成功但未在项目目录中找到 SKILL.md。项目: {}，命令: {}",
+                project_root.display(),
+                command
+            ),
+        })
 }
 
 fn install_skill_from_materialized_source(
@@ -1628,7 +1751,10 @@ fn update_from_command_source(
         )));
     };
 
-    run_update_command(&command, Some(source_path))?;
+    // 外部 CLI（如 `skills`）需要项目上下文，从 source_path 向上查找项目根目录作为 cwd
+    let run_cwd = find_project_root_from(source_path).unwrap_or_else(|| source_path.to_path_buf());
+    let command = ensure_non_interactive_flag(&command);
+    run_update_command(&command, Some(&run_cwd))?;
 
     if vibe_fs::is_link(skill_path) {
         origin.last_checked_at = Some(crate::utils::datetime::chrono_now());

@@ -172,6 +172,8 @@
     "update_skill": "更新 Skill",
     "updating_skill": "正在更新",
     "skill_updated": "已更新 {skill}",
+    "skill_update_failed": "更新 {skill} 失败：{error}",
+    "status_update_error": "更新检测异常",
     "library": "技能库",
     "already_exists_at_agent": "该 Agent 下已存在此 Skill",
     "total_skills": "共",
