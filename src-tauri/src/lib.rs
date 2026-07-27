@@ -89,7 +89,7 @@ pub fn run() {
             // 创建系统托盘图标
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("QS-Vibe - AI Skills Manager")
+                .tooltip("QS VIBE - AI Skills Manager")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_tray_icon_event(|tray, event| {

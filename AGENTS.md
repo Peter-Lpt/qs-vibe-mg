@@ -4,7 +4,7 @@
 
 QS-Vibe (qs-vibe-mg) — Tauri 2 桌面应用（Rust 后端 + Vue 3 / TypeScript 前端），用于通过统一技能库 `~/.vibe-skills/` 集中管理多个 AI 编码 agent 的 skills（Claude Code、Hermes、Pi Agent、OpenCode、Codex CLI、MiMo Code、共享 agents 等）。Skills 通过符号链接（symlink）挂接到各 agent 目录，并支持 git / 文件夹 / 命令 / 插件市场等多种安装来源与来源溯源（provenance）。遵循 [Agent Skills](https://agentskills.io) 开放标准。
 
-当前版本：v0.2.0（package.json）。v0.1 功能（安装/删除、预览、批量操作、撤销/重做、i18n、主题、设置、自定义 agent）已完成。
+当前版本：v0.3.0（package.json）。v0.1 功能（安装/删除、预览、批量操作、撤销/重做、i18n、主题、设置、自定义 agent）已完成。
 
 ## Commands
 
@@ -134,7 +134,8 @@ $env:CARGO_HOME = "D:\environment\rust\.cargo"
 ## Version Roadmap
 
 - **v0.1**（Full）：安装/删除、预览、批量操作、撤销/重做、i18n、主题、设置、自定义 agent —— 已完成。
-- **v0.2**（Current）：来源溯源（git/命令/插件市场）、更新检测与自动更新、异常检测与一键修复、Plugin Skills 分组 —— 进行中（package.json 0.2.0）。
+- **v0.2**（Full）：来源溯源（git/命令/插件市场）、更新检测与自动更新、异常检测与一键修复、Plugin Skills 分组 —— 已完成。
+- **v0.3**（Current）：package.json 0.3.0。
 
 ## Documentation Index
 

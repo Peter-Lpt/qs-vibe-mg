@@ -85,7 +85,7 @@ async function handleTitlebarMouseDown(event: MouseEvent) {
           <h1 class="text-sm font-semibold leading-tight" style="color: var(--c-text-strong);">
             {{ t('app.workspace_title') }}
           </h1>
-          <p class="text-[10px] leading-tight" style="color: var(--c-text-secondary);">
+          <p class="text-[9px] leading-tight opacity-50" style="color: var(--c-text-secondary);">
             {{ t('app.title') }}
           </p>
         </div>
