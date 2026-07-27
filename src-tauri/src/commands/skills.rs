@@ -332,7 +332,7 @@ pub fn adopt_plugin_skill(skill_id: String) -> Result<Skill, VibeError> {
         Path::new(&plugin_source.path),
     );
     origin.method = SOURCE_METHOD_MARKETPLACE.to_string();
-    origin.installed_by = Some("qs-vibe-adopt".to_string());
+    origin.installed_by = Some("qs-vibe-mg-adopt".to_string());
     // 清除 command 和 update_command，因为 marketplace 来源不支持命令更新
     origin.command = None;
     origin.update_command = None;
@@ -2349,7 +2349,7 @@ mod tests {
 
     #[test]
     fn mock_git_update_is_detected() {
-        let root = std::env::temp_dir().join(format!("qs-vibe-mock-update-{}", Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("qs-vibe-mg-mock-update-{}", Uuid::new_v4()));
         let source = root.join("source");
         let clone = root.join("clone");
         let destination = root.join("library-skill");

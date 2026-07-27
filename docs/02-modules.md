@@ -10,7 +10,7 @@
 
 ## 预留模块
 
-### 📋 Plugin 管理（v0.2.0 - 规划中）
+### 📋 Plugin 管理（v0.3.0 - 规划中）
 **目标**：管理各 agent 的 plugin 配置和文件
 
 **各 Agent Plugin 机制**：

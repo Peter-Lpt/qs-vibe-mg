@@ -48,7 +48,7 @@ pub fn build_install_origin(source_path: &Path) -> SkillOrigin {
         commit: None,
         branch: None,
         installed_at: chrono_now(),
-        installed_by: Some("qs-vibe".to_string()),
+        installed_by: Some("qs-vibe-mg".to_string()),
         trust_level: "explicit".to_string(),
         source_path: Some(source_path.to_string_lossy().to_string()),
         command: Some(format!("local-folder {}", source_path.to_string_lossy())),
@@ -72,7 +72,7 @@ pub fn build_command_origin(source_path: &Path, command: &str) -> SkillOrigin {
         commit: None,
         branch: None,
         installed_at: chrono_now(),
-        installed_by: Some("qs-vibe".to_string()),
+        installed_by: Some("qs-vibe-mg".to_string()),
         trust_level: "explicit".to_string(),
         source_path: Some(source_path.to_string_lossy().to_string()),
         command: Some(command.to_string()),
@@ -93,7 +93,7 @@ pub fn build_git_origin(source_path: &Path, probe: &GitProbe) -> SkillOrigin {
         commit: Some(probe.commit.clone()),
         branch: probe.branch.clone(),
         installed_at: chrono_now(),
-        installed_by: Some("qs-vibe".to_string()),
+        installed_by: Some("qs-vibe-mg".to_string()),
         trust_level: "explicit".to_string(),
         source_path: Some(source_path.to_string_lossy().to_string()),
         command: Some(format!("git-source {}", source_path.to_string_lossy())),
@@ -468,7 +468,7 @@ mod tests {
         let origin = build_install_origin(Path::new("F:/skill-source"));
         assert_eq!(origin.method, SOURCE_METHOD_LOCAL_FOLDER);
         assert_eq!(origin.trust_level, "explicit");
-        assert_eq!(origin.installed_by.as_deref(), Some("qs-vibe"));
+        assert_eq!(origin.installed_by.as_deref(), Some("qs-vibe-mg"));
         assert_eq!(update_status_for(Some(&origin), None), UPDATE_STATUS_BEST_EFFORT);
     }
 
