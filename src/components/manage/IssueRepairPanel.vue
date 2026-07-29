@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import type { Agent, Skill } from "../../types";
 import { classifySkillSources } from "./manageFilters";
 
-export type RepairGroupId = "conflict" | "dangling" | "missing_lib" | "linked_elsewhere";
+export type RepairGroupId = "conflict" | "dangling" | "missing_lib";
 
 const props = defineProps<{
   skills: Skill[];
@@ -60,17 +60,6 @@ const groups = computed(() => {
         return !c.hasLibrary && c.hasProject && !c.hasAgent;
       }),
       actionable: false, // "仅项目"首期不写 filter state，视图内名单展示
-    },
-    {
-      id: "linked_elsewhere" as const,
-      label: t("manage.repair_linked_elsewhere"),
-      icon: "Share2",
-      color: "var(--c-warning)",
-      skills: props.skills.filter((skill) => {
-        const c = classifySkillSources(skill, props.agents);
-        return c.hasLinkedElsewhere;
-      }),
-      actionable: true,
     },
   ];
   return data.filter((group) => group.skills.length > 0);

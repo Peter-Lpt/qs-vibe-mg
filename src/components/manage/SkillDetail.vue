@@ -1126,7 +1126,7 @@ function getAgentNameFromPath(path: string): string {
           </button>
 
           <button
-            v-if="item.action !== 'none' && item.source && (isPluginSource(item.source) || item.status === 'linked_elsewhere')"
+            v-if="item.action !== 'none' && item.source && isPluginSource(item.source)"
             class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors shrink-0 whitespace-nowrap"
             :style="actionStyle(item.action)"
             :disabled="resolvingConflict === item.agent.id"
