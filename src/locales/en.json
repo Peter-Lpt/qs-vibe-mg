@@ -138,6 +138,7 @@
     "repair_uncovered": "Missing target agents",
     "repair_only_agent": "Agent only",
     "repair_only_project": "Project only",
+    "repair_linked_elsewhere": "Linked elsewhere",
     "sources_title": "Sources",
     "source_kind_library": "Library",
     "source_kind_agent": "Agent",
