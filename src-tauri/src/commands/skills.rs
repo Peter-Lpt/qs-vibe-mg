@@ -1283,11 +1283,100 @@ fn install_skill_from_git_url(git_url: &str, reference: bool) -> Result<Skill, V
     result
 }
 
+/// 从 git 仓库安装指定的 skill（支持多 skill 仓库）
+fn install_skill_from_git_url_with_skill(
+    git_url: &str,
+    skill_name: Option<&str>,
+    reference: bool,
+) -> Result<Skill, VibeError> {
+    let source_root = managed_install_source_dir("git")?;
+    let result = (|| {
+        if let Some(parent) = source_root.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        clone_git_repo(git_url, &source_root)?;
+
+        let install_root = if let Some(name) = skill_name {
+            // 在仓库中查找指定名称的 skill 子目录
+            let skill_dir = find_skill_by_name(&source_root, name)?;
+            skill_dir
+        } else {
+            // 没有指定 skill 名称，查找根目录或第一个 skill
+            locate_skill_root(&source_root)?
+        };
+
+        let probe = probe_git_origin(&source_root).ok_or_else(|| {
+            VibeError::Path(format!(
+                "Unable to read Git provenance from {}",
+                source_root.display()
+            ))
+        })?;
+        let origin = build_git_origin(&source_root, &probe);
+        install_skill_from_materialized_source(&install_root, reference, origin)
+    })();
+
+    if result.is_err() {
+        let _ = remove_path(&source_root);
+    }
+
+    result
+}
+
+/// 在仓库中查找指定名称的 skill 目录
+fn find_skill_by_name(repo_root: &Path, skill_name: &str) -> Result<std::path::PathBuf, VibeError> {
+    // 先检查根目录是否就是目标 skill
+    if repo_root.join("SKILL.md").exists() {
+        // 读取 SKILL.md 检查 name 是否匹配
+        if let Ok(content) = fs::read_to_string(repo_root.join("SKILL.md")) {
+            if content.contains(&format!("name: {}", skill_name))
+                || content.contains(&format!("name: \"{}\"", skill_name))
+            {
+                return Ok(repo_root.to_path_buf());
+            }
+        }
+    }
+
+    // 递归搜索子目录
+    let mut stack = vec![(repo_root.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = stack.pop() {
+        if depth > 3 {
+            continue;
+        }
+        if let Ok(entries) = fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                if path.join("SKILL.md").exists() {
+                    // 检查 name 是否匹配
+                    if let Ok(content) = fs::read_to_string(path.join("SKILL.md")) {
+                        if content.contains(&format!("name: {}", skill_name))
+                            || content.contains(&format!("name: \"{}\"", skill_name))
+                        {
+                            return Ok(path);
+                        }
+                    }
+                }
+                stack.push((path, depth + 1));
+            }
+        }
+    }
+
+    Err(VibeError::InvalidSkillMd {
+        reason: format!(
+            "Unable to find skill '{}' in repository {}",
+            skill_name,
+            repo_root.display()
+        ),
+    })
+}
+
 fn install_skill_from_command(command: &str, reference: bool) -> Result<Skill, VibeError> {
-    // 如果是 `skills add <git-url>` 模式，走原生 git clone 流程（参考 skills-manager），
-    // 避免依赖 skills CLI 的交互式环境
-    if let Some(git_url) = extract_git_url_from_skills_cli(command) {
-        return install_skill_from_git_url(&git_url, reference);
+    // 如果是 `skills add <git-url> --skill <name>` 模式，走原生 git clone 流程，
+    // 避免依赖 skills CLI 的交互式环境，并支持多 skill 仓库中选择特定 skill
+    if let Some((git_url, skill_name)) = extract_git_url_and_skill_from_skills_cli(command) {
+        return install_skill_from_git_url_with_skill(&git_url, skill_name.as_deref(), reference);
     }
 
     // 其他命令：在项目根目录运行，自动注入 -y 跳过交互确认
@@ -1302,14 +1391,20 @@ fn install_skill_from_command(command: &str, reference: bool) -> Result<Skill, V
     install_skill_from_materialized_source(&install_root, reference, origin)
 }
 
-/// 从 skills CLI 命令中提取 git URL，用于原生安装
+/// 判断 token 是否为 skills CLI 包名（`skills` 或 `skills@latest` / `skills@1.0` 等）
+fn is_skills_cli_token(s: &str) -> bool {
+    s == "skills" || s.starts_with("skills@")
+}
+
+/// 从 skills CLI 命令中提取 git URL 和可选的 --skill 名称
 /// 支持: "npx skills add https://github.com/owner/repo --skill x"
 ///        "skills add owner/repo --skill x"
 ///        "skills add https://github.com/owner/repo.git"
-fn extract_git_url_from_skills_cli(command: &str) -> Option<String> {
+/// 只有包含 --skill 参数时才返回 Some，否则返回 None（让命令作为普通命令运行）
+fn extract_git_url_and_skill_from_skills_cli(command: &str) -> Option<(String, Option<String>)> {
     let parts: Vec<&str> = command.split_whitespace().collect();
     // 跳过 npx/npm 前缀，找到 "skills" + "add"
-    let skills_pos = parts.iter().position(|&p| p == "skills")?;
+    let skills_pos = parts.iter().position(|&p| is_skills_cli_token(p))?;
     let add_pos = skills_pos + 1;
     if parts.get(add_pos) != Some(&"add") {
         return None;
@@ -1327,24 +1422,30 @@ fn extract_git_url_from_skills_cli(command: &str) -> Option<String> {
     } else {
         return None;
     };
-    Some(url)
+
+    // 查找 --skill 参数
+    let skill_name = parts.iter().skip(add_pos + 2).position(|&p| p == "--skill" || p == "-s")
+        .and_then(|idx| parts.get(add_pos + 2 + idx + 1))
+        .map(|s| s.to_string());
+
+    // 只有指定了 --skill 才拦截，否则让命令作为普通命令运行（支持交互式选择）
+    skill_name.map(|name| (url, Some(name)))
 }
 
 /// 为 skills CLI 自动注入 -y 标志，避免非交互环境下卡在确认提示
 fn ensure_non_interactive_flag(command: &str) -> String {
     let trimmed = command.trim();
-    let is_skills_cli = trimmed.starts_with("skills ")
-        || trimmed.starts_with("npx skills ")
-        || trimmed.starts_with("npx -y skills ")
-        || trimmed.starts_with("npx --yes skills ");
+    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+    let is_skills_cli = parts.first().map_or(false, |p| is_skills_cli_token(p))
+        || (parts.first().map_or(false, |p| *p == "npx")
+            && parts.iter().skip(1).any(|p| is_skills_cli_token(p)));
     if !is_skills_cli || trimmed.contains(" -y") || trimmed.contains(" --yes") {
         return command.to_string();
     }
     // 在子命令（add/remove/update）后面插入 -y
     // 例: "npx skills add ..." → "npx skills add -y ..."
-    let parts: Vec<&str> = trimmed.split_whitespace().collect();
     // 找到 "skills" 后面的子命令位置
-    if let Some(skills_pos) = parts.iter().position(|&p| p == "skills") {
+    if let Some(skills_pos) = parts.iter().position(|&p| is_skills_cli_token(p)) {
         if skills_pos + 1 < parts.len() {
             let mut new_parts: Vec<String> = parts[..=skills_pos + 1].iter().map(|s| s.to_string()).collect();
             new_parts.push("-y".to_string());
@@ -2413,5 +2514,56 @@ mod tests {
         assert!(updated_skill.contains("description: updated"));
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn is_skills_cli_token_matches_versioned() {
+        assert!(is_skills_cli_token("skills"));
+        assert!(is_skills_cli_token("skills@latest"));
+        assert!(is_skills_cli_token("skills@1.0.0"));
+        assert!(!is_skills_cli_token("npx"));
+        assert!(!is_skills_cli_token("add"));
+    }
+
+    #[test]
+    fn extract_git_url_and_skill_from_skills_cli_versioned() {
+        // owner/repo with --skill flag
+        let result = extract_git_url_and_skill_from_skills_cli("npx skills@latest add mattpocock/skills --skill my-skill");
+        assert!(result.is_some());
+        let (url, skill) = result.unwrap();
+        assert_eq!(url, "https://github.com/mattpocock/skills.git");
+        assert_eq!(skill.as_deref(), Some("my-skill"));
+
+        // without --skill flag → returns None (don't intercept, let command run)
+        let result = extract_git_url_and_skill_from_skills_cli("npx skills@latest add mattpocock/skills");
+        assert!(result.is_none());
+
+        // plain "skills" with --skill
+        let result = extract_git_url_and_skill_from_skills_cli("npx skills add owner/repo --skill test");
+        assert!(result.is_some());
+        let (url, skill) = result.unwrap();
+        assert_eq!(url, "https://github.com/owner/repo.git");
+        assert_eq!(skill.as_deref(), Some("test"));
+
+        // explicit git URL with --skill
+        let result = extract_git_url_and_skill_from_skills_cli("npx skills@latest add https://github.com/foo/bar --skill baz");
+        assert!(result.is_some());
+        let (url, skill) = result.unwrap();
+        assert_eq!(url, "https://github.com/foo/bar");
+        assert_eq!(skill.as_deref(), Some("baz"));
+    }
+
+    #[test]
+    fn ensure_non_interactive_flag_versioned() {
+        let cmd = ensure_non_interactive_flag("npx skills@latest add mattpocock/skills");
+        assert_eq!(cmd, "npx skills@latest add -y mattpocock/skills");
+
+        // already has -y
+        let cmd = ensure_non_interactive_flag("npx skills@latest add -y mattpocock/skills");
+        assert_eq!(cmd, "npx skills@latest add -y mattpocock/skills");
+
+        // plain "skills" still works
+        let cmd = ensure_non_interactive_flag("npx skills add owner/repo");
+        assert_eq!(cmd, "npx skills add -y owner/repo");
     }
 }
