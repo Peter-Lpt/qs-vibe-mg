@@ -207,6 +207,9 @@ function handleFilterGroup(group: RepairGroupId) {
     filterModel.issues.value = new Set(["conflict"]);
   } else if (group === "dangling") {
     filterModel.issues.value = new Set(["dangling"]);
+  } else if (group === "linked_elsewhere") {
+    // 筛选"链接到其他位置"的 skill
+    filterModel.statusPreset.value = "needs_attention";
   } else {
     filterModel.libraryScope.value = new Set([...filterModel.libraryScope.value, "missing_library"]);
   }
@@ -518,8 +521,8 @@ defineExpose({
       </div>
     </section>
 
-    <!-- 待处理视图：修复分组卡 -->
-    <section v-if="view === 'attention'">
+    <!-- 修复分组卡（有异常时自动显示） -->
+    <section>
       <IssueRepairPanel
         :skills="skillsStore.skills"
         :agents="detectedAgents"

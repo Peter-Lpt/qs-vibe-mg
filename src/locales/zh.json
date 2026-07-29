@@ -134,6 +134,7 @@
     "repair_uncovered": "未覆盖目标 Agent",
     "repair_only_agent": "仅存在于 Agent",
     "repair_only_project": "仅存在于 Project",
+    "repair_linked_elsewhere": "链接到其他位置",
     "sources_title": "来源",
     "source_kind_library": "Library",
     "source_kind_agent": "Agent",
