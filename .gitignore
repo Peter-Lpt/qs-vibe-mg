@@ -60,3 +60,6 @@ $RECYCLE.BIN/
 
 # WorkBuddy local project memory/data (not for version control)
 .workbuddy/
+
+# Local design/plan docs (only kept locally, not tracked)
+docs/
