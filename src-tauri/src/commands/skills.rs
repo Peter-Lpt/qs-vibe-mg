@@ -409,7 +409,8 @@ fn check_skill_update_sync(skill_id: String) -> Result<SkillUpdateCheck, VibeErr
             current_commit: None,
             remote_commit: None,
             checked_at,
-            error: Some("No provenance record is available".to_string()),
+            // C：无溯源记录是正常状态（非 QS-Vibe 安装的 skill），不算"更新异常"
+            error: None,
         });
     };
     check_skill_update_for_origin(&skill_id, &origin, checked_at)
@@ -426,7 +427,8 @@ fn check_skill_update_for_skill(skill: &Skill) -> Result<SkillUpdateCheck, VibeE
             current_commit: None,
             remote_commit: None,
             checked_at,
-            error: Some("Skill is not installed in the library; agent-only copies cannot be checked here".to_string()),
+            // C：非库安装（agent-only 副本）是正常状态，不纳入"更新异常"
+            error: None,
         });
     };
     let Some(origin) = source.origin.as_ref() else {
@@ -437,7 +439,8 @@ fn check_skill_update_for_skill(skill: &Skill) -> Result<SkillUpdateCheck, VibeE
             current_commit: None,
             remote_commit: None,
             checked_at,
-            error: Some("No provenance record is available".to_string()),
+            // C：同上，无溯源记录不视为异常
+            error: None,
         });
     };
 
@@ -465,7 +468,8 @@ fn check_skill_update_for_origin(
             current_commit: None,
             remote_commit: None,
             checked_at,
-            error: Some(format!("来源 {} 暂不支持远程更新检测", origin.method)),
+            // C：来源不支持远程检测（如本地目录）是正常状态，不视为异常
+            error: None,
         }),
     }
 }
@@ -847,32 +851,6 @@ fn update_plugin_skills_from_marketplace_sync(marketplace: String) -> Result<Vec
     }
 
     Ok(updated_ids)
-}
-
-#[tauri::command]
-pub async fn search_skills(query: String) -> Result<Vec<Skill>, VibeError> {
-    tauri::async_runtime::spawn_blocking(move || search_skills_sync(query))
-        .await
-        .map_err(|error| VibeError::Path(format!("search_skills task failed: {}", error)))?
-}
-
-fn search_skills_sync(query: String) -> Result<Vec<Skill>, VibeError> {
-    let all_skills = list_skills_sync()?;
-    if query.trim().is_empty() {
-        return Ok(all_skills);
-    }
-
-    let q = query.to_lowercase();
-    let results: Vec<Skill> = all_skills
-        .into_iter()
-        .filter(|s| {
-            s.name.to_lowercase().contains(&q)
-                || s.description.to_lowercase().contains(&q)
-                || s.id.to_lowercase().contains(&q)
-        })
-        .collect();
-
-    Ok(results)
 }
 
 #[tauri::command]
@@ -2075,17 +2053,6 @@ fn delete_library_skill_sync(skill_id: String) -> Result<(), VibeError> {
     }
 
     Ok(())
-}
-
-#[tauri::command]
-pub async fn delete_skill(skill_id: String) -> Result<(), VibeError> {
-    tauri::async_runtime::spawn_blocking(move || delete_skill_sync(skill_id))
-        .await
-        .map_err(|error| VibeError::Path(format!("delete_skill task failed: {}", error)))?
-}
-
-fn delete_skill_sync(skill_id: String) -> Result<(), VibeError> {
-    delete_library_skill_sync(skill_id)
 }
 
 /// Restore a deleted skill from trash snapshot

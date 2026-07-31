@@ -1,16 +1,12 @@
 import { computed, type ComputedRef, type Ref } from "vue";
 import type { Agent, Skill, SmartViewId, ViewId } from "../types";
-import type { DomainScope, LibraryScope, ManageFilterState } from "../components/manage/manageFilters";
-import {
-  computeFacetCounts,
-  matchesDomain,
-} from "../components/manage/manageFilters";
+import type { LibraryScope, ManageFilterState } from "../components/manage/manageFilters";
+import { computeFacetCounts } from "../components/manage/manageFilters";
 
-export type { SmartViewId, ViewId, DomainScope };
+export type { SmartViewId, ViewId };
 
 export interface SmartViewDef {
   id: SmartViewId;
-  domain: DomainScope;
   labelKey: string;
   icon: string;
   showBadge?: boolean;
@@ -19,17 +15,16 @@ export interface SmartViewDef {
 // ── 视图注册表（侧边栏与快捷键的单一真源，替代 App.vue 硬编码 tabs） ──
 // Plugin skills 现在由独立的 PluginSkillsView 处理
 export const SMART_VIEWS: readonly SmartViewDef[] = [
-  { id: "all", domain: "local", labelKey: "sidebar.view_all", icon: "List" },
-  { id: "attention", domain: "local", labelKey: "sidebar.view_attention", icon: "TriangleAlert", showBadge: true },
-  { id: "linked", domain: "local", labelKey: "sidebar.view_linked", icon: "Link2" },
-  { id: "unlinked", domain: "local", labelKey: "sidebar.view_unlinked", icon: "CircleDashed" },
-  { id: "plugins", domain: "local", labelKey: "sidebar.plugins", icon: "Puzzle" },
+  { id: "all", labelKey: "sidebar.view_all", icon: "List" },
+  { id: "attention", labelKey: "sidebar.view_attention", icon: "TriangleAlert", showBadge: true },
+  { id: "linked", labelKey: "sidebar.view_linked", icon: "Link2" },
+  { id: "unlinked", labelKey: "sidebar.view_unlinked", icon: "CircleDashed" },
+  { id: "plugins", labelKey: "sidebar.plugins", icon: "Puzzle" },
 ];
 
 export interface ViewFilterPreset {
   statusPreset?: ManageFilterState["statusPreset"];
   libraryScope?: Set<LibraryScope>;
-  domain: DomainScope;
 }
 
 // ── 视图 → 筛选预设（不写状态，纯映射） ──
@@ -37,21 +32,21 @@ export interface ViewFilterPreset {
 export function viewToFilterPreset(view: SmartViewId): ViewFilterPreset {
   switch (view) {
     case "attention":
-      return { domain: "local", statusPreset: "needs_attention" };
+      return { statusPreset: "needs_attention" };
     case "linked":
-      return { domain: "local", statusPreset: "linked_any" };
+      return { statusPreset: "linked_any" };
     case "unlinked":
-      return { domain: "local", statusPreset: "unlinked_all" };
+      return { statusPreset: "unlinked_all" };
     case "plugins":
       // Plugin view 由独立组件处理，这里返回默认预设
-      return { domain: "local", statusPreset: "all" };
+      return { statusPreset: "all" };
     case "all":
     default:
-      return { domain: "local", statusPreset: "all" };
+      return { statusPreset: "all" };
   }
 }
 
-// ── 视图计数（domain 前置 + facet 合同） ──
+// ── 视图计数（facet 合同） ──
 export function useSmartViews(
   skills: Ref<Skill[]> | ComputedRef<Skill[]>,
   agents: Ref<Agent[]> | ComputedRef<Agent[]>,
@@ -59,7 +54,7 @@ export function useSmartViews(
 ) {
   const viewCounts = computed<Record<SmartViewId, number>>(() => {
     // 计数语义 = "用户若切到该视图会看到什么"：
-    // 视图持有字段（statusPreset/libraryScope/domain）中和到基线，
+    // 视图持有字段（statusPreset/libraryScope）中和到基线，
     // 用户高级条件（query/issues/agentIds/agentMatch）保留参与计数。
     const baseState: ManageFilterState = {
       ...state.value,
@@ -67,9 +62,7 @@ export function useSmartViews(
       libraryScope: new Set(),
     };
 
-    const localScoped = skills.value.filter((s) => matchesDomain(s, "local"));
-
-    const facets = computeFacetCounts(localScoped, { ...baseState, domain: "local" }, agents.value);
+    const facets = computeFacetCounts(skills.value, baseState, agents.value);
 
     return {
       all: facets.status.all,

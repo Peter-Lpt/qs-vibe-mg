@@ -174,7 +174,8 @@ fn sync_to_vibe_impl(
         if vibe_fs::is_link(&source_path) {
             vibe_fs::remove_symlink(&source_path)?;
         } else {
-            fs::remove_dir_all(&source_path)?;
+            // B2：并入技能库后删除 agent 副本先进 trash，可恢复
+            trash_agent_copy(agent, &source_path, skill_id)?;
         }
 
         let report = vibe_fs::create_symlink_with_report(&vibe_path, &source_path)?;
@@ -185,11 +186,11 @@ fn sync_to_vibe_impl(
     // 技能库没有此 skill，复制过去
     vibe_fs::copy_skill_dir_all(&real_source, &vibe_real_path)?;
 
-    // 如果源是 symlink，删除旧 symlink；如果是独立副本，删除副本
+    // 如果源是 symlink，删除旧 symlink；如果是独立副本，B2：先进 trash 再删除
     if vibe_fs::is_link(&source_path) {
         vibe_fs::remove_symlink(&source_path)?;
     } else {
-        fs::remove_dir_all(&source_path)?;
+        trash_agent_copy(agent, &source_path, skill_id)?;
     }
 
     // 创建新 symlink 指向技能库
@@ -254,7 +255,8 @@ fn replace_with_library_impl(
     if vibe_fs::is_link(&link_path) {
         vibe_fs::remove_symlink(&link_path)?;
     } else if link_path.is_dir() {
-        fs::remove_dir_all(&link_path)?;
+        // B1：独立副本先进 trash，不再直接删除——撤销/找回不丢数据
+        trash_agent_copy(agent, &link_path, skill_id)?;
     } else if link_path.exists() {
         fs::remove_file(&link_path)?;
     }
@@ -288,6 +290,14 @@ fn remove_agent_skill_copy_impl(
         });
     }
 
+    trash_agent_copy(agent, &target, skill_id)?;
+    invalidate_agents_cache();
+    Ok(())
+}
+
+/// 将 agent 的独立本地副本移入 trash（替代直接删除，保证可恢复）。
+/// 优先 rename（同卷原子）；跨卷失败时退化为复制+删除，复制失败则中止不删。
+fn trash_agent_copy(agent: &Agent, target: &Path, skill_id: &str) -> Result<(), VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let trash_root = vibe_dir.join(".trash").join("agent-copies").join(&agent.id);
     fs::create_dir_all(&trash_root)?;
@@ -301,9 +311,16 @@ fn remove_agent_skill_copy_impl(
         trash_path = trash_root.join(format!("{}-{}-{}", skill_id, stamp, suffix));
         suffix += 1;
     }
-    fs::rename(&target, trash_path)?;
-    invalidate_agents_cache();
-    Ok(())
+
+    match fs::rename(target, &trash_path) {
+        Ok(()) => Ok(()),
+        Err(rename_error) => {
+            // 跨卷（vibe 目录与 agent 目录在不同盘）时 rename 失败 → 复制 + 删除
+            copy_skill_dir_all(target, &trash_path).map_err(|_| VibeError::Io(rename_error))?;
+            fs::remove_dir_all(target)?;
+            Ok(())
+        }
+    }
 }
 
 #[tauri::command]

@@ -47,19 +47,17 @@ $env:CARGO_HOME = "D:\environment\rust\.cargo"
 - `app.ts`：当前 Tab、locale、主题、`showSettings`、`init()`。
 
 **组件层（`src/components/`）**
-- `layout/`：`AppLayout`（外壳 + 主题 CSS 变量）、`TabBar`。
-- `manage/`（核心工作区，替代早期规划的 skills/agents/symlink/dashboard 分栏）：
-  - `ManageTab.vue`：主组合视图——顶部统计卡（总数 / 共享 / 独立 / 异常）、筛选中心（关键词、排序、按问题/状态/来源/Agent 分面，逻辑在 `manageFilters.ts`）、`IssueRepairPanel`（冲突/断链/重复修复入口）、技能列表 `SkillRow`（可展开为 `SkillDetail`）、Plugin 来源分组、底部批量操作条、Agent 管理浮层、`InstallDialog`、`BatchSyncPanel`、回到顶部。
-  - `SkillTree.vue` / `SkillWorkbench.vue` / `SkillWorkbenchRow.vue` / `SkillCard.vue`：树状 / 工作台等可选布局。
-  - `AgentMatrix.vue`：Agent × Skill 批量链接矩阵；`AgentStatusBadge.vue`、`BatchSyncPanel.vue`、`ConflictWarning.vue`、`DanglingWarning.vue`、`IssueRepairPanel.vue`：异常可视化与修复。
-- `agents/`：`AgentCard.vue`、`AddAgentDialog.vue`。
+- `layout/`：`AppLayout`（外壳 + 主题 CSS 变量）、`AppSidebar`（左侧导航）。
+- `manage/`（核心工作区）：
+  - `SkillsView.vue`：主组合视图——顶部统计卡、筛选中心（关键词防抖、排序、按问题/状态/来源/Agent 分面，逻辑在 `manageFilters.ts`）、`IssueRepairPanel`（冲突/断链/重复修复入口）、技能列表 `SkillRow`（可展开为 `SkillDetail`）、底部批量操作条、`InstallDialog`、回到顶部。
+  - `PluginSkillsView.vue`：Plugin 技能独立视图（认领/更新/启用状态）。
 - `history/`：`HistoryTab.vue`（撤销/重做时间线）。
-- `settings/`：`SettingsPage.vue`。
+- `settings/`：`SettingsPage.vue`（含内联的自定义 Agent 增删改）。
 - `common/`：`ConfirmDialog`、`EmptyState`、`SkeletonCard`、`ToastContainer`。
 
-**组合式函数（`src/composables/`）**：`useToast`（轻提示）、`useSkillActions`、`useSkillAgentStatus`、`skillActionRegistry`（动作注册表）、`useEscapeKey`、`useFileLogger`（前端日志 → 后端 `log_message`）。
+**组合式函数（`src/composables/`）**：`useToast`（轻提示）、`useSkillActions`、`useSkillAgentStatus`、`skillActionRegistry`（动作注册表）、`useBatchActions`（意图驱动批量）、`useSmartViews`（侧边栏视图注册表）、`useEscapeKey`、`useFileLogger`（前端日志 → 后端 `log_message`）。
 
-**i18n / 类型**：`src/i18n.ts` + `src/locales/{zh,en,zh-TW}.json`（所有 UI 文案入 i18n）；`src/types/index.ts`、`src/types/tree.ts` 为共享 TS 接口。
+**i18n / 类型**：`src/i18n.ts` + `src/locales/{zh,en,zh-TW}.json`（所有 UI 文案入 i18n）；`src/types/index.ts` 为共享 TS 接口。
 
 ---
 
@@ -72,7 +70,7 @@ $env:CARGO_HOME = "D:\environment\rust\.cargo"
 **命令模块（`commands/`）**
 - `skills.rs`：
   - `list_skills` —— 递归扫描 `~/.vibe-skills/`（vibe-lib）、所有 agent 技能目录、项目根（`project:` 来源）、插件市场（claude-plugin / codex-plugin 缓存），按文件夹名去重合并为 `Skill`；检测冲突（多来源内容哈希不同）、断链（symlink 目标不存在）、重复（同名不同 SKILL.md 或 plugin+本地并存）；使用哈希缓存避免重复读取。
-  - `search_skills`、`preview_skill` / `preview_skill_at_path`（路径沙箱：仅允许读取 vibe/agent/项目根内文件）。
+  - `preview_skill` / `preview_skill_at_path`（路径沙箱：仅允许读取 vibe/agent/项目根内文件）。
   - `check_skill_update` / `check_all_skill_updates` —— 对 git 来源做远程 commit 比对（带 30s fetch 超时）。
   - `install_skill` / `install_skill_from_source` —— 支持 folder / git / command 三种来源；`reference=true` 以 symlink 引用源码，否则复制；写入 `SkillOrigin` 溯源。
   - `update_skill` —— git 来源 `git pull --ff-only`（冲突时要求 force），命令来源执行 `update_command`。

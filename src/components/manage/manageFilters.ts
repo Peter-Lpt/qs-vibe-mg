@@ -6,7 +6,6 @@ export type IssueFilter = "conflict" | "dangling" | "duplicate" | "update_error"
 export type LibraryScope = "missing_library" | "library_only";
 export type AgentMatch = "any" | "exclude";
 export type SortMode = "status" | "updated" | "name" | "linked_agents";
-export type DomainScope = "local"; // Plugin skills 现在由独立 API 处理
 
 export interface ManageFilterState {
   query: string;
@@ -16,7 +15,6 @@ export interface ManageFilterState {
   agentIds: Set<string>;
   agentMatch: AgentMatch;
   sort: SortMode;
-  domain: DomainScope;
 }
 
 export interface SourceClassification {
@@ -30,25 +28,11 @@ export interface SourceClassification {
   hasLinkedElsewhere: boolean;
 }
 
-// Plugin 类型到 Agent ID 的映射（保留用于兼容性）
+// Plugin 类型到 Agent ID 的映射（plugin 来源的 skill 归属其宿主 agent）
 export const PLUGIN_AGENT_MAP: Record<string, string> = {
   "claude-plugin": "claude-code",
   "codex-plugin": "codex",
 };
-
-// 是否存在非 plugin 来源（简化：regular skills 不含 plugin 来源）
-export function hasNonPluginSource(_skill: Skill): boolean {
-  // 由于 list_skills() 只返回 regular skills，这里总是返回 true
-  // 保留函数签名以维持兼容性
-  return true;
-}
-
-// domain 互斥分区：简化为只处理 local 域
-export function matchesDomain(_skill: Skill, _domain: DomainScope): boolean {
-  // Plugin skills 由独立 API (list_plugin_skills) 处理
-  // 这里只处理 regular skills，总是返回 true
-  return true;
-}
 
 function sourceKind(source: SkillSource, agentIds: ReadonlySet<string>): "library" | "agent" | "project" | "external" | "marketplace" {
   if (source.source_kind === "marketplace") return "marketplace";
@@ -68,15 +52,6 @@ export function getPluginAgentId(source: SkillSource): string | null {
     }
   }
   return null;
-}
-
-// 检查 skill 是否属于指定的 agent（包括 plugin 来源）
-export function skillBelongsToAgent(skill: Skill, agentId: string): boolean {
-  return skill.sources.some((source) => {
-    if (source.from === agentId) return true;
-    const pluginAgentId = getPluginAgentId(source);
-    return pluginAgentId === agentId;
-  });
 }
 
 function normalizePath(path: string): string {
@@ -229,7 +204,6 @@ export function filterSkills(
   updateChecks?: Record<string, SkillUpdateCheck>
 ): Skill[] {
   const filtered = skills.filter((skill) =>
-    matchesDomain(skill, state.domain) &&
     matchesQuery(skill, state.query) &&
     matchesStatusPreset(skill, state.statusPreset, agents) &&
     matchesIssues(skill, state.issues, updateChecks) &&
@@ -278,7 +252,6 @@ export function computeFacetCounts(
 export function useManageFilters(
   skills: ComputedRef<Skill[]> | Ref<Skill[]>,
   agents: ComputedRef<Agent[]> | Ref<Agent[]>,
-  defaultDomain?: ComputedRef<DomainScope> | Ref<DomainScope>,
   updateChecks?: ComputedRef<Record<string, SkillUpdateCheck>> | Ref<Record<string, SkillUpdateCheck>>
 ) {
   const query = ref("");
@@ -298,7 +271,6 @@ export function useManageFilters(
   const agentIds = ref<Set<string>>(new Set());
   const agentMatch = ref<AgentMatch>("any");
   const sort = ref<SortMode>("status");
-  const domain = ref<DomainScope>(defaultDomain?.value ?? "local");
 
   const state = computed<ManageFilterState>(() => ({
     query: debouncedQuery.value,
@@ -308,7 +280,6 @@ export function useManageFilters(
     agentIds: agentIds.value,
     agentMatch: agentMatch.value,
     sort: sort.value,
-    domain: domain.value,
   }));
   const filteredSkills = computed(() => filterSkills(skills.value, state.value, agents.value, updateChecks?.value));
   const facetCounts = computed(() => computeFacetCounts(skills.value, state.value, agents.value, updateChecks?.value));
@@ -333,7 +304,6 @@ export function useManageFilters(
     libraryScope.value = new Set();
     agentIds.value = new Set();
     agentMatch.value = "any";
-    if (defaultDomain) domain.value = defaultDomain.value;
   }
 
   function toggleIssue(issue: IssueFilter) {
@@ -394,7 +364,6 @@ export function useManageFilters(
     agentIds,
     agentMatch,
     sort,
-    domain,
     state,
     filteredSkills,
     facetCounts,

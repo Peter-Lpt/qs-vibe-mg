@@ -7,7 +7,7 @@ import { useSkillsStore } from "./stores/skills";
 import { useHistoryStore } from "./stores/history";
 import { useAppStore } from "./stores/app";
 import { useToast } from "./composables/useToast";
-import { useSmartViews, viewToFilterPreset } from "./composables/useSmartViews";
+import { useSmartViews } from "./composables/useSmartViews";
 import { useManageFilters } from "./components/manage/manageFilters";
 import type { SmartViewId, Skill } from "./types";
 import AppLayout from "./components/layout/AppLayout.vue";
@@ -34,9 +34,8 @@ const skillsViewId = computed<SmartViewId>(() =>
     ? appStore.lastSkillsView
     : appStore.activeView
 );
-const defaultDomain = computed(() => viewToFilterPreset(skillsViewId.value).domain);
 const updateChecks = computed(() => skillsStore.updateChecks);
-const filterModel = useManageFilters(skillList, detectedAgents, defaultDomain, updateChecks);
+const filterModel = useManageFilters(skillList, detectedAgents, updateChecks);
 const { viewCounts } = useSmartViews(skillList, detectedAgents, filterModel.state);
 
 // ── Plugin skills 计数 ──

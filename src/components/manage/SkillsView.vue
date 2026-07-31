@@ -62,7 +62,6 @@ function applyViewPreset(view: SmartViewId) {
   const preset = viewToFilterPreset(view);
   filterModel.statusPreset.value = preset.statusPreset ?? "all";
   filterModel.libraryScope.value = preset.libraryScope ? new Set(preset.libraryScope) : new Set();
-  filterModel.domain.value = preset.domain;
 }
 
 // ── 列表数据 ──────────────────────────────────────

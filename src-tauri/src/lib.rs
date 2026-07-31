@@ -152,8 +152,6 @@ pub fn run() {
             commands::skills::install_skill_from_source,
             commands::skills::update_skill,
             commands::skills::delete_library_skill,
-            commands::skills::delete_skill,
-            commands::skills::search_skills,
             commands::skills::detect_issues,
             commands::skills::get_dashboard_data,
             commands::sync::create_link,

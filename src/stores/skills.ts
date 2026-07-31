@@ -33,8 +33,6 @@ export const useSkillsStore = defineStore("skills", () => {
   const skills = ref<Skill[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
-  const searchQuery = ref("");
-  const searchResults = ref<Skill[]>([]);
   const dashboardData = ref<DashboardData | null>(null);
   const dashboardLoading = ref(false);
   const issues = ref<SkillIssue[]>([]);
@@ -64,21 +62,6 @@ export const useSkillsStore = defineStore("skills", () => {
     } catch (e: unknown) {
       if (requestId === refreshRequestId) error.value = String(e);
     }
-  }
-
-  function searchSkills(query: string) {
-    searchQuery.value = query;
-    const q = query.trim().toLowerCase();
-    if (!q) {
-      searchResults.value = [];
-      return;
-    }
-    searchResults.value = skills.value.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        s.description.toLowerCase().includes(q) ||
-        s.id.toLowerCase().includes(q)
-    );
   }
 
   async function getDashboardData() {
@@ -329,15 +312,12 @@ export const useSkillsStore = defineStore("skills", () => {
     skills,
     loading,
     error,
-    searchQuery,
-    searchResults,
     dashboardData,
     dashboardLoading,
     issues,
     issuesLoading,
     fetchSkills,
     refreshSkills,
-    searchSkills,
     getDashboardData,
     fetchIssues,
     createLink,
