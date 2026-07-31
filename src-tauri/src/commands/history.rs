@@ -7,20 +7,34 @@ use crate::utils::history::{
 
 /// 获取操作历史
 #[tauri::command]
-pub fn get_history() -> Result<Vec<HistoryEntry>, VibeError> {
+pub async fn get_history() -> Result<Vec<HistoryEntry>, VibeError> {
+    tauri::async_runtime::spawn_blocking(get_history_sync)
+        .await
+        .map_err(|error| VibeError::Path(format!("get_history task failed: {}", error)))?
+}
+
+fn get_history_sync() -> Result<Vec<HistoryEntry>, VibeError> {
     let store = load_history()?;
     Ok(store.entries)
 }
 
 /// 清空所有历史记录
 #[tauri::command]
-pub fn clear_history() -> Result<(), VibeError> {
-    utils_clear_history()
+pub async fn clear_history() -> Result<(), VibeError> {
+    tauri::async_runtime::spawn_blocking(utils_clear_history)
+        .await
+        .map_err(|error| VibeError::Path(format!("clear_history task failed: {}", error)))?
 }
 
 /// 撤销最后一个操作
 #[tauri::command]
-pub fn undo() -> Result<HistoryEntry, VibeError> {
+pub async fn undo() -> Result<HistoryEntry, VibeError> {
+    tauri::async_runtime::spawn_blocking(undo_sync)
+        .await
+        .map_err(|error| VibeError::Path(format!("undo task failed: {}", error)))?
+}
+
+fn undo_sync() -> Result<HistoryEntry, VibeError> {
     let entry = last_active_for_undo()?.ok_or(VibeError::NothingToUndo)?;
 
     perform_undo(&entry)?;
@@ -33,7 +47,13 @@ pub fn undo() -> Result<HistoryEntry, VibeError> {
 
 /// 重做最后一个已撤销的操作
 #[tauri::command]
-pub fn redo() -> Result<HistoryEntry, VibeError> {
+pub async fn redo() -> Result<HistoryEntry, VibeError> {
+    tauri::async_runtime::spawn_blocking(redo_sync)
+        .await
+        .map_err(|error| VibeError::Path(format!("redo task failed: {}", error)))?
+}
+
+fn redo_sync() -> Result<HistoryEntry, VibeError> {
     let entry = last_undone_for_redo()?.ok_or(VibeError::NothingToRedo)?;
 
     perform_redo(&entry)?;
@@ -46,7 +66,13 @@ pub fn redo() -> Result<HistoryEntry, VibeError> {
 
 /// 按ID撤销（堆栈模式：只允许操作最新的未撤销记录）
 #[tauri::command]
-pub fn undo_by_id(id: String) -> Result<HistoryEntry, VibeError> {
+pub async fn undo_by_id(id: String) -> Result<HistoryEntry, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || undo_by_id_sync(id))
+        .await
+        .map_err(|error| VibeError::Path(format!("undo_by_id task failed: {}", error)))?
+}
+
+fn undo_by_id_sync(id: String) -> Result<HistoryEntry, VibeError> {
     let store = load_history()?;
     let entry = store
         .entries
@@ -77,7 +103,13 @@ pub fn undo_by_id(id: String) -> Result<HistoryEntry, VibeError> {
 
 /// 按ID重做（堆栈模式：只允许操作最新的已撤销记录）
 #[tauri::command]
-pub fn redo_by_id(id: String) -> Result<HistoryEntry, VibeError> {
+pub async fn redo_by_id(id: String) -> Result<HistoryEntry, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || redo_by_id_sync(id))
+        .await
+        .map_err(|error| VibeError::Path(format!("redo_by_id task failed: {}", error)))?
+}
+
+fn redo_by_id_sync(id: String) -> Result<HistoryEntry, VibeError> {
     let store = load_history()?;
     let entry = store
         .entries

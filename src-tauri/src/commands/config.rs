@@ -18,18 +18,36 @@ use crate::utils::path::{expand_tilde, vibe_skills_dir};
 
 /// 获取配置
 #[tauri::command]
-pub fn get_config() -> Result<Config, VibeError> {
-    load_config()
+pub async fn get_config() -> Result<Config, VibeError> {
+    tauri::async_runtime::spawn_blocking(load_config)
+        .await
+        .map_err(|error| VibeError::Path(format!("get_config task failed: {}", error)))?
 }
 
 #[tauri::command]
-pub fn suggest_project_roots() -> Result<Vec<ProjectRootSuggestion>, VibeError> {
-    Ok(build_project_root_suggestions())
+pub async fn suggest_project_roots() -> Result<Vec<ProjectRootSuggestion>, VibeError> {
+    tauri::async_runtime::spawn_blocking(|| Ok(build_project_root_suggestions()))
+        .await
+        .map_err(|error| VibeError::Path(format!("suggest_project_roots task failed: {}", error)))?
 }
 
 /// 更新配置
 #[tauri::command]
-pub fn update_config(
+pub async fn update_config(
+    theme: Option<String>,
+    locale: Option<String>,
+    sync_mode_default: Option<String>,
+    max_history: Option<u32>,
+    project_roots: Option<Vec<String>>,
+) -> Result<Config, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        update_config_sync(theme, locale, sync_mode_default, max_history, project_roots)
+    })
+    .await
+    .map_err(|error| VibeError::Path(format!("update_config task failed: {}", error)))?
+}
+
+fn update_config_sync(
     theme: Option<String>,
     locale: Option<String>,
     sync_mode_default: Option<String>,
@@ -48,7 +66,8 @@ pub fn update_config(
         config.sync_mode_default = s;
     }
     if let Some(m) = max_history {
-        config.history.max_entries = m;
+        // H4：钳制下限，避免 record_action 对空历史 remove(0) panic
+        config.history.max_entries = m.max(1);
     }
     if let Some(roots) = project_roots {
         config.project_roots = normalize_project_roots(roots);
@@ -60,7 +79,13 @@ pub fn update_config(
 
 /// 设置 vibe-skills 目录路径，可选迁移旧数据
 #[tauri::command]
-pub fn set_vibe_skills_path(new_path: String, migrate: bool) -> Result<Config, VibeError> {
+pub async fn set_vibe_skills_path(new_path: String, migrate: bool) -> Result<Config, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || set_vibe_skills_path_sync(new_path, migrate))
+        .await
+        .map_err(|error| VibeError::Path(format!("set_vibe_skills_path task failed: {}", error)))?
+}
+
+fn set_vibe_skills_path_sync(new_path: String, migrate: bool) -> Result<Config, VibeError> {
     let expanded = expand_tilde(&new_path)?;
     let old_dir = vibe_skills_dir()?;
 
@@ -127,7 +152,13 @@ pub struct ExportData {
 
 /// Export config and history as JSON string
 #[tauri::command]
-pub fn export_data() -> Result<String, VibeError> {
+pub async fn export_data() -> Result<String, VibeError> {
+    tauri::async_runtime::spawn_blocking(export_data_sync)
+        .await
+        .map_err(|error| VibeError::Path(format!("export_data task failed: {}", error)))?
+}
+
+fn export_data_sync() -> Result<String, VibeError> {
     let config = load_config()?;
     let history = load_history()?;
     let data = ExportData { config, history };
@@ -136,7 +167,13 @@ pub fn export_data() -> Result<String, VibeError> {
 
 /// Import config and history from JSON string
 #[tauri::command]
-pub fn import_data(json: String) -> Result<(), VibeError> {
+pub async fn import_data(json: String) -> Result<(), VibeError> {
+    tauri::async_runtime::spawn_blocking(move || import_data_sync(json))
+        .await
+        .map_err(|error| VibeError::Path(format!("import_data task failed: {}", error)))?
+}
+
+fn import_data_sync(json: String) -> Result<(), VibeError> {
     let data: ExportData =
         serde_json::from_str(&json).map_err(|e| VibeError::History(e.to_string()))?;
     save_config(&data.config)?;
@@ -145,23 +182,42 @@ pub fn import_data(json: String) -> Result<(), VibeError> {
     Ok(())
 }
 
-/// Write content to a file path (used by export)（P6：拒绝 `..` 字符串逃逸）
+/// 路径是否含 `..` 父目录组件（组件级判定，避免误伤含 `..` 子串的正常路径）
+fn has_parent_dir_component(path: &str) -> bool {
+    std::path::Path::new(path)
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+}
+
+/// Write content to a file path (used by export)（P6：拒绝 `..` 路径逃逸）
 #[tauri::command]
-pub fn write_file_to_path(path: String, content: String) -> Result<(), VibeError> {
-    if path.contains("..") {
+pub async fn write_file_to_path(path: String, content: String) -> Result<(), VibeError> {
+    tauri::async_runtime::spawn_blocking(move || write_file_to_path_sync(path, content))
+        .await
+        .map_err(|error| VibeError::Path(format!("write_file_to_path task failed: {}", error)))?
+}
+
+fn write_file_to_path_sync(path: String, content: String) -> Result<(), VibeError> {
+    if has_parent_dir_component(&path) {
         return Err(VibeError::Path(
-            "write_file_to_path 不允许路径包含 '..'".to_string(),
+            "write_file_to_path 不允许路径包含 '..' 父目录组件".to_string(),
         ));
     }
     fs::write(&path, content).map_err(VibeError::Io)
 }
 
-/// Read content from a file path (used by import)（P6：拒绝 `..` 字符串逃逸）
+/// Read content from a file path (used by import)（P6：拒绝 `..` 路径逃逸）
 #[tauri::command]
-pub fn read_file_from_path(path: String) -> Result<String, VibeError> {
-    if path.contains("..") {
+pub async fn read_file_from_path(path: String) -> Result<String, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || read_file_from_path_sync(path))
+        .await
+        .map_err(|error| VibeError::Path(format!("read_file_from_path task failed: {}", error)))?
+}
+
+fn read_file_from_path_sync(path: String) -> Result<String, VibeError> {
+    if has_parent_dir_component(&path) {
         return Err(VibeError::Path(
-            "read_file_from_path 不允许路径包含 '..'".to_string(),
+            "read_file_from_path 不允许路径包含 '..' 父目录组件".to_string(),
         ));
     }
     fs::read_to_string(&path).map_err(VibeError::Io)

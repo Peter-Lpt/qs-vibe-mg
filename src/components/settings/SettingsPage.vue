@@ -157,6 +157,12 @@ async function handleMigrate(migrate: boolean) {
   }
 }
 
+// H5：点"否"只关闭对话框，不执行 set_vibe_skills_path（不迁移也不切路径）
+function cancelMigrate() {
+  showMigrateConfirm.value = false;
+  pendingPath.value = "";
+}
+
 async function handleExport() {
   try {
     const json = await appStore.exportData();
@@ -674,7 +680,7 @@ onMounted(() => {
       :error="pathError"
       :disabled="savingPath"
       @confirm="handleMigrate(true)"
-      @cancel="handleMigrate(false)"
+      @cancel="cancelMigrate"
     />
   </div>
 </template>

@@ -6,12 +6,28 @@ use tracing::warn;
 use crate::errors::VibeError;
 use crate::models::agent::Agent;
 use crate::models::history::HistoryAction;
+use crate::models::skill::Skill;
 use crate::models::sync::SyncResult;
 use crate::utils::config::{invalidate_agents_cache, load_agents};
 use crate::utils::fs::{self as vibe_fs, LinkCreationReport, copy_skill_dir_all};
 use crate::utils::hash::dir_hash;
 use crate::utils::history::{record_action, record_action_with_skills, record_action_with_source};
 use crate::utils::path::vibe_skills_dir;
+
+/// M1：校验相对路径段不含 `..` 父目录组件或绝对路径，防止路径穿越到目标目录外
+fn validate_relative_segment(segment: &str, what: &str) -> Result<(), VibeError> {
+    let path = Path::new(segment);
+    let has_parent = path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir));
+    if has_parent || path.is_absolute() {
+        return Err(VibeError::Path(format!(
+            "{} 不允许包含 '..' 父目录组件或绝对路径: {}",
+            what, segment
+        )));
+    }
+    Ok(())
+}
 
 /// 仅创建符号链接（链接方向：vibe-lib → agent 目录），不记录历史
 fn link_skill(skill_id: &str, agent: &Agent) -> Result<LinkCreationReport, VibeError> {
@@ -71,6 +87,16 @@ fn resolve_agent_skill_path(
     let agent_skills_dir = Path::new(&agent.skills_dir);
 
     if let Some(path) = source_path.filter(|p| !p.trim().is_empty()) {
+        // M1：拒绝 `..` 父目录组件，防止拼接后逃逸 agent 目录
+        let has_parent = Path::new(path)
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir));
+        if has_parent {
+            return Err(VibeError::Path(format!(
+                "Source path contains '..' parent component: {}",
+                path
+            )));
+        }
         let candidate = PathBuf::from(path);
         if !vibe_fs::is_path_within_allow_final_link(&candidate, agent_skills_dir) {
             return Err(VibeError::Path(format!(
@@ -281,7 +307,13 @@ fn remove_agent_skill_copy_impl(
 }
 
 #[tauri::command]
-pub fn create_link(skill_id: String, agent_id: String) -> Result<String, VibeError> {
+pub async fn create_link(skill_id: String, agent_id: String) -> Result<String, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || create_link_sync(skill_id, agent_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("create_link task failed: {}", error)))?
+}
+
+fn create_link_sync(skill_id: String, agent_id: String) -> Result<String, VibeError> {
     tracing::info!("create_link: skill={}, agent={}", skill_id, agent_id);
 
     let agents = load_agents()?;
@@ -308,7 +340,17 @@ pub fn create_link(skill_id: String, agent_id: String) -> Result<String, VibeErr
 }
 
 #[tauri::command]
-pub fn remove_link(
+pub async fn remove_link(
+    skill_id: String,
+    agent_id: String,
+    source_path: Option<String>,
+) -> Result<(), VibeError> {
+    tauri::async_runtime::spawn_blocking(move || remove_link_sync(skill_id, agent_id, source_path))
+        .await
+        .map_err(|error| VibeError::Path(format!("remove_link task failed: {}", error)))?
+}
+
+fn remove_link_sync(
     skill_id: String,
     agent_id: String,
     source_path: Option<String>,
@@ -341,7 +383,17 @@ pub fn remove_link(
 }
 
 #[tauri::command]
-pub fn detach_keep_local_copy(
+pub async fn detach_keep_local_copy(
+    skill_id: String,
+    agent_id: String,
+    source_path: Option<String>,
+) -> Result<String, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || detach_keep_local_copy_sync(skill_id, agent_id, source_path))
+        .await
+        .map_err(|error| VibeError::Path(format!("detach_keep_local_copy task failed: {}", error)))?
+}
+
+fn detach_keep_local_copy_sync(
     skill_id: String,
     agent_id: String,
     source_path: Option<String>,
@@ -387,7 +439,17 @@ pub fn detach_keep_local_copy(
 }
 
 #[tauri::command]
-pub fn remove_agent_skill_copy(
+pub async fn remove_agent_skill_copy(
+    skill_id: String,
+    agent_id: String,
+    source_path: String,
+) -> Result<(), VibeError> {
+    tauri::async_runtime::spawn_blocking(move || remove_agent_skill_copy_sync(skill_id, agent_id, source_path))
+        .await
+        .map_err(|error| VibeError::Path(format!("remove_agent_skill_copy task failed: {}", error)))?
+}
+
+fn remove_agent_skill_copy_sync(
     skill_id: String,
     agent_id: String,
     source_path: String,
@@ -412,7 +474,13 @@ pub fn remove_agent_skill_copy(
 }
 
 #[tauri::command]
-pub fn batch_link(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String>, VibeError> {
+pub async fn batch_link(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String>, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || batch_link_sync(skill_ids, agent_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("batch_link task failed: {}", error)))?
+}
+
+fn batch_link_sync(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String>, VibeError> {
     let agents = load_agents()?;
     let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
         VibeError::AgentNotFound {
@@ -452,7 +520,13 @@ pub fn batch_link(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String
 }
 
 #[tauri::command]
-pub fn batch_unlink(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String>, VibeError> {
+pub async fn batch_unlink(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String>, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || batch_unlink_sync(skill_ids, agent_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("batch_unlink task failed: {}", error)))?
+}
+
+fn batch_unlink_sync(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<String>, VibeError> {
     let agents = load_agents()?;
     let agent = agents.iter().find(|a| a.id == agent_id).ok_or_else(|| {
         VibeError::AgentNotFound {
@@ -487,7 +561,13 @@ pub fn batch_unlink(skill_ids: Vec<String>, agent_id: String) -> Result<Vec<Stri
 
 /// 将 agent 的所有 skills 层级同步到 ~/.vibe-skills/{agent_id}/
 #[tauri::command]
-pub fn sync_agent_to_vibe(agent_id: String) -> Result<SyncResult, VibeError> {
+pub async fn sync_agent_to_vibe(agent_id: String) -> Result<SyncResult, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || sync_agent_to_vibe_sync(agent_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("sync_agent_to_vibe task failed: {}", error)))?
+}
+
+fn sync_agent_to_vibe_sync(agent_id: String) -> Result<SyncResult, VibeError> {
     let agents = load_agents()?;
     let agent = agents
         .iter()
@@ -529,7 +609,16 @@ pub fn sync_agent_to_vibe(agent_id: String) -> Result<SyncResult, VibeError> {
 
 /// 将 agent 的特定分类同步到 ~/.vibe-skills/{agent_id}/{category}/
 #[tauri::command]
-pub fn sync_category_to_vibe(
+pub async fn sync_category_to_vibe(
+    agent_id: String,
+    category_path: String,
+) -> Result<SyncResult, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || sync_category_to_vibe_sync(agent_id, category_path))
+        .await
+        .map_err(|error| VibeError::Path(format!("sync_category_to_vibe task failed: {}", error)))?
+}
+
+fn sync_category_to_vibe_sync(
     agent_id: String,
     category_path: String,
 ) -> Result<SyncResult, VibeError> {
@@ -542,6 +631,8 @@ pub fn sync_category_to_vibe(
         })?;
 
     let source_dir = Path::new(&agent.skills_dir);
+    // M1：拒绝 `..` 父目录组件与绝对路径，防止穿越到 agent 目录外
+    validate_relative_segment(&category_path, "Category path")?;
     let category_dir = source_dir.join(&category_path);
 
     if !category_dir.exists() {
@@ -576,7 +667,13 @@ pub fn sync_category_to_vibe(
 
 /// 移除软连接
 #[tauri::command]
-pub fn remove_sync(agent_id: String, path: Option<String>) -> Result<(), VibeError> {
+pub async fn remove_sync(agent_id: String, path: Option<String>) -> Result<(), VibeError> {
+    tauri::async_runtime::spawn_blocking(move || remove_sync_sync(agent_id, path))
+        .await
+        .map_err(|error| VibeError::Path(format!("remove_sync task failed: {}", error)))?
+}
+
+fn remove_sync_sync(agent_id: String, path: Option<String>) -> Result<(), VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let target_base = vibe_dir.join(&agent_id);
 
@@ -591,6 +688,8 @@ pub fn remove_sync(agent_id: String, path: Option<String>) -> Result<(), VibeErr
 
     match &path {
         Some(p) => {
+            // M1：拒绝 `..` 父目录组件与绝对路径
+            validate_relative_segment(p, "Sync path")?;
             let target = target_base.join(p);
             if target.exists() {
                 let _ = remove_symlinks_recursive(&target)?;
@@ -669,7 +768,16 @@ fn sync_directory_recursive(
 
 /// 按 skill 名称列表删除目标端 symlink
 #[tauri::command]
-pub fn remove_sync_skills(
+pub async fn remove_sync_skills(
+    agent_id: String,
+    skill_names: Vec<String>,
+) -> Result<SyncResult, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || remove_sync_skills_sync(agent_id, skill_names))
+        .await
+        .map_err(|error| VibeError::Path(format!("remove_sync_skills task failed: {}", error)))?
+}
+
+fn remove_sync_skills_sync(
     agent_id: String,
     skill_names: Vec<String>,
 ) -> Result<SyncResult, VibeError> {
@@ -683,6 +791,8 @@ pub fn remove_sync_skills(
     };
 
     for name in &skill_names {
+        // M1：拒绝 `..` 父目录组件与绝对路径
+        validate_relative_segment(name, "Skill name")?;
         let target = target_base.join(name);
         if !target.exists() {
             continue;
@@ -742,7 +852,18 @@ fn remove_symlinks_recursive(dir: &Path) -> Result<usize, VibeError> {
 
 /// 将 agent 的 skill 同步到技能库（命令入口，记录单条 Link 历史）
 #[tauri::command]
-pub fn sync_to_vibe(
+pub async fn sync_to_vibe(
+    skill_id: String,
+    agent_id: String,
+    force: bool,
+    source_path: Option<String>,
+) -> Result<String, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || sync_to_vibe_sync(skill_id, agent_id, force, source_path))
+        .await
+        .map_err(|error| VibeError::Path(format!("sync_to_vibe task failed: {}", error)))?
+}
+
+fn sync_to_vibe_sync(
     skill_id: String,
     agent_id: String,
     force: bool,
@@ -777,7 +898,17 @@ pub fn sync_to_vibe(
 
 /// 重新链接（命令入口，记录单条 Link 历史）
 #[tauri::command]
-pub fn relink(
+pub async fn relink(
+    skill_id: String,
+    agent_id: String,
+    source_path: Option<String>,
+) -> Result<String, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || relink_sync(skill_id, agent_id, source_path))
+        .await
+        .map_err(|error| VibeError::Path(format!("relink task failed: {}", error)))?
+}
+
+fn relink_sync(
     skill_id: String,
     agent_id: String,
     source_path: Option<String>,
@@ -810,7 +941,17 @@ pub fn relink(
 }
 
 #[tauri::command]
-pub fn replace_with_library(
+pub async fn replace_with_library(
+    skill_id: String,
+    agent_id: String,
+    source_path: Option<String>,
+) -> Result<String, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || replace_with_library_sync(skill_id, agent_id, source_path))
+        .await
+        .map_err(|error| VibeError::Path(format!("replace_with_library task failed: {}", error)))?
+}
+
+fn replace_with_library_sync(
     skill_id: String,
     agent_id: String,
     source_path: Option<String>,
@@ -841,41 +982,68 @@ pub fn replace_with_library(
     Ok(format_link_report(&report))
 }
 
-/// 递归查找 skill 路径
+/// 递归查找 skill 路径（L1：带 visited 环保护，symlink 环不会无限递归）
 fn find_skill_path_recursive(dir: &Path, skill_id: &str) -> Option<PathBuf> {
     if !dir.exists() {
         return None;
     }
 
-    // 直接检查当前目录
-    let direct = dir.join(skill_id);
-    if (direct.exists() && direct.join("SKILL.md").exists()) || vibe_fs::is_link(&direct) {
-        return Some(direct);
-    }
+    let mut visited: std::collections::HashSet<std::path::PathBuf> =
+        std::collections::HashSet::new();
 
-    // 递归搜索子目录
-    for entry in fs::read_dir(dir).ok()? {
-        let entry = entry.ok()?;
-        let path = entry.path();
-        let name = path.file_name().map(|n| n.to_string_lossy().to_string());
-        if name.as_deref() == Some(skill_id)
-            && ((path.exists() && path.join("SKILL.md").exists()) || vibe_fs::is_link(&path))
-        {
-            return Some(path);
+    fn walk(
+        dir: &Path,
+        skill_id: &str,
+        depth: usize,
+        visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    ) -> Option<PathBuf> {
+        const MAX_DEPTH: usize = 12;
+        if depth > MAX_DEPTH || !visited.insert(vibe_fs::normalize_path(dir)) {
+            return None;
         }
-        if path.is_dir() {
-            if let Some(found) = find_skill_path_recursive(&path, skill_id) {
-                return Some(found);
+
+        // 直接检查当前目录
+        let direct = dir.join(skill_id);
+        if (direct.exists() && direct.join("SKILL.md").exists()) || vibe_fs::is_link(&direct) {
+            return Some(direct);
+        }
+
+        // 递归搜索子目录
+        for entry in fs::read_dir(dir).ok()? {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            let name = path.file_name().map(|n| n.to_string_lossy().to_string());
+            if name.as_deref() == Some(skill_id)
+                && ((path.exists() && path.join("SKILL.md").exists()) || vibe_fs::is_link(&path))
+            {
+                return Some(path);
+            }
+            if path.is_dir() {
+                if let Some(found) = walk(&path, skill_id, depth + 1, visited) {
+                    return Some(found);
+                }
             }
         }
+
+        None
     }
 
-    None
+    walk(dir, skill_id, 0, &mut visited)
 }
 
 /// 批量操作：对同一个 skill 执行多个 agent 的操作（每个 agent 记录独立历史，撤销/重做精确生效）
 #[tauri::command]
-pub fn batch_skill_action(
+pub async fn batch_skill_action(
+    skill_id: String,
+    agent_ids: Vec<String>,
+    action: String,
+) -> Result<SyncResult, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || batch_skill_action_sync(skill_id, agent_ids, action))
+        .await
+        .map_err(|error| VibeError::Path(format!("batch_skill_action task failed: {}", error)))?
+}
+
+fn batch_skill_action_sync(
     skill_id: String,
     agent_ids: Vec<String>,
     action: String,
@@ -893,6 +1061,13 @@ pub fn batch_skill_action(
         synced_count: 0,
         errors: Vec::new(),
         warnings: Vec::new(),
+    };
+
+    // M11：sync_from_plugin 的插件列表只需扫描一次（提出 agent 循环外）
+    let plugin_skills = if action == "sync_from_plugin" {
+        Some(crate::commands::skills::list_plugin_skills_sync()?)
+    } else {
+        None
     };
 
     for agent_id in &agent_ids {
@@ -914,7 +1089,12 @@ pub fn batch_skill_action(
             "remove_dangling" => {
                 unlink_skill(&skill_id, agent, None).map(|_| action_report("unlink"))
             }
-            "sync_from_plugin" => sync_from_plugin_impl(&skill_id, agent),
+            "sync_from_plugin" => match &plugin_skills {
+                Some(list) => sync_from_plugin_impl(&skill_id, list),
+                None => Err(VibeError::Path(
+                    "sync_from_plugin: plugin skills were not preloaded".to_string(),
+                )),
+            },
             _ => {
                 result.errors.push(format!("Unknown action: {}", action));
                 continue;
@@ -947,7 +1127,7 @@ pub fn batch_skill_action(
 }
 
 /// 从 plugin 同步 skill 到中心库
-fn sync_from_plugin_impl(skill_id: &str, _agent: &Agent) -> Result<LinkCreationReport, VibeError> {
+fn sync_from_plugin_impl(skill_id: &str, plugin_skills: &[Skill]) -> Result<LinkCreationReport, VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let skill_path = vibe_dir.join(skill_id);
 
@@ -956,8 +1136,7 @@ fn sync_from_plugin_impl(skill_id: &str, _agent: &Agent) -> Result<LinkCreationR
         return Ok(action_report("sync_from_plugin"));
     }
 
-    // 查找 plugin 来源的路径（从 plugin skills 列表中查找）
-    let plugin_skills = crate::commands::skills::list_plugin_skills()?;
+    // 从预取的 plugin skills 列表中查找来源路径
     let skill = plugin_skills.iter().find(|s| s.id == skill_id).ok_or_else(|| {
         VibeError::SkillNotFound {
             skill_id: skill_id.to_string(),

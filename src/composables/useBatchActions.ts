@@ -167,8 +167,8 @@ export function useBatchActions(
   async function execute(intent: BatchIntent): Promise<BatchResult> {
     operating.value = true;
     result.value = null;
-
-    const details: BatchResultDetail[] = [];
+    try {
+      const details: BatchResultDetail[] = [];
     // 按 skillId 分组执行
     const bySkill = new Map<string, { action: AgentAction; agentIds: string[] }[]>();
     for (const pair of intent.pairs) {
@@ -224,7 +224,6 @@ export function useBatchActions(
 
     await skillsStore.refreshSkills();
     await agentsStore.fetchAgents();
-    operating.value = false;
 
     const batchResult: BatchResult = {
       intentId: intent.id,
@@ -235,6 +234,10 @@ export function useBatchActions(
     };
     result.value = batchResult;
     return batchResult;
+    } finally {
+      // 意外异常时也要复位 operating，避免 UI 永久禁用
+      operating.value = false;
+    }
   }
 
   function clearResult() {

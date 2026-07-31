@@ -278,8 +278,10 @@ pub fn load_config() -> Result<Config, VibeError> {
     match serde_json::from_str::<Config>(&content) {
         Ok(config) => Ok(config),
         Err(e) => {
-            // 配置损坏：回退默认并写回，避免应用无法启动
+            // 配置损坏：先备份原文件再回退默认写回，避免用户自定义配置（agents/project_roots）静默丢失
             tracing::warn!("Config corrupt, falling back to default: {}", e);
+            let backup_path = config_path.with_extension("json.bak");
+            let _ = fs::copy(&config_path, &backup_path);
             let config = default_config();
             let _ = save_config(&config);
             Ok(config)

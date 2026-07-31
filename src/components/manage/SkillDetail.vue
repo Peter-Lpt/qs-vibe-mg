@@ -3,7 +3,6 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSkillsStore } from "../../stores/skills";
 import { useToast } from "../../composables/useToast";
-import { useFileLogger } from "../../composables/useFileLogger";
 import { useSkillActions } from "../../composables/useSkillActions";
 import { marked } from "marked";
 import {
@@ -25,7 +24,6 @@ const props = defineProps<{
 const { t } = useI18n();
 const skillsStore = useSkillsStore();
 const toast = useToast();
-const logger = useFileLogger();
 const actions = useSkillActions((k, p) => t(k, p as Record<string, unknown>));
 
 function displayPath(path: string | undefined): string {
@@ -69,7 +67,12 @@ interface ConflictItem {
 }
 const conflictItems = ref<ConflictItem[]>([]);
 
+// M8：竞态守卫——skill 快速切换时丢弃过期响应
+let conflictRequestSeq = 0;
+let updateRequestSeq = 0;
+
 async function loadConflictSources() {
+  const seq = ++conflictRequestSeq;
   if (!props.skill.has_conflict) {
     conflictItems.value = [];
     return;
@@ -86,13 +89,14 @@ async function loadConflictSources() {
   await Promise.all(
     conflictItems.value.map(async (it) => {
       try {
-        it.content = (marked.parse(
-          await skillsStore.previewSkillAtPath(it.source.path)
-        ) as string);
+        const html = marked.parse(await skillsStore.previewSkillAtPath(it.source.path)) as string;
+        if (seq !== conflictRequestSeq) return;
+        it.content = html;
       } catch {
+        if (seq !== conflictRequestSeq) return;
         it.content = "";
       } finally {
-        it.loading = false;
+        if (seq === conflictRequestSeq) it.loading = false;
       }
     })
   );
@@ -111,13 +115,17 @@ async function checkForUpdate() {
     updateCheck.value = null;
     return;
   }
+  const seq = ++updateRequestSeq;
   checkingUpdate.value = true;
   try {
-    updateCheck.value = await skillsStore.checkSkillUpdate(props.skill.id);
+    const result = await skillsStore.checkSkillUpdate(props.skill.id);
+    if (seq !== updateRequestSeq) return;
+    updateCheck.value = result;
   } catch (error: unknown) {
+    if (seq !== updateRequestSeq) return;
     updateCheck.value = { available: false, error: String(error), checked_at: new Date().toISOString() };
   } finally {
-    checkingUpdate.value = false;
+    if (seq === updateRequestSeq) checkingUpdate.value = false;
   }
 }
 
@@ -658,7 +666,7 @@ async function handleBatchAction(action: string) {
 }
 
 function getAgentNameFromPath(path: string): string {
-  logger.debug(`[getAgentNameFromPath] input: ${path}`);
+  // M7：纯字符串映射，不再在渲染路径发日志 IPC
   const lowerPath = path.toLowerCase();
   if (lowerPath.includes(".claude/skills") || lowerPath.includes(".claude\\skills")) return "Claude";
   if (lowerPath.includes(".hermes/skills") || lowerPath.includes(".hermes\\skills")) return "Hermes";
@@ -670,10 +678,8 @@ function getAgentNameFromPath(path: string): string {
   if (lowerPath.includes(".vibe-skills") || lowerPath.includes(".vibe_skills")) return "VibeLib";
   const match = path.match(/[/\\]\.?([^/\\]+)[/\\]skills/);
   if (match && match[1]) {
-    logger.debug(`[getAgentNameFromPath] regex match: ${match[1]}`);
     return match[1].charAt(0).toUpperCase() + match[1].slice(1);
   }
-  logger.debug("[getAgentNameFromPath] no match, returning empty");
   return "";
 }
 
@@ -1085,7 +1091,7 @@ function getAgentNameFromPath(path: string): string {
                 style="color: var(--c-warning);"
                 :title="item.source.symlink_target"
               >
-                → {{ getAgentNameFromPath(item.source.symlink_target) || item.source.symlink_target.split(/[/\\]/).slice(-2, -1)[0] || '未知' }}
+                → {{ getAgentNameFromPath(item.source.symlink_target) || item.source.symlink_target.split(/[/\\]/).slice(-2, -1)[0] || t('manage.link_target_unknown') }}
               </span>
               <span class="text-[10px] shrink-0" style="color: var(--c-text-secondary);">|</span>
               <span
@@ -1093,7 +1099,7 @@ function getAgentNameFromPath(path: string): string {
                 style="color: var(--c-success);"
                 :title="vibeSource?.path || ''"
               >
-                → 库
+                → {{ t('manage.link_to_library') }}
               </span>
             </template>
             <span

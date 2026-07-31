@@ -68,7 +68,9 @@ pub fn load_hash_cache(vibe_dir: &Path) -> HashCache {
 }
 
 /// 原子写回缓存：写入临时文件后 rename，避免并发/中断损坏缓存文件
-pub fn save_hash_cache(vibe_dir: &Path, cache: &HashCache) {
+/// L3：写回前裁剪已不存在的目录条目，防止缓存随 skill 增删无限膨胀
+pub fn save_hash_cache(vibe_dir: &Path, cache: &mut HashCache) {
+    cache.entries.retain(|key, _| Path::new(key).exists());
     let path = vibe_dir.join(CACHE_FILE);
     if let Some(parent) = path.parent() {
         if !parent.exists() {

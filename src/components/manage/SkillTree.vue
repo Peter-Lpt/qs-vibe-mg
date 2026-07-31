@@ -174,13 +174,16 @@ const previewHtml = ref<Record<string, string>>({});
 const previewLoadingKey = ref<string | null>(null);
 async function togglePreview(node: TreeSkillNode) {
   previewKey.value = previewKey.value === node.nodeKey ? null : node.nodeKey;
+  // L7: 只保留当前预览节点的缓存，避免随预览节点数无限增长
   if (!previewKey.value || previewHtml.value[node.nodeKey]) return;
   previewLoadingKey.value = node.nodeKey;
-  previewHtml.value = {
-    ...previewHtml.value,
-    [node.nodeKey]: await actions.loadPreview(node.skill, node),
-  };
-  previewLoadingKey.value = null;
+  try {
+    previewHtml.value = {
+      [node.nodeKey]: await actions.loadPreview(node.skill, node),
+    };
+  } finally {
+    previewLoadingKey.value = null;
+  }
 }
 
 // —— 详情：行内展开（与列表模式 SkillRow 一致，避免抽屉遮挡与竞态；单列列表下仅下推兄弟节点，无网格留白问题）——

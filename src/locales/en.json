@@ -216,6 +216,8 @@
     "btn_replace": "Replace with Link",
     "btn_relink": "Relink",
     "btn_clean": "Clean Broken",
+    "link_target_unknown": "Unknown",
+    "link_to_library": "Library",
     "action_delete": "Delete",
     "detach_keep_local_copy": "Detach and keep local copy",
     "detached_keep_local_copy_success": "Detached {agent} and kept a local copy",

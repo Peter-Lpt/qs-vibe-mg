@@ -76,22 +76,22 @@ export const useHistoryStore = defineStore("history", () => {
     canRedo.value = entries.value.some((e) => e.undone);
   }
 
-  /** 最新可撤销条目的ID（堆栈顶） */
+  /** 最新可撤销条目的ID（堆栈顶）——L7：倒序遍历，避免 slice().reverse() 复制全量数组 */
   const latestUndoableId = computed<string | null>(() => {
-    const last = entries.value
-      .slice()
-      .reverse()
-      .find((e) => !e.undone);
-    return last?.id ?? null;
+    const list = entries.value;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (!list[i].undone) return list[i].id;
+    }
+    return null;
   });
 
   /** 最新可重做条目的ID（堆栈顶） */
   const latestRedoableId = computed<string | null>(() => {
-    const last = entries.value
-      .slice()
-      .reverse()
-      .find((e) => e.undone);
-    return last?.id ?? null;
+    const list = entries.value;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].undone) return list[i].id;
+    }
+    return null;
   });
 
   /** 按搜索和过滤条件筛选后的条目 */

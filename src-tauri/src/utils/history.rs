@@ -189,8 +189,18 @@ fn do_detach_keep_copy(skill_id: &str, agent: &Agent, source_path: Option<&str>)
 }
 
 fn do_delete_skill(skill_id: &str) -> Result<(), VibeError> {
-    let skill_path = vibe_skills_dir()?.join(skill_id);
+    let vibe_dir = vibe_skills_dir()?;
+    let skill_path = vibe_dir.join(skill_id);
     if skill_path.exists() {
+        // L4：撤销安装前先快照到 trash，避免安装后本地改动无法找回
+        let trash_root = vibe_dir.join(".trash");
+        fs::create_dir_all(&trash_root)?;
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let snapshot = trash_root.join(format!("undo-install-{}-{}", skill_id, stamp));
+        let _ = crate::utils::fs::copy_dir_all(&skill_path, &snapshot);
         fs::remove_dir_all(&skill_path)?;
     }
     Ok(())

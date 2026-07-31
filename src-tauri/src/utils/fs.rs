@@ -245,7 +245,9 @@ pub fn classify_io_error(error: &std::io::Error) -> String {
 
 /// 删除 symlink（不删除源文件）
 pub fn remove_symlink(link: &Path) -> Result<(), VibeError> {
-    if !link.exists() && !is_symlink(link) {
+    // M2：用 is_link（含 junction）而非 is_symlink，悬空 junction 目标已删时
+    // `exists()` 为 false，但 reparse point 仍在，必须走删除分支清除残留链接
+    if !link.exists() && !is_link(link) {
         return Ok(());
     }
 
@@ -282,12 +284,14 @@ pub fn is_symlink(path: &Path) -> bool {
 }
 
 /// 检查路径是否是 junction（Windows 目录链接）
+/// 用 symlink_metadata 而非 metadata：后者会跟随链接，悬空 junction 的目标已删时
+/// metadata() 失败导致无法识别，残留的 reparse point 就清不掉了
 #[cfg(windows)]
 pub fn is_junction(path: &Path) -> bool {
     use std::os::windows::fs::MetadataExt;
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 
-    path.metadata()
+    path.symlink_metadata()
         .map(|m| {
             let attrs = m.file_attributes();
             // junction 是 reparse point 但不是 symlink

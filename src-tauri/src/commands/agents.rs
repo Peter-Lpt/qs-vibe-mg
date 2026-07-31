@@ -11,17 +11,38 @@ use std::fs;
 use std::path::Path;
 
 #[tauri::command]
-pub fn list_agents() -> Result<Vec<Agent>, VibeError> {
-    load_agents()
+pub async fn list_agents() -> Result<Vec<Agent>, VibeError> {
+    tauri::async_runtime::spawn_blocking(load_agents)
+        .await
+        .map_err(|error| VibeError::Path(format!("list_agents task failed: {}", error)))?
 }
 
 #[tauri::command]
-pub fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VibeError> {
-    add_custom_agent_with_options(name, skills_dir, None, Vec::new())
+pub async fn add_custom_agent(name: String, skills_dir: String) -> Result<Agent, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || add_custom_agent_sync(name, skills_dir))
+        .await
+        .map_err(|error| VibeError::Path(format!("add_custom_agent task failed: {}", error)))?
+}
+
+fn add_custom_agent_sync(name: String, skills_dir: String) -> Result<Agent, VibeError> {
+    add_custom_agent_with_options_sync(name, skills_dir, None, Vec::new())
 }
 
 #[tauri::command]
-pub fn add_custom_agent_with_options(
+pub async fn add_custom_agent_with_options(
+    name: String,
+    skills_dir: String,
+    detect_dir: Option<String>,
+    additional_scan_dirs: Vec<String>,
+) -> Result<Agent, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        add_custom_agent_with_options_sync(name, skills_dir, detect_dir, additional_scan_dirs)
+    })
+    .await
+    .map_err(|error| VibeError::Path(format!("add_custom_agent_with_options task failed: {}", error)))?
+}
+
+fn add_custom_agent_with_options_sync(
     name: String,
     skills_dir: String,
     detect_dir: Option<String>,
@@ -45,6 +66,9 @@ pub fn add_custom_agent_with_options(
             id
         )));
     }
+
+    // M10：校验 skills_dir 为已存在的目录，避免把任意路径（如 C:\）当技能目录深度遍历
+    validate_skills_dir(&skills_dir)?;
 
     let agent_config = AgentConfig {
         id: id.clone(),
@@ -70,7 +94,22 @@ pub fn add_custom_agent_with_options(
 }
 
 #[tauri::command]
-pub fn update_agent(
+pub async fn update_agent(
+    agent_id: String,
+    name: Option<String>,
+    skills_dir: Option<String>,
+    detect_dir: Option<String>,
+    additional_scan_dirs: Option<Vec<String>>,
+    enabled: Option<bool>,
+) -> Result<Agent, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        update_agent_sync(agent_id, name, skills_dir, detect_dir, additional_scan_dirs, enabled)
+    })
+    .await
+    .map_err(|error| VibeError::Path(format!("update_agent task failed: {}", error)))?
+}
+
+fn update_agent_sync(
     agent_id: String,
     name: Option<String>,
     skills_dir: Option<String>,
@@ -92,6 +131,8 @@ pub fn update_agent(
         agent_config.name = n;
     }
     if let Some(d) = skills_dir {
+        // M10：同上，更新时也校验
+        validate_skills_dir(&d)?;
         agent_config.skills_dir = d;
     }
     if let Some(d) = detect_dir {
@@ -120,7 +161,13 @@ pub fn update_agent(
 }
 
 #[tauri::command]
-pub fn remove_custom_agent(agent_id: String) -> Result<(), VibeError> {
+pub async fn remove_custom_agent(agent_id: String) -> Result<(), VibeError> {
+    tauri::async_runtime::spawn_blocking(move || remove_custom_agent_sync(agent_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("remove_custom_agent task failed: {}", error)))?
+}
+
+fn remove_custom_agent_sync(agent_id: String) -> Result<(), VibeError> {
     let mut config = load_config()?;
 
     let idx = config
@@ -135,11 +182,44 @@ pub fn remove_custom_agent(agent_id: String) -> Result<(), VibeError> {
     save_config(&config)?;
     invalidate_agents_cache();
 
+    // L5：清理该 agent 在 vibe 库中的镜像目录（~/.vibe-skills/{agent_id}/，内容为指向 agent 源目录的 symlink）
+    let vibe_dir = vibe_skills_dir()?;
+    let mirror_dir = vibe_dir.join(&agent_id);
+    if mirror_dir.is_dir() && is_mirror_dir(&mirror_dir) {
+        let _ = fs::remove_dir_all(&mirror_dir);
+    }
+
+    Ok(())
+}
+
+/// 镜像目录判定：所有直接子项都是链接（或目录为空），避免误删与 agent 同名的真实 skill
+fn is_mirror_dir(dir: &std::path::Path) -> bool {
+    match fs::read_dir(dir) {
+        Ok(entries) => entries.flatten().all(|e| vibe_fs::is_link(&e.path())),
+        Err(_) => false,
+    }
+}
+
+/// M10：校验 skills_dir 为已存在的目录
+fn validate_skills_dir(skills_dir: &str) -> Result<(), VibeError> {
+    let expanded = crate::utils::path::expand_tilde(skills_dir)?;
+    if !expanded.exists() || !expanded.is_dir() {
+        return Err(VibeError::Config(format!(
+            "Skills directory does not exist or is not a directory: {}",
+            skills_dir
+        )));
+    }
     Ok(())
 }
 
 #[tauri::command]
-pub fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VibeError> {
+pub async fn get_skills_tree(agent_id: String) -> Result<SkillsTreeNode, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || get_skills_tree_sync(agent_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("get_skills_tree task failed: {}", error)))?
+}
+
+fn get_skills_tree_sync(agent_id: String) -> Result<SkillsTreeNode, VibeError> {
     let agents = load_agents()?;
     let agent = agents
         .iter()

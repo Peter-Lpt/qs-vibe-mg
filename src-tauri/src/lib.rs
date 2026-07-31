@@ -16,6 +16,10 @@ use tracing_subscriber::{fmt, EnvFilter};
 // 全局更新异常计数
 static UPDATE_ERROR_COUNT: AtomicU32 = AtomicU32::new(0);
 
+// L6：持有 non_blocking writer 的 guard，避免 std::mem::forget 泄漏；OnceLock 保证只初始化一次
+static LOG_GUARD: std::sync::OnceLock<tracing_appender::non_blocking::WorkerGuard> =
+    std::sync::OnceLock::new();
+
 fn init_logger() {
     let log_dir = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -25,10 +29,8 @@ fn init_logger() {
     std::fs::create_dir_all(&log_dir).ok();
 
     let file_appender = tracing_appender::rolling::daily(&log_dir, "app.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-    // 保持 _guard 在整个程序运行期间存活
-    std::mem::forget(_guard);
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+    let _ = LOG_GUARD.set(guard);
 
     fmt()
         .with_env_filter(

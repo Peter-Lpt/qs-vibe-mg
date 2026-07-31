@@ -32,6 +32,22 @@ const agentsStore = useAgentsStore();
 const appStore = useAppStore();
 const toast = useToast();
 
+// L8：action → 现有 locale key 映射（manage.btn_sync_to_vibe 等动态 key 不存在，
+// 注册表实际使用 btn_sync / btn_replace / btn_clean）
+const ACTION_LABEL_KEYS: Record<string, string> = {
+  link: "manage.btn_link",
+  unlink: "manage.btn_unlink",
+  sync_to_vibe: "manage.btn_sync",
+  replace_with_link: "manage.btn_replace",
+  replace_with_library: "manage.btn_replace",
+  relink: "manage.btn_relink",
+  remove_dangling: "manage.btn_clean",
+  sync_from_plugin: "manage.btn_sync_from_plugin",
+};
+function actionLabel(action: string): string {
+  return t(ACTION_LABEL_KEYS[action] ?? `manage.btn_${action}`);
+}
+
 const filterModel = props.filterModel;
 const selectionModel = useManageSelection(filterModel.filteredSkills);
 
@@ -279,6 +295,7 @@ function filterToErrors() {
 // ── 回到顶部 ──────────────────────────────────
 const showScrollToTop = ref(false);
 let scrollContainer: HTMLElement | null = null;
+let scrollAttachTimer: ReturnType<typeof setTimeout> | null = null;
 function getScrollContainer(): HTMLElement | null {
   if (!scrollContainer) scrollContainer = document.querySelector(".app-shell-content");
   return scrollContainer;
@@ -324,7 +341,9 @@ watch(
 onMounted(async () => {
   document.addEventListener("keydown", handleKeydown);
   document.addEventListener("pointerdown", handlePointerDown);
-  setTimeout(() => {
+  // 延迟挂载滚动监听（等待 .app-shell-content 出现），卸载时清理定时器与监听避免泄漏
+  scrollAttachTimer = setTimeout(() => {
+    scrollAttachTimer = null;
     getScrollContainer()?.addEventListener("scroll", handleScroll);
   }, 100);
   if (skillsStore.skills.length === 0) await skillsStore.fetchSkills();
@@ -334,6 +353,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  if (scrollAttachTimer) clearTimeout(scrollAttachTimer);
   document.removeEventListener("keydown", handleKeydown);
   document.removeEventListener("pointerdown", handlePointerDown);
   getScrollContainer()?.removeEventListener("scroll", handleScroll);
@@ -675,7 +695,7 @@ defineExpose({
               <span style="color: var(--c-text-tertiary);">→</span>
               <span class="truncate" style="color: var(--c-text-secondary);">{{ pair.agentName }}</span>
               <span class="shrink-0 rounded px-1 text-[9px]" style="background: var(--c-surface-hover); color: var(--c-text-tertiary);">
-                {{ t(`manage.btn_${pair.action}`) }}
+                {{ actionLabel(pair.action) }}
               </span>
             </div>
             <div v-if="allPairs.length > 100" class="px-2.5 py-1 text-[10px]" style="color: var(--c-text-tertiary);">
@@ -724,7 +744,7 @@ defineExpose({
                 <span style="color: var(--c-text-tertiary);">→</span>
                 <span class="truncate" style="color: var(--c-text-secondary);">{{ pair.agentName }}</span>
                 <span class="shrink-0 rounded px-1 text-[9px]" style="background: var(--c-surface-hover); color: var(--c-text-tertiary);">
-                  {{ t(`manage.btn_${pair.action}`) }}
+                  {{ actionLabel(pair.action) }}
                 </span>
               </div>
               <div v-if="batchConfirmIntent.pairs.length > 50" class="px-3 py-1.5 text-[10px]" style="color: var(--c-text-tertiary);">

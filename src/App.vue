@@ -64,12 +64,13 @@ watch(
 );
 
 // 当技能列表发生变化时，同步刷新历史记录
+// M12：浅 watch 数组引用 + length 即可覆盖 fetch/refresh（整体替换）与
+// install push（长度变化）；深比较大数组每次变更开销大且无必要
 watch(
-  () => skillsStore.skills,
+  () => [skillsStore.skills, skillsStore.skills.length],
   () => {
     historyStore.fetchHistory();
-  },
-  { deep: true }
+  }
 );
 
 function handleGlobalKeydown(e: KeyboardEvent) {

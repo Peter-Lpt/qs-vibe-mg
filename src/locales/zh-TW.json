@@ -212,6 +212,8 @@
     "btn_replace": "替換為連結",
     "btn_relink": "重新連結",
     "btn_clean": "清理斷鏈",
+    "link_target_unknown": "未知",
+    "link_to_library": "庫",
     "action_delete": "刪除",
     "detach_keep_local_copy": "斷開並保留本地副本",
     "detached_keep_local_copy_success": "已斷開 {agent} 並保留本地副本",

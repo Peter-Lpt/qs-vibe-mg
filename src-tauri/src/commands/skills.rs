@@ -34,7 +34,13 @@ use crate::utils::path::vibe_skills_dir;
 const MAX_SCAN_DEPTH: usize = 12;
 
 #[tauri::command]
-pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
+pub async fn list_skills() -> Result<Vec<Skill>, VibeError> {
+    tauri::async_runtime::spawn_blocking(list_skills_sync)
+        .await
+        .map_err(|error| VibeError::Path(format!("list_skills task failed: {}", error)))?
+}
+
+fn list_skills_sync() -> Result<Vec<Skill>, VibeError> {
     let mut map: HashMap<String, SkillEntry> = HashMap::new();
 
     let vibe_dir = vibe_skills_dir()?;
@@ -43,6 +49,9 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
     let agents = build_agents_from_config(&config)?;
     let agent_ids: std::collections::HashSet<String> =
         agents.iter().map(|agent| agent.id.clone()).collect();
+
+    // H2：每个 agent 只扫描一次链接，构建 skill_id → agents 映射，避免每个 skill 全量重扫
+    let linked_agents_map = build_linked_agents_map(&agents);
 
     scan_directory(
         &vibe_dir,
@@ -96,12 +105,12 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
     // Plugin skills 由独立的 list_plugin_skills() 处理
     // 这样可以避免 plugin sources 与 regular sources 合并
 
-    crate::utils::hash::save_hash_cache(&vibe_dir, &hash_cache);
+    crate::utils::hash::save_hash_cache(&vibe_dir, &mut hash_cache);
 
     let mut skills: Vec<Skill> = map
         .into_iter()
         .map(|(id, entry)| {
-            let linked_agents = find_linked_agents(&id, &agents);
+            let linked_agents = linked_agents_map.get(&id).cloned().unwrap_or_default();
 
             // list_skills() 不再扫描 plugin marketplace，所以这里不会有 plugin sources
             let from_plugin = false;
@@ -182,7 +191,13 @@ pub fn list_skills() -> Result<Vec<Skill>, VibeError> {
 /// 列出所有 plugin skills（独立于 regular skills）
 /// Plugin skills 由 plugin 市场管理，不在中心库中
 #[tauri::command]
-pub fn list_plugin_skills() -> Result<Vec<Skill>, VibeError> {
+pub async fn list_plugin_skills() -> Result<Vec<Skill>, VibeError> {
+    tauri::async_runtime::spawn_blocking(list_plugin_skills_sync)
+        .await
+        .map_err(|error| VibeError::Path(format!("list_plugin_skills task failed: {}", error)))?
+}
+
+pub fn list_plugin_skills_sync() -> Result<Vec<Skill>, VibeError> {
     let mut map: HashMap<String, SkillEntry> = HashMap::new();
 
     let config = load_config()?;
@@ -194,13 +209,20 @@ pub fn list_plugin_skills() -> Result<Vec<Skill>, VibeError> {
     // 只扫描 plugin 市场
     scan_plugin_marketplace_skills(&mut map, &mut hash_cache)?;
 
-    crate::utils::hash::save_hash_cache(&vibe_dir, &hash_cache);
+    crate::utils::hash::save_hash_cache(&vibe_dir, &mut hash_cache);
+
+    // M9：插件启用状态配置文件只需读取一次，避免每个 plugin 重读 settings.json/config.toml
+    let claude_enabled = read_claude_enabled_plugins().unwrap_or_default();
+    let codex_enabled = read_codex_plugin_enabled().unwrap_or_default();
+
+    // H2：每个 agent 只扫描一次链接，构建 skill_id → agents 映射
+    let linked_agents_map = build_linked_agents_map(&agents);
 
     // 过滤掉已认领的 skill（已在中心库中的）
     let mut skills: Vec<Skill> = map
         .into_iter()
         .map(|(id, entry)| {
-            let linked_agents = find_linked_agents(&id, &agents);
+            let linked_agents = linked_agents_map.get(&id).cloned().unwrap_or_default();
 
             // 提取 plugin 来源信息
             let from_plugin = true; // 这里只处理 plugin skills
@@ -219,16 +241,16 @@ pub fn list_plugin_skills() -> Result<Vec<Skill>, VibeError> {
             // Plugin skills 不检测冲突、断链、重复（由 plugin 系统管理）
             let missing_name = entry.name.is_empty();
 
-            // 获取 plugin 启用状态
+            // 获取 plugin 启用状态（M9：从预读的映射查找，不重复读文件）
             let plugin_enabled = entry.sources.iter()
                 .find(|s| s.source_kind == "marketplace" || s.from.starts_with("claude-plugin:") || s.from.starts_with("codex-plugin:"))
                 .and_then(|s| {
                     if s.from.starts_with("claude-plugin:") {
                         let plugin_name = s.from.strip_prefix("claude-plugin:").unwrap_or("");
-                        get_plugin_enabled("claude-plugin", plugin_name)
+                        lookup_plugin_enabled(&claude_enabled, plugin_name)
                     } else if s.from.starts_with("codex-plugin:") {
                         let plugin_name = s.from.strip_prefix("codex-plugin:").unwrap_or("");
-                        get_plugin_enabled("codex-plugin", plugin_name)
+                        lookup_plugin_enabled(&codex_enabled, plugin_name)
                     } else {
                         None
                     }
@@ -285,12 +307,18 @@ pub fn list_plugin_skills() -> Result<Vec<Skill>, VibeError> {
 /// 将 plugin skill 复制到 ~/.vibe-skills/，使其成为 library-managed skill
 /// 如果已存在，先快照到 .trash/ 再覆盖
 #[tauri::command]
-pub fn adopt_plugin_skill(skill_id: String) -> Result<Skill, VibeError> {
+pub async fn adopt_plugin_skill(skill_id: String) -> Result<Skill, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || adopt_plugin_skill_sync(skill_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("adopt_plugin_skill task failed: {}", error)))?
+}
+
+fn adopt_plugin_skill_sync(skill_id: String) -> Result<Skill, VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let skill_path = vibe_dir.join(&skill_id);
 
     // 查找 plugin skill
-    let plugin_skills = list_plugin_skills()?;
+    let plugin_skills = list_plugin_skills_sync()?;
     let plugin_skill = plugin_skills.iter().find(|s| s.id == skill_id).ok_or_else(|| {
         VibeError::SkillNotFound {
             skill_id: skill_id.clone(),
@@ -314,14 +342,22 @@ pub fn adopt_plugin_skill(skill_id: String) -> Result<Skill, VibeError> {
         )));
     }
 
-    // 如果已存在，先快照到 .trash/ 再删除
+    // 如果已存在，先快照到 .trash/ 再删除（H3：快照失败则中止，避免数据丢失）
     if skill_path.exists() {
         let trash_dir = vibe_dir.join(".trash");
-        let _ = std::fs::create_dir_all(&trash_dir);
-        let timestamp = crate::utils::datetime::chrono_now().replace("-", "").replace(":", "").replace(" ", "_");
-        let trash_path = trash_dir.join(format!("{}_{}", skill_id, timestamp));
-        let _ = copy_dir_all(&skill_path, &trash_path);
-        let _ = std::fs::remove_dir_all(&skill_path);
+        fs::create_dir_all(&trash_dir)?;
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let trash_path = trash_dir.join(format!("{}_{}", skill_id, stamp));
+        copy_dir_all(&skill_path, &trash_path).map_err(|e| {
+            VibeError::Path(format!(
+                "认领前快照已有 skill '{}' 到 trash 失败，已中止：{}",
+                skill_id, e
+            ))
+        })?;
+        fs::remove_dir_all(&skill_path)?;
     }
 
     // 复制到中心库
@@ -339,7 +375,7 @@ pub fn adopt_plugin_skill(skill_id: String) -> Result<Skill, VibeError> {
     let _ = write_skill_origin(&skill_path, &origin);
 
     // 返回新创建的 library skill
-    let skills = list_skills()?;
+    let skills = list_skills_sync()?;
     skills.into_iter().find(|s| s.id == skill_id).ok_or_else(|| {
         VibeError::Path(format!(
             "Failed to find adopted skill '{}' in library",
@@ -356,13 +392,27 @@ pub async fn check_skill_update(skill_id: String) -> Result<SkillUpdateCheck, Vi
 }
 
 fn check_skill_update_sync(skill_id: String) -> Result<SkillUpdateCheck, VibeError> {
-    let skill = list_skills()?
-        .into_iter()
-        .find(|skill| skill.id == skill_id)
-        .ok_or_else(|| VibeError::SkillNotFound {
+    // 直接读取中心库来源记录，避免每次单技能检测都触发全量扫描
+    let vibe_dir = vibe_skills_dir()?;
+    let skill_path = vibe_dir.join(&skill_id);
+    if !skill_path.exists() && !vibe_fs::is_link(&skill_path) {
+        return Err(VibeError::SkillNotFound {
             skill_id: skill_id.clone(),
-        })?;
-    check_skill_update_for_skill(&skill)
+        });
+    }
+    let checked_at = datetime::chrono_now();
+    let Some(origin) = read_skill_origin(&skill_path) else {
+        return Ok(SkillUpdateCheck {
+            skill_id,
+            method: "unknown".to_string(),
+            available: false,
+            current_commit: None,
+            remote_commit: None,
+            checked_at,
+            error: Some("No provenance record is available".to_string()),
+        });
+    };
+    check_skill_update_for_origin(&skill_id, &origin, checked_at)
 }
 
 fn check_skill_update_for_skill(skill: &Skill) -> Result<SkillUpdateCheck, VibeError> {
@@ -391,17 +441,25 @@ fn check_skill_update_for_skill(skill: &Skill) -> Result<SkillUpdateCheck, VibeE
         });
     };
 
+    check_skill_update_for_origin(&skill_id, origin, checked_at)
+}
+
+fn check_skill_update_for_origin(
+    skill_id: &str,
+    origin: &crate::models::origin::SkillOrigin,
+    checked_at: String,
+) -> Result<SkillUpdateCheck, VibeError> {
     let method = normalize_source_method(&origin.method);
     match method.as_str() {
-        SOURCE_METHOD_GIT => check_git_source_update(&skill_id, origin, checked_at),
+        SOURCE_METHOD_GIT => check_git_source_update(skill_id, origin, checked_at),
         SOURCE_METHOD_NPX | SOURCE_METHOD_NPM => {
-            check_npm_package_update(&skill_id, origin, checked_at)
+            check_npm_package_update(skill_id, origin, checked_at)
         }
         SOURCE_METHOD_MARKETPLACE => {
-            check_plugin_update(&skill_id, origin, checked_at)
+            check_plugin_update(skill_id, origin, checked_at)
         }
         _ => Ok(SkillUpdateCheck {
-            skill_id,
+            skill_id: skill_id.to_string(),
             method: origin.method.clone(),
             available: false,
             current_commit: None,
@@ -459,21 +517,38 @@ fn check_git_source_update(
 
 #[tauri::command]
 pub async fn check_all_skill_updates() -> Result<Vec<SkillUpdateCheck>, VibeError> {
-    tauri::async_runtime::spawn_blocking(|| {
-        let skills = list_skills()?;
-        tracing::info!(skill_count = skills.len(), "Checking all skill updates");
-        let results: Result<Vec<_>, _> = skills
-            .iter()
-            .map(check_skill_update_for_skill)
-            .collect();
-        if let Ok(items) = &results {
-            let available = items.iter().filter(|item| item.available).count();
-            tracing::info!(checked = items.len(), available, "Finished checking skill updates");
+    tauri::async_runtime::spawn_blocking(check_all_skill_updates_sync)
+        .await
+        .map_err(|error| VibeError::Path(format!("Update check task failed: {}", error)))?
+}
+
+fn check_all_skill_updates_sync() -> Result<Vec<SkillUpdateCheck>, VibeError> {
+    let skills = list_skills_sync()?;
+    tracing::info!(skill_count = skills.len(), "Checking all skill updates");
+    // H7：git fetch / npm view 网络等待占大头，按批次并发检测，避免串行 N×30s
+    const MAX_CONCURRENCY: usize = 6;
+    let mut results: Vec<SkillUpdateCheck> = Vec::with_capacity(skills.len());
+    std::thread::scope(|scope| {
+        for chunk in skills.chunks(MAX_CONCURRENCY) {
+            let handles: Vec<_> = chunk
+                .iter()
+                .map(|skill| scope.spawn(move || check_skill_update_for_skill(skill)))
+                .collect();
+            for handle in handles {
+                match handle.join().unwrap_or_else(|_| {
+                    Err(VibeError::Path("update check task panicked".to_string()))
+                }) {
+                    Ok(item) => results.push(item),
+                    Err(error) => {
+                        warn!(%error, "Skill update check failed");
+                    }
+                }
+            }
         }
-        results
-    })
-    .await
-    .map_err(|error| VibeError::Path(format!("Update check task failed: {}", error)))?
+    });
+    let available = results.iter().filter(|item| item.available).count();
+    tracing::info!(checked = results.len(), available, "Finished checking skill updates");
+    Ok(results)
 }
 
 fn run_git_fetch(path: &Path) -> Result<std::process::Output, String> {
@@ -727,9 +802,15 @@ fn update_plugin_skill(
 /// 批量更新同一 marketplace 的所有 plugin skills
 /// 当一个 plugin 更新时，同一来源的其他 plugin 也会被更新
 #[tauri::command]
-pub fn update_plugin_skills_from_marketplace(marketplace: String) -> Result<Vec<String>, VibeError> {
+pub async fn update_plugin_skills_from_marketplace(marketplace: String) -> Result<Vec<String>, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || update_plugin_skills_from_marketplace_sync(marketplace))
+        .await
+        .map_err(|error| VibeError::Path(format!("update_plugin_skills_from_marketplace task failed: {}", error)))?
+}
+
+fn update_plugin_skills_from_marketplace_sync(marketplace: String) -> Result<Vec<String>, VibeError> {
     let vibe_dir = vibe_skills_dir()?;
-    let all_skills = list_skills()?;
+    let all_skills = list_skills_sync()?;
     let mut updated_ids = Vec::new();
 
     // 找到所有来自该 marketplace 的 plugin skills
@@ -769,8 +850,14 @@ pub fn update_plugin_skills_from_marketplace(marketplace: String) -> Result<Vec<
 }
 
 #[tauri::command]
-pub fn search_skills(query: String) -> Result<Vec<Skill>, VibeError> {
-    let all_skills = list_skills()?;
+pub async fn search_skills(query: String) -> Result<Vec<Skill>, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || search_skills_sync(query))
+        .await
+        .map_err(|error| VibeError::Path(format!("search_skills task failed: {}", error)))?
+}
+
+fn search_skills_sync(query: String) -> Result<Vec<Skill>, VibeError> {
+    let all_skills = list_skills_sync()?;
     if query.trim().is_empty() {
         return Ok(all_skills);
     }
@@ -789,8 +876,14 @@ pub fn search_skills(query: String) -> Result<Vec<Skill>, VibeError> {
 }
 
 #[tauri::command]
-pub fn detect_issues() -> Result<Vec<SkillIssue>, VibeError> {
-    let skills = list_skills()?;
+pub async fn detect_issues() -> Result<Vec<SkillIssue>, VibeError> {
+    tauri::async_runtime::spawn_blocking(detect_issues_sync)
+        .await
+        .map_err(|error| VibeError::Path(format!("detect_issues task failed: {}", error)))?
+}
+
+fn detect_issues_sync() -> Result<Vec<SkillIssue>, VibeError> {
+    let skills = list_skills_sync()?;
     let mut issues = Vec::new();
 
     for skill in skills {
@@ -834,7 +927,13 @@ pub fn detect_issues() -> Result<Vec<SkillIssue>, VibeError> {
 }
 
 #[tauri::command]
-pub fn get_dashboard_data() -> Result<DashboardData, VibeError> {
+pub async fn get_dashboard_data() -> Result<DashboardData, VibeError> {
+    tauri::async_runtime::spawn_blocking(get_dashboard_data_sync)
+        .await
+        .map_err(|error| VibeError::Path(format!("get_dashboard_data task failed: {}", error)))?
+}
+
+fn get_dashboard_data_sync() -> Result<DashboardData, VibeError> {
     let config = load_config()?;
     let agents = build_agents_from_config(&config)?;
     let vibe_dir = vibe_skills_dir()?;
@@ -1098,7 +1197,13 @@ fn collect_vibe_skills(
 }
 
 #[tauri::command]
-pub fn preview_skill(skill_id: String) -> Result<String, VibeError> {
+pub async fn preview_skill(skill_id: String) -> Result<String, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || preview_skill_sync(skill_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("preview_skill task failed: {}", error)))?
+}
+
+fn preview_skill_sync(skill_id: String) -> Result<String, VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let vibe_path = vibe_dir.join(&skill_id).join("SKILL.md");
     if vibe_path.exists() {
@@ -1141,7 +1246,13 @@ pub fn preview_skill(skill_id: String) -> Result<String, VibeError> {
 
 /// 按路径预览 SKILL.md 内容（P6：沙箱到 vibe 目录与已配置 agent 目录）
 #[tauri::command]
-pub fn preview_skill_at_path(path: String) -> Result<String, VibeError> {
+pub async fn preview_skill_at_path(path: String) -> Result<String, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || preview_skill_at_path_sync(path))
+        .await
+        .map_err(|error| VibeError::Path(format!("preview_skill_at_path task failed: {}", error)))?
+}
+
+fn preview_skill_at_path_sync(path: String) -> Result<String, VibeError> {
     let skill_path = Path::new(&path);
     if !skill_path.exists() {
         return Err(VibeError::SkillNotFound { skill_id: path });
@@ -1219,12 +1330,28 @@ fn find_skill_md_recursive(
 }
 
 #[tauri::command]
-pub fn install_skill(source_path: String, reference: bool) -> Result<Skill, VibeError> {
+pub async fn install_skill(source_path: String, reference: bool) -> Result<Skill, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || install_skill_sync(source_path, reference))
+        .await
+        .map_err(|error| VibeError::Path(format!("install_skill task failed: {}", error)))?
+}
+
+fn install_skill_sync(source_path: String, reference: bool) -> Result<Skill, VibeError> {
     install_skill_from_path(Path::new(&source_path), reference)
 }
 
 #[tauri::command]
-pub fn install_skill_from_source(
+pub async fn install_skill_from_source(
+    source_mode: String,
+    source_value: String,
+    reference: bool,
+) -> Result<Skill, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || install_skill_from_source_sync(source_mode, source_value, reference))
+        .await
+        .map_err(|error| VibeError::Path(format!("install_skill_from_source task failed: {}", error)))?
+}
+
+fn install_skill_from_source_sync(
     source_mode: String,
     source_value: String,
     reference: bool,
@@ -1576,10 +1703,10 @@ fn install_skill_from_materialized_source(
     }
 
     let modified_at = get_modified_at(&dest);
-    let hash = crate::utils::hash::dir_hash_into(
-        &mut crate::utils::hash::load_hash_cache(&vibe_dir),
-        &dest,
-    );
+    // L2：算完哈希立即写回缓存，避免刚安装的 skill 下次扫描重复计算
+    let mut hash_cache = crate::utils::hash::load_hash_cache(&vibe_dir);
+    let hash = crate::utils::hash::dir_hash_into(&mut hash_cache, &dest);
+    crate::utils::hash::save_hash_cache(&vibe_dir, &mut hash_cache);
 
     Ok(Skill {
         id: name.clone(),
@@ -1693,7 +1820,13 @@ fn remove_path(path: &Path) -> Result<(), VibeError> {
 }
 
 #[tauri::command]
-pub fn update_skill(skill_id: String, force: bool) -> Result<Skill, VibeError> {
+pub async fn update_skill(skill_id: String, force: bool) -> Result<Skill, VibeError> {
+    tauri::async_runtime::spawn_blocking(move || update_skill_sync(skill_id, force))
+        .await
+        .map_err(|error| VibeError::Path(format!("update_skill task failed: {}", error)))?
+}
+
+fn update_skill_sync(skill_id: String, force: bool) -> Result<Skill, VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let skill_path = vibe_dir.join(&skill_id);
     if !skill_path.exists() && !vibe_fs::is_link(&skill_path) {
@@ -1758,7 +1891,7 @@ pub fn update_skill(skill_id: String, force: bool) -> Result<Skill, VibeError> {
         }
     }
 
-    list_skills()?
+    list_skills_sync()?
         .into_iter()
         .find(|skill| skill.id == skill_id)
         .ok_or(VibeError::SkillNotFound { skill_id })
@@ -1820,12 +1953,26 @@ fn update_from_git_source(
     }
 
     copy_skill_dir_all(source_path, &temp_dir)?;
-    if vibe_fs::is_link(skill_path) {
-        vibe_fs::remove_symlink(skill_path)?;
-    } else if skill_path.exists() {
-        fs::remove_dir_all(skill_path)?;
+
+    // M3：先把旧版本 rename 为备份，再把新版本 rename 到原位；失败则回滚备份，
+    // 避免「先删后建」窗口下 rename 失败导致中心库版本丢失
+    let backup_dir = skill_path.with_file_name(format!(".{}.backup", skill_id));
+    let backup_existed = skill_path.exists() || vibe_fs::is_link(&skill_path);
+    if backup_existed {
+        if backup_dir.exists() || vibe_fs::is_link(&backup_dir) {
+            remove_path(&backup_dir)?;
+        }
+        fs::rename(&skill_path, &backup_dir)?;
     }
-    fs::rename(&temp_dir, skill_path)?;
+    if let Err(error) = fs::rename(&temp_dir, skill_path) {
+        if backup_existed && (backup_dir.exists() || vibe_fs::is_link(&backup_dir)) {
+            let _ = fs::rename(&backup_dir, skill_path);
+        }
+        return Err(VibeError::Io(error));
+    }
+    if backup_existed && (backup_dir.exists() || vibe_fs::is_link(&backup_dir)) {
+        remove_path(&backup_dir)?;
+    }
 
     refresh_git_origin(origin, &probe);
     write_skill_origin(skill_path, origin)?;
@@ -1884,7 +2031,13 @@ fn update_from_command_source(
 }
 
 #[tauri::command]
-pub fn delete_library_skill(skill_id: String) -> Result<(), VibeError> {
+pub async fn delete_library_skill(skill_id: String) -> Result<(), VibeError> {
+    tauri::async_runtime::spawn_blocking(move || delete_library_skill_sync(skill_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("delete_library_skill task failed: {}", error)))?
+}
+
+fn delete_library_skill_sync(skill_id: String) -> Result<(), VibeError> {
     let vibe_dir = vibe_skills_dir()?;
     let skill_path = vibe_dir.join(&skill_id);
 
@@ -1892,10 +2045,19 @@ pub fn delete_library_skill(skill_id: String) -> Result<(), VibeError> {
         return Err(VibeError::SkillNotFound { skill_id });
     }
 
-    let trash_dir = vibe_dir.join(".trash").join(&skill_id);
+    let trash_root = vibe_dir.join(".trash");
+    let trash_dir = trash_root.join(&skill_id);
+    // M4：若已有旧快照（更早一次已撤销的删除留下的），先挪到带时间戳的归档名，
+    // 避免抹掉旧快照导致深层撤销链失效
     if trash_dir.exists() {
-        fs::remove_dir_all(&trash_dir)?;
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let stale = trash_root.join(format!("{}_{}_stale", skill_id, stamp));
+        fs::rename(&trash_dir, &stale)?;
     }
+    fs::create_dir_all(&trash_root)?;
     copy_dir_all(&skill_path, &trash_dir)?;
 
     let agents = load_agents()?;
@@ -1916,8 +2078,14 @@ pub fn delete_library_skill(skill_id: String) -> Result<(), VibeError> {
 }
 
 #[tauri::command]
-pub fn delete_skill(skill_id: String) -> Result<(), VibeError> {
-    delete_library_skill(skill_id)
+pub async fn delete_skill(skill_id: String) -> Result<(), VibeError> {
+    tauri::async_runtime::spawn_blocking(move || delete_skill_sync(skill_id))
+        .await
+        .map_err(|error| VibeError::Path(format!("delete_skill task failed: {}", error)))?
+}
+
+fn delete_skill_sync(skill_id: String) -> Result<(), VibeError> {
+    delete_library_skill_sync(skill_id)
 }
 
 /// Restore a deleted skill from trash snapshot
@@ -2085,45 +2253,17 @@ fn read_codex_plugin_enabled() -> Result<HashMap<String, bool>, VibeError> {
     Ok(result)
 }
 
-/// 获取 plugin 的启用状态
-/// 根据 plugin_type 和 plugin_name 查询对应配置
+/// 从预读的启用映射中查找插件状态（M9：避免每个 plugin 重读配置文件）
 /// 返回 Some(true) = 已启用, Some(false) = 已禁用, None = 未配置
-fn get_plugin_enabled(plugin_type: &str, plugin_name: &str) -> Option<bool> {
-    match plugin_type {
-        "claude-plugin" => {
-            // Claude Code: 查询 ~/.claude/settings.json 的 enabledPlugins
-            // plugin_key 格式为 "name@marketplace"
-            if let Ok(enabled_map) = read_claude_enabled_plugins() {
-                // 遍历所有 key，查找匹配的 plugin
-                for (key, enabled) in &enabled_map {
-                    // key 格式: "name@marketplace"
-                    if let Some(at_pos) = key.find('@') {
-                        let name = &key[..at_pos];
-                        if name == plugin_name {
-                            return Some(*enabled);
-                        }
-                    }
-                }
+fn lookup_plugin_enabled(enabled_map: &HashMap<String, bool>, plugin_name: &str) -> Option<bool> {
+    for (key, enabled) in enabled_map {
+        if let Some(at_pos) = key.find('@') {
+            if &key[..at_pos] == plugin_name {
+                return Some(*enabled);
             }
-            // 未配置时返回 None（默认启用）
-            None
         }
-        "codex-plugin" => {
-            // Codex: 查询 ~/.codex/config.toml 的 [plugins."name@marketplace"]
-            if let Ok(enabled_map) = read_codex_plugin_enabled() {
-                for (key, enabled) in &enabled_map {
-                    if let Some(at_pos) = key.find('@') {
-                        let name = &key[..at_pos];
-                        if name == plugin_name {
-                            return Some(*enabled);
-                        }
-                    }
-                }
-            }
-            None
-        }
-        _ => None,
     }
+    None
 }
 
 /// 扫描 Claude Plugin 和 Codex Plugin 市场安装的 skill
@@ -2403,22 +2543,18 @@ fn scan_directory(
     Ok(())
 }
 
-fn find_linked_agents(skill_id: &str, agents: &[crate::models::agent::Agent]) -> Vec<String> {
-    let mut linked = Vec::new();
-
+/// H2：每个 agent 只扫描一次链接目录，构建 skill_id → agent 列表映射
+fn build_linked_agents_map(agents: &[crate::models::agent::Agent]) -> HashMap<String, Vec<String>> {
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
     for agent in agents {
         if !agent.detected {
             continue;
         }
-        // P2：统一复用 scan_linked_skills，避免 Windows junction 归一化分歧
-        let linked_for_agent =
-            crate::utils::config::scan_linked_skills(Path::new(&agent.skills_dir));
-        if linked_for_agent.iter().any(|id| id == skill_id) {
-            linked.push(agent.id.clone());
+        for skill_id in crate::utils::config::scan_linked_skills(Path::new(&agent.skills_dir)) {
+            map.entry(skill_id).or_default().push(agent.id.clone());
         }
     }
-
-    linked
+    map
 }
 
 fn get_modified_at(path: &Path) -> String {

@@ -282,6 +282,16 @@ export function useManageFilters(
   updateChecks?: ComputedRef<Record<string, SkillUpdateCheck>> | Ref<Record<string, SkillUpdateCheck>>
 ) {
   const query = ref("");
+  // H6：过滤计算用防抖后的 query，输入即时更新显示、过滤延迟 200ms 生效，
+  // 避免每次击键触发 filteredSkills + facetCounts 约 19 次全量 filter/sort
+  const debouncedQuery = ref("");
+  let queryDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  watch(query, (value) => {
+    if (queryDebounceTimer) clearTimeout(queryDebounceTimer);
+    queryDebounceTimer = setTimeout(() => {
+      debouncedQuery.value = value;
+    }, 200);
+  });
   const statusPreset = ref<StatusPreset>("all");
   const issues = ref<Set<IssueFilter>>(new Set());
   const libraryScope = ref<Set<LibraryScope>>(new Set());
@@ -291,7 +301,7 @@ export function useManageFilters(
   const domain = ref<DomainScope>(defaultDomain?.value ?? "local");
 
   const state = computed<ManageFilterState>(() => ({
-    query: query.value,
+    query: debouncedQuery.value,
     statusPreset: statusPreset.value,
     issues: issues.value,
     libraryScope: libraryScope.value,
@@ -313,6 +323,7 @@ export function useManageFilters(
 
   function clearQuery() {
     query.value = "";
+    debouncedQuery.value = "";
   }
 
   function clearFilters() {
@@ -372,7 +383,8 @@ export function useManageFilters(
     if (next.size === 0) agentMatch.value = "any";
   }
 
-  watch(agents, (value) => normalizeAgents(value), { deep: true });
+  // M12：agents 为整体替换的数组，浅 watch 即可，避免深比较大数组
+  watch(agents, (value) => normalizeAgents(value));
 
   return {
     query,
@@ -439,7 +451,8 @@ export function useManageSelection(visibleSkills: ComputedRef<Skill[]> | Ref<Ski
     if (next.size !== selectedIds.value.size) selectedIds.value = next;
   }
 
-  watch(visibleSkills, pruneInvisible, { deep: true });
+  // M12：filteredSkills 每次重算返回新数组，浅 watch 即可
+  watch(visibleSkills, pruneInvisible);
 
   return {
     selectedIds,
