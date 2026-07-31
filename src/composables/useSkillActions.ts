@@ -82,9 +82,6 @@ export function useSkillActions(t: (key: string, params?: Record<string, unknown
       case "sync_to_vibe":
         await skillsStore.syncToVibe(skill.id, status.agent.id, true, status.source?.path);
         break;
-      case "replace_with_link":
-        await skillsStore.syncToVibe(skill.id, status.agent.id, false, status.source?.path);
-        break;
       case "relink":
         await skillsStore.relink(skill.id, status.agent.id, status.source?.path);
         break;

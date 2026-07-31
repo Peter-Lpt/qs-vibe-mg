@@ -100,11 +100,9 @@ export function useBatchActions(
       });
     }
 
-    // 统一副本：independent (replace_with_link 或 sync_to_vibe)
+    // 统一副本：independent 副本同步入库（sync_to_vibe）
     const unify = pairs.filter(
-      (p) =>
-        p.action === "replace_with_link" ||
-        (p.action === "sync_to_vibe" && p.statusType === "independent")
+      (p) => p.action === "sync_to_vibe" && p.statusType === "independent"
     );
     if (unify.length > 0) {
       result.push({

@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -58,32 +59,48 @@ pub struct HashCache {
     pub entries: std::collections::HashMap<String, (u64, u64, u64, String)>,
 }
 
-/// 从 vibe 目录加载哈希缓存（文件缺失/损坏时返回空缓存，不影响正确性）
+/// 从 vibe 目录加载哈希缓存。进程内维护全局单例：并发 load→modify→save
+/// 时后写不再覆盖先写；首次从磁盘读取合并，之后直接返回全局快照。
 pub fn load_hash_cache(vibe_dir: &Path) -> HashCache {
-    let path = vibe_dir.join(CACHE_FILE);
-    fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<HashCache>(&s).ok())
-        .unwrap_or_default()
+    let mut global = global_cache().lock().unwrap_or_else(|e| e.into_inner());
+    if global.entries.is_empty() {
+        if let Ok(content) = fs::read_to_string(vibe_dir.join(CACHE_FILE)) {
+            if let Ok(disk) = serde_json::from_str::<HashCache>(&content) {
+                global.entries.extend(disk.entries);
+            }
+        }
+    }
+    global.clone()
 }
 
-/// 原子写回缓存：写入临时文件后 rename，避免并发/中断损坏缓存文件
-/// L3：写回前裁剪已不存在的目录条目，防止缓存随 skill 增删无限膨胀
+/// 原子写回缓存：写入临时文件后 rename，避免并发/中断损坏缓存文件。
+/// 写回前裁剪已不存在的目录条目防止缓存无限膨胀，并将本快照 merge 进
+/// 全局单例，保证多个并发扫描互不覆盖。
 pub fn save_hash_cache(vibe_dir: &Path, cache: &mut HashCache) {
     cache.entries.retain(|key, _| Path::new(key).exists());
+    let merged = {
+        let mut global = global_cache().lock().unwrap_or_else(|e| e.into_inner());
+        global.entries.extend(cache.entries.clone());
+        global.entries.clone()
+    };
     let path = vibe_dir.join(CACHE_FILE);
     if let Some(parent) = path.parent() {
         if !parent.exists() {
             let _ = fs::create_dir_all(parent);
         }
     }
-    let Ok(content) = serde_json::to_string(cache) else {
+    let Ok(content) = serde_json::to_string(&HashCache { entries: merged }) else {
         return;
     };
     let tmp = vibe_dir.join(format!("{}.tmp", CACHE_FILE));
     if fs::write(&tmp, &content).is_ok() {
         let _ = fs::rename(&tmp, &path);
     }
+}
+
+fn global_cache() -> &'static Mutex<HashCache> {
+    static CACHE: OnceLock<Mutex<HashCache>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashCache::default()))
 }
 
 /// 聚合目录的 (mtime_ns, 总字节数, 文件数)，作为缓存失效键。

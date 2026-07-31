@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { computed, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import type { Skill, DashboardData, SkillIssue, SkillUpdateCheck } from "../types";
+import type { Skill, SkillIssue, SkillUpdateCheck } from "../types";
 import { useAgentsStore } from "./agents";
 
 export interface SyncActionResult {
@@ -33,8 +33,6 @@ export const useSkillsStore = defineStore("skills", () => {
   const skills = ref<Skill[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
-  const dashboardData = ref<DashboardData | null>(null);
-  const dashboardLoading = ref(false);
   const issues = ref<SkillIssue[]>([]);
   const issuesLoading = ref(false);
   const updateChecks = ref<Record<string, SkillUpdateCheck>>({});
@@ -61,17 +59,6 @@ export const useSkillsStore = defineStore("skills", () => {
       error.value = null;
     } catch (e: unknown) {
       if (requestId === refreshRequestId) error.value = String(e);
-    }
-  }
-
-  async function getDashboardData() {
-    dashboardLoading.value = true;
-    try {
-      dashboardData.value = await invoke<DashboardData>("get_dashboard_data");
-    } catch (e: unknown) {
-      error.value = String(e);
-    } finally {
-      dashboardLoading.value = false;
     }
   }
 
@@ -153,24 +140,10 @@ export const useSkillsStore = defineStore("skills", () => {
     return updatedIds;
   }
 
-  // 检查插件更新（带 TTL 保护，进入页面时自动调用）
+  // 检查插件更新（带 TTL 保护，进入页面时自动调用；复用 checkSkillUpdate 的缓存）
   async function checkPluginUpdates(skillIds: string[]): Promise<Record<string, { available: boolean; error?: string }>> {
     const results: Record<string, { available: boolean; error?: string }> = {};
-    const needsCheck: string[] = [];
-
-    // 先检查缓存
     for (const id of skillIds) {
-      const cached = getCachedCheck(id);
-      if (cached) {
-        results[id] = { available: cached.available, error: cached.error };
-        updateChecks.value = { ...updateChecks.value, [id]: cached };
-      } else {
-        needsCheck.push(id);
-      }
-    }
-
-    // 对没有缓存的 skill 进行检测
-    for (const id of needsCheck) {
       try {
         const check = await checkSkillUpdate(id);
         results[id] = { available: check.available, error: check.error };
@@ -178,7 +151,6 @@ export const useSkillsStore = defineStore("skills", () => {
         results[id] = { available: false, error: String(e) };
       }
     }
-
     return results;
   }
 
@@ -199,8 +171,18 @@ export const useSkillsStore = defineStore("skills", () => {
 
   async function checkAllSkillUpdates(): Promise<SkillUpdateCheck[]> {
     const results = await invoke<SkillUpdateCheck[]>("check_all_skill_updates");
+    // 结果统一写入 TTL 缓存，checkSkillUpdate 后续可命中
+    for (const result of results) setCachedCheck(result.skill_id, result);
     updateChecks.value = Object.fromEntries(results.map((result) => [result.skill_id, result]));
     return results;
+  }
+
+  // 恢复上次落盘的更新检测结果（重启后无需重新联网即可看到历史状态）
+  async function loadUpdateChecks() {
+    const results = await invoke<SkillUpdateCheck[]>("load_update_checks");
+    if (results.length > 0) {
+      updateChecks.value = Object.fromEntries(results.map((result) => [result.skill_id, result]));
+    }
   }
 
   // 更新异常：有 error 的检测结果
@@ -312,13 +294,10 @@ export const useSkillsStore = defineStore("skills", () => {
     skills,
     loading,
     error,
-    dashboardData,
-    dashboardLoading,
     issues,
     issuesLoading,
     fetchSkills,
     refreshSkills,
-    getDashboardData,
     fetchIssues,
     createLink,
     removeLink,
@@ -330,6 +309,7 @@ export const useSkillsStore = defineStore("skills", () => {
     updatePluginSkillsFromMarketplace,
     checkSkillUpdate,
     checkAllSkillUpdates,
+    loadUpdateChecks,
     checkPluginUpdates,
     updateChecks,
     updateErrors,

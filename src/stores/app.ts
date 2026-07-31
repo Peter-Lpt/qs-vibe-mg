@@ -99,23 +99,6 @@ export const useAppStore = defineStore("app", () => {
       });
   }
 
-  // 数据管理：导出/导入配置（后端调用统一收口到 store）
-  async function exportData(): Promise<string> {
-    return await invoke<string>("export_data");
-  }
-
-  async function readFileFromPath(path: string): Promise<string> {
-    return await invoke<string>("read_file_from_path", { path });
-  }
-
-  async function writeFileToPath(path: string, content: string): Promise<void> {
-    await invoke("write_file_to_path", { path, content });
-  }
-
-  async function importData(json: string): Promise<void> {
-    await invoke("import_data", { json });
-  }
-
   async function fetchConfig() {
     config.value = await invoke<AppConfig>("get_config");
   }
@@ -131,6 +114,12 @@ export const useAppStore = defineStore("app", () => {
     await fetchProjectRootSuggestions();
   }
 
+  async function updateUiConfig(patch: { autoCheckUpdates?: boolean }) {
+    config.value = await invoke<AppConfig>("update_config", {
+      autoCheckUpdates: patch.autoCheckUpdates,
+    });
+  }
+
   return {
     theme,
     locale,
@@ -143,12 +132,9 @@ export const useAppStore = defineStore("app", () => {
     setTheme,
     setLocale,
     init,
-    exportData,
-    readFileFromPath,
-    writeFileToPath,
-    importData,
     fetchConfig,
     fetchProjectRootSuggestions,
     updateProjectRoots,
+    updateUiConfig,
   };
 });

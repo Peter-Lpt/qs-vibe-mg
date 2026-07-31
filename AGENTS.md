@@ -75,17 +75,17 @@ $env:CARGO_HOME = "D:\environment\rust\.cargo"
   - `install_skill` / `install_skill_from_source` —— 支持 folder / git / command 三种来源；`reference=true` 以 symlink 引用源码，否则复制；写入 `SkillOrigin` 溯源。
   - `update_skill` —— git 来源 `git pull --ff-only`（冲突时要求 force），命令来源执行 `update_command`。
   - `delete_library_skill` —— 先快照到 `.trash/` 再删除，并清理各 agent 上的链接。
-  - `detect_issues`、`get_dashboard_data`。
+  - `detect_issues`；`load_update_checks`（读取上次落盘的更新检测结果）。
 - `sync.rs`（符号链接管理，核心）：
   - 链接方向 **vibe→agent**：`create_link` / `remove_link` 在 `agent_dir/{skill}` 创建/移除指向 `~/.vibe-skills/{skill}` 的链接；`detach_keep_local_copy` 断开链接但保留本地副本；`remove_agent_skill_copy` 删除 agent 本地副本（进 trash）。
-  - 镜像方向 **agent→vibe**：`sync_agent_to_vibe` / `sync_category_to_vibe` / `remove_sync` / `remove_sync_skills` 在 `~/.vibe-skills/{agent_id}/` 下为 agent 技能建镜像 symlink。
+  - 镜像方向 **agent→vibe**：`sync_agent_to_vibe` / `sync_category_to_vibe` / `remove_sync` / `remove_sync_skills` 在 `~/.vibe-skills/{agent_id}/` 下为 agent 技能建镜像 symlink（镜像同步类操作不进 undo 链）。
   - 单技能整理：`sync_to_vibe`（把 agent 副本并入库并改指库的 symlink）、`relink`、`replace_with_library`；`batch_link` / `batch_unlink` / `batch_skill_action`（同一 skill 对多 agent 批量操作，每个 agent 记独立历史）。
-- `agents.rs`：`list_agents` / `add_custom_agent`(+`_with_options`) / `update_agent` / `remove_custom_agent` / `get_skills_tree`。
+- `agents.rs`：`list_agents` / `add_custom_agent`(+`_with_options`) / `update_agent` / `remove_custom_agent`。
 - `history.rs`：`get_history` / `undo` / `redo` / `undo_by_id` / `redo_by_id` / `clear_history`。
-- `config.rs`：`get_config` / `suggest_project_roots` / `update_config` / `set_vibe_skills_path` / `export_data` / `import_data` / `write_file_to_path` / `read_file_from_path`。
+- `config.rs`：`get_config` / `suggest_project_roots` / `update_config` / `set_vibe_skills_path`。
 - `logger.rs`：`log_message`（前端日志转发到 tracing）。
 
-**数据模型（`models/`）**：`skill.rs`（`Skill`、`SkillSource`、`ConflictType`、`SkillIssue`）、`agent.rs`（`Agent`）、`history.rs`（`HistoryAction`）、`dashboard.rs`（`DashboardData`/`DashboardStats`/`SharedSkillInfo`）、`origin.rs`（`SkillOrigin` 溯源记录）、`sync.rs`（`SyncResult`）。
+**数据模型（`models/`）**：`skill.rs`（`Skill`、`SkillSource`、`ConflictType`、`SkillIssue`）、`agent.rs`（`Agent`）、`history.rs`（`HistoryAction`）、`origin.rs`（`SkillOrigin` 溯源记录）、`sync.rs`（`SyncResult`）。
 
 **解析（`parsers/`）**：`skill_md.rs` 解析 SKILL.md 的 YAML frontmatter（`name`、`description`，可选 `license`/`compatibility`/`metadata`）。
 
@@ -110,7 +110,7 @@ $env:CARGO_HOME = "D:\environment\rust\.cargo"
    - **Sync（agent→库）**：`sync_agent_to_vibe` 在 `~/.vibe-skills/{agent_id}/` 镜像 agent 技能为 symlink。
    - **整理类**：`sync_to_vibe`（并入库 + 重定向为库 symlink，实现单一事实来源）、`relink`、`replace_with_library`、`detach_keep_local_copy`。
 3. **来源溯源（provenance）**：每个 skill 安装/更新时写入 `SkillOrigin`（`.vibe-origin.json` 或 sidecar `.vibe-origin/{name}.json`），记录 method、url、commit、branch、source_path、update_command、trust_level、sync_mode。由此支持更新检测（git 远程 diff）与自动更新。来源方法：`git` / `local-folder` / `npm` / `npx` / `marketplace`（插件）。
-4. **异常检测**：冲突（多非插件来源内容哈希不同）、断链（symlink 目标缺失）、重复（同名不同 name 或 plugin+本地并存）。`detect_issues` / `get_dashboard_data` 暴露给前端 `IssueRepairPanel` 修复。
+4. **异常检测**：冲突（多非插件来源内容哈希不同）、断链（symlink 目标缺失）、重复（同名不同 name 或 plugin+本地并存）。`detect_issues` 暴露给前端 `IssueRepairPanel` 修复。
 5. **撤销/重做**：每个变更命令记录 `HistoryAction` 到 `.vibe-history.json`；删除先快照 `.trash/`，撤销/重做按 id 通过 trash 快照 + symlink 操作精确回放。
 6. **无数据库**：配置 `.vibe-config.json`、历史 `.vibe-history.json`、各 skill 溯源文件、trash `.trash/` 均在用户目录。
 

@@ -33,12 +33,11 @@ const appStore = useAppStore();
 const toast = useToast();
 
 // L8：action → 现有 locale key 映射（manage.btn_sync_to_vibe 等动态 key 不存在，
-// 注册表实际使用 btn_sync / btn_replace / btn_clean）
+// 注册表实际使用 btn_sync / btn_clean）
 const ACTION_LABEL_KEYS: Record<string, string> = {
   link: "manage.btn_link",
   unlink: "manage.btn_unlink",
   sync_to_vibe: "manage.btn_sync",
-  replace_with_link: "manage.btn_replace",
   replace_with_library: "manage.btn_replace",
   relink: "manage.btn_relink",
   remove_dangling: "manage.btn_clean",
@@ -345,9 +344,7 @@ onMounted(async () => {
     scrollAttachTimer = null;
     getScrollContainer()?.addEventListener("scroll", handleScroll);
   }, 100);
-  if (skillsStore.skills.length === 0) await skillsStore.fetchSkills();
-  if (agentsStore.agents.length === 0) await agentsStore.fetchAgents();
-  if (skillsStore.issues.length === 0) await skillsStore.fetchIssues();
+  // 数据由 App 层统一加载（fetchSkills/fetchAgents/fetchIssues），此处只消费
   filterModel.normalizeAgents(detectedAgents.value);
 });
 

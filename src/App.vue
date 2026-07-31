@@ -141,17 +141,32 @@ let unlistenScaleChange: (() => void) | null = null;
 let unlistenTrayFilterErrors: (() => void) | null = null;
 
 // 切换到异常筛选视图
-function switchToErrorFilter() {
+async function switchToErrorFilter() {
   appStore.setActiveView("all");
   filterModel.clearFilters();
   filterModel.issues.value = new Set(["update_error"]);
+  // 本会话尚未执行过检查时自动补一次，避免空转出"无结果"且无解释
+  if (Object.keys(skillsStore.updateChecks).length === 0) {
+    try {
+      await skillsStore.checkAllSkillUpdates();
+    } catch {
+      // 检查失败时保持已筛选的视图，由空态提示兜底
+    }
+  }
 }
 
 onMounted(async () => {
   appStore.init();
   locale.value = appStore.locale;
+  await appStore.fetchConfig();
+  await skillsStore.loadUpdateChecks();
+  // 启动后台静默检查更新（不阻塞 UI；失败静默，托盘/徽章空态由 U12 兜底）
+  if (appStore.config?.ui?.auto_check_updates !== false) {
+    skillsStore.checkAllSkillUpdates().catch(() => {});
+  }
   await agentsStore.fetchAgents();
   await skillsStore.fetchSkills();
+  await skillsStore.fetchIssues();
   await fetchPluginSkillsCount();
   await historyStore.fetchHistory();
   historyStore.updateUndoRedoState();

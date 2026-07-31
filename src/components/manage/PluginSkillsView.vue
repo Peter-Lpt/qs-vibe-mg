@@ -29,7 +29,7 @@ function getPluginTypeLabel(skill: typeof pluginSkills.value[0]): string {
 
 // 检查 skill 是否已认领
 function isAdopted(skill: typeof pluginSkills.value[0]): boolean {
-  return skill.metadata?.adopted === "true";
+  return skill.adopted === true;
 }
 
 // 按 plugin_source 分组，显示格式：[Type] plugin_name
@@ -96,7 +96,7 @@ async function fetchPluginSkills() {
 
 // 自动检查更新（使用 TTL 缓存，进入页面时调用）
 async function autoCheckUpdates() {
-  const adoptedSkills = pluginSkills.value.filter((s) => s.metadata?.adopted === "true");
+  const adoptedSkills = pluginSkills.value.filter((s) => s.adopted === true);
   if (adoptedSkills.length === 0) return;
   try {
     const results = await skillsStore.checkPluginUpdates(adoptedSkills.map((s) => s.id));
@@ -124,7 +124,7 @@ async function handleAdopt(skillId: string) {
 async function checkAllPluginUpdates() {
   checkingUpdates.value = true;
   try {
-    const adoptedSkills = pluginSkills.value.filter((s) => s.metadata?.adopted === "true");
+    const adoptedSkills = pluginSkills.value.filter((s) => s.adopted === true);
     const results: Record<string, { available: boolean; error?: string }> = {};
     for (const skill of adoptedSkills) {
       try {

@@ -369,7 +369,8 @@
     "install_git_placeholder": "https://github.com/owner/repo.git",
     "install_git_hint": "Enter a Git repository URL. QS VIBE will clone it into a managed source directory before installing it into the library.",
     "install_command_placeholder": "npx your-skill-installer",
-    "install_command_hint": "Enter a shell command. The command should create or fetch a skill directory containing SKILL.md inside a temporary managed source directory."
+    "install_command_hint": "Enter a shell command. The command should create or fetch a skill directory containing SKILL.md inside a temporary managed source directory.",
+    "install_command_running": "Command running…"
   },
   "agents": {
     "add": "Add Agent",
@@ -458,6 +459,9 @@
     "title": "Settings",
     "version_info": "Version",
     "check_updates": "Check Updates",
+    "auto_check_updates": "Check for skill updates on startup",
+    "auto_check_enabled": "Startup update check enabled",
+    "auto_check_disabled": "Startup update check disabled",
     "update_check_unavailable": "No automatic update source is configured yet. Please install newer versions from the release channel.",
     "theme": "Theme",
     "theme_system": "System",
@@ -476,11 +480,7 @@
     "migrate_confirm": "Migrate data from old directory to new location?",
     "migrate_yes": "Migrate",
     "migrate_no": "Don't migrate",
-    "data_management": "Data Management",
-    "export_data": "Export Config",
-    "import_data": "Import Config",
-    "export_success": "Config exported",
-    "import_success": "Config imported",
+    "migrate_relink_hint": "Migration complete. Existing agent links point to the old directory and are broken; please re-link them in the skill list.",
     "save": "Save",
     "cancel": "Cancel",
     "project_roots": "Project Roots",

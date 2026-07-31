@@ -8,9 +8,6 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::errors::VibeError;
-use crate::models::dashboard::{
-    DashboardAgent, DashboardData, DashboardSkill, DashboardStats, SharedSkillInfo,
-};
 use crate::models::history::HistoryAction;
 use crate::models::skill::{ConflictType, Skill, SkillIssue, SkillSource, SkillUpdateCheck};
 use crate::parsers::skill_md::parse_skill_md_full;
@@ -107,7 +104,7 @@ fn list_skills_sync() -> Result<Vec<Skill>, VibeError> {
 
     crate::utils::hash::save_hash_cache(&vibe_dir, &mut hash_cache);
 
-    let mut skills: Vec<Skill> = map
+    let skills: Vec<Skill> = map
         .into_iter()
         .map(|(id, entry)| {
             let linked_agents = linked_agents_map.get(&id).cloned().unwrap_or_default();
@@ -167,18 +164,12 @@ fn list_skills_sync() -> Result<Vec<Skill>, VibeError> {
                 from_plugin,
                 plugin_source,
                 plugin_enabled: None, // regular skills 不需要这个字段
+                adopted: false,
             }
         })
         .collect();
 
-    // 排序：冲突和断链置顶，其余按字母排序
-    skills.sort_by(|a, b| {
-        let a_issue = a.has_conflict || a.has_dangling;
-        let b_issue = b.has_conflict || b.has_dangling;
-        b_issue
-            .cmp(&a_issue)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
+    // 排序统一由前端负责（sortSkills/statusPriority），后端保持扫描原始顺序
 
     // 分离：只返回 regular skills（非 plugin）
     let regular_skills: Vec<Skill> = skills.into_iter()
@@ -277,6 +268,7 @@ pub fn list_plugin_skills_sync() -> Result<Vec<Skill>, VibeError> {
                 from_plugin,
                 plugin_source,
                 plugin_enabled,
+                adopted: false,
             }
         })
         .collect();
@@ -284,13 +276,7 @@ pub fn list_plugin_skills_sync() -> Result<Vec<Skill>, VibeError> {
     // 标记已认领的 skill（已在中心库中的）
     for skill in &mut skills {
         let skill_path = vibe_dir.join(&skill.id);
-        // 通过 metadata 标记是否已认领
-        if skill.metadata.is_none() {
-            skill.metadata = Some(std::collections::HashMap::new());
-        }
-        if let Some(meta) = &mut skill.metadata {
-            meta.insert("adopted".to_string(), skill_path.exists().to_string());
-        }
+        skill.adopted = skill_path.exists();
     }
 
     // 按 plugin_source 分组，然后按名称排序
@@ -552,7 +538,42 @@ fn check_all_skill_updates_sync() -> Result<Vec<SkillUpdateCheck>, VibeError> {
     });
     let available = results.iter().filter(|item| item.available).count();
     tracing::info!(checked = results.len(), available, "Finished checking skill updates");
+    // 结果落盘：重启后前端可直接恢复上次检测结果，无需重新联网
+    save_update_checks(&results);
     Ok(results)
+}
+
+const UPDATE_CHECKS_FILE: &str = ".vibe-update-checks.json";
+
+fn save_update_checks(results: &[SkillUpdateCheck]) {
+    let Ok(vibe_dir) = vibe_skills_dir() else {
+        return;
+    };
+    let path = vibe_dir.join(UPDATE_CHECKS_FILE);
+    let Ok(content) = serde_json::to_string(results) else {
+        return;
+    };
+    let tmp = vibe_dir.join(format!("{}.tmp", UPDATE_CHECKS_FILE));
+    if fs::write(&tmp, &content).is_ok() {
+        let _ = fs::rename(&tmp, &path);
+    }
+}
+
+/// 读取上次落盘的更新检测结果（文件缺失/损坏时返回空列表）
+#[tauri::command]
+pub async fn load_update_checks() -> Result<Vec<SkillUpdateCheck>, VibeError> {
+    tauri::async_runtime::spawn_blocking(load_update_checks_sync)
+        .await
+        .map_err(|error| VibeError::Path(format!("load_update_checks task failed: {}", error)))?
+}
+
+fn load_update_checks_sync() -> Result<Vec<SkillUpdateCheck>, VibeError> {
+    let path = vibe_skills_dir()?.join(UPDATE_CHECKS_FILE);
+    let content = match fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(_) => return Ok(Vec::new()),
+    };
+    Ok(serde_json::from_str(&content).unwrap_or_default())
 }
 
 fn run_git_fetch(path: &Path) -> Result<std::process::Output, String> {
@@ -905,276 +926,6 @@ fn detect_issues_sync() -> Result<Vec<SkillIssue>, VibeError> {
 }
 
 #[tauri::command]
-pub async fn get_dashboard_data() -> Result<DashboardData, VibeError> {
-    tauri::async_runtime::spawn_blocking(get_dashboard_data_sync)
-        .await
-        .map_err(|error| VibeError::Path(format!("get_dashboard_data task failed: {}", error)))?
-}
-
-fn get_dashboard_data_sync() -> Result<DashboardData, VibeError> {
-    let config = load_config()?;
-    let agents = build_agents_from_config(&config)?;
-    let vibe_dir = vibe_skills_dir()?;
-    let mut truncated = false;
-
-    let mut agent_skills: HashMap<String, Vec<(String, String)>> = HashMap::new();
-    let mut all_skill_agents: HashMap<String, Vec<String>> = HashMap::new();
-
-    for agent in &agents {
-        if !agent.detected {
-            continue;
-        }
-        let skills_dir = Path::new(&agent.skills_dir);
-        if !skills_dir.exists() {
-            continue;
-        }
-
-        let mut skills = Vec::new();
-        collect_skills_recursive(
-            skills_dir,
-            &mut skills,
-            &mut all_skill_agents,
-            &agent.id,
-            &vibe_dir,
-            0,
-            &mut std::collections::HashSet::new(),
-            &mut truncated,
-        );
-
-        agent_skills.insert(agent.id.clone(), skills);
-    }
-
-    let shared_skills: Vec<SharedSkillInfo> = all_skill_agents
-        .iter()
-        .filter(|(_, agent_ids)| agent_ids.len() > 1)
-        .map(|(skill_id, agent_ids)| {
-            let skill_name = agent_skills
-                .values()
-                .flatten()
-                .find(|(id, _)| id == skill_id)
-                .map(|(_, name)| name.clone())
-                .unwrap_or_else(|| skill_id.clone());
-
-            SharedSkillInfo {
-                skill_id: skill_id.clone(),
-                skill_name,
-                agent_ids: agent_ids.clone(),
-            }
-        })
-        .collect();
-
-    let mut total_skills: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut per_agent_count: HashMap<String, usize> = HashMap::new();
-
-    let dashboard_agents: Vec<DashboardAgent> = agents
-        .iter()
-        .filter(|a| a.detected)
-        .map(|agent| {
-            let skills = agent_skills.get(&agent.id).cloned().unwrap_or_default();
-            let skill_count = skills.len();
-            per_agent_count.insert(agent.id.clone(), skill_count);
-
-            let mut dashboard_skills: Vec<DashboardSkill> = skills
-                .iter()
-                .map(|(skill_id, skill_name)| {
-                    total_skills.insert(skill_id.clone());
-                    let shared_with: Vec<String> = all_skill_agents
-                        .get(skill_id)
-                        .map(|ids| ids.iter().filter(|id| *id != &agent.id).cloned().collect())
-                        .unwrap_or_default();
-
-                    DashboardSkill {
-                        skill_id: skill_id.clone(),
-                        skill_name: skill_name.clone(),
-                        shared_with,
-                    }
-                })
-                .collect();
-
-            dashboard_skills.sort_by(|a, b| {
-                b.shared_with.len().cmp(&a.shared_with.len()).then(
-                    a.skill_name
-                        .to_lowercase()
-                        .cmp(&b.skill_name.to_lowercase()),
-                )
-            });
-
-            DashboardAgent {
-                agent_id: agent.id.clone(),
-                agent_name: agent.name.clone(),
-                skill_count,
-                skills: dashboard_skills,
-            }
-        })
-        .collect();
-
-    let mut vibe_skills = Vec::new();
-    let mut vibe_truncated = false;
-    if vibe_dir.exists() {
-        collect_vibe_skills(
-            &vibe_dir,
-            &mut vibe_skills,
-            &all_skill_agents,
-            &mut total_skills,
-            0,
-            &mut std::collections::HashSet::new(),
-            &mut vibe_truncated,
-        );
-    }
-
-    let mut all_agents = dashboard_agents;
-    if !vibe_skills.is_empty() {
-        all_agents.insert(
-            0,
-            DashboardAgent {
-                agent_id: "vibe-lib".to_string(),
-                agent_name: "VIBE Library".to_string(),
-                skill_count: vibe_skills.len(),
-                skills: vibe_skills,
-            },
-        );
-    }
-
-    let stats = DashboardStats {
-        total_skills: total_skills.len(),
-        shared_count: shared_skills.len(),
-        per_agent_count,
-    };
-
-    Ok(DashboardData {
-        agents: all_agents,
-        shared_skills,
-        stats,
-        truncated: truncated || vibe_truncated,
-    })
-}
-
-fn collect_skills_recursive(
-    dir: &Path,
-    skills: &mut Vec<(String, String)>,
-    all_skill_agents: &mut HashMap<String, Vec<String>>,
-    agent_id: &str,
-    vibe_dir: &Path,
-    depth: usize,
-    visited: &mut std::collections::HashSet<std::path::PathBuf>,
-    truncated: &mut bool,
-) {
-    if depth > MAX_SCAN_DEPTH || !visited.insert(vibe_fs::normalize_path(dir)) {
-        *truncated = true;
-        return;
-    }
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_dir() {
-                continue;
-            }
-            let name = path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-            if name.starts_with('.') {
-                continue;
-            }
-
-            // 跳过指向 vibe-lib 的 symlink，避免重复计数
-            if vibe_fs::is_link(&path) {
-                if let Ok(target) = vibe_fs::read_link_target(&path) {
-                    if target.starts_with(vibe_dir) {
-                        continue;
-                    }
-                }
-            }
-
-            let skill_md_path = path.join("SKILL.md");
-            if skill_md_path.exists() {
-                let id = name.clone();
-                let skill_name = parse_skill_md_full(&skill_md_path)
-                    .map(|(n, _, _, _, _, _)| n)
-                    .unwrap_or_else(|_| id.clone());
-
-                all_skill_agents
-                    .entry(id.clone())
-                    .or_default()
-                    .push(agent_id.to_string());
-                skills.push((id, skill_name));
-            } else {
-                collect_skills_recursive(
-                    &path,
-                    skills,
-                    all_skill_agents,
-                    agent_id,
-                    vibe_dir,
-                    depth + 1,
-                    visited,
-                    truncated,
-                );
-            }
-        }
-    }
-}
-
-fn collect_vibe_skills(
-    dir: &Path,
-    vibe_skills: &mut Vec<DashboardSkill>,
-    all_skill_agents: &HashMap<String, Vec<String>>,
-    total_skills: &mut std::collections::HashSet<String>,
-    depth: usize,
-    visited: &mut std::collections::HashSet<std::path::PathBuf>,
-    truncated: &mut bool,
-) {
-    if depth > MAX_SCAN_DEPTH || !visited.insert(vibe_fs::normalize_path(dir)) {
-        *truncated = true;
-        return;
-    }
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_dir() {
-                continue;
-            }
-            let id = path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-            if id.starts_with('.') || id == ".vibe-config.json" || id == ".vibe-history.json" {
-                continue;
-            }
-
-            let skill_md_path = path.join("SKILL.md");
-            if skill_md_path.exists() {
-                let name = parse_skill_md_full(&skill_md_path)
-                    .map(|(n, _, _, _, _, _)| n)
-                    .unwrap_or_else(|_| id.clone());
-
-                total_skills.insert(id.clone());
-
-                let shared_with: Vec<String> = all_skill_agents
-                    .get(&id)
-                    .map(|ids| ids.clone())
-                    .unwrap_or_default();
-
-                vibe_skills.push(DashboardSkill {
-                    skill_id: id,
-                    skill_name: name,
-                    shared_with,
-                });
-            } else {
-                collect_vibe_skills(
-                    &path,
-                    vibe_skills,
-                    all_skill_agents,
-                    total_skills,
-                    depth + 1,
-                    visited,
-                    truncated,
-                );
-            }
-        }
-    }
-}
-
-#[tauri::command]
 pub async fn preview_skill(skill_id: String) -> Result<String, VibeError> {
     tauri::async_runtime::spawn_blocking(move || preview_skill_sync(skill_id))
         .await
@@ -1182,9 +933,26 @@ pub async fn preview_skill(skill_id: String) -> Result<String, VibeError> {
 }
 
 fn preview_skill_sync(skill_id: String) -> Result<String, VibeError> {
+    // skill_id 必须是纯目录名，拒绝 `..`/路径分隔符逃逸（与 preview_skill_at_path 同级安全边界）
+    let is_plain_name = !skill_id.is_empty()
+        && !skill_id.contains("..")
+        && !skill_id.contains('/')
+        && !skill_id.contains('\\');
+    if !is_plain_name {
+        return Err(VibeError::Path(
+            "preview_skill 仅接受纯 skill 目录名".to_string(),
+        ));
+    }
+
     let vibe_dir = vibe_skills_dir()?;
     let vibe_path = vibe_dir.join(&skill_id).join("SKILL.md");
     if vibe_path.exists() {
+        let target = vibe_fs::normalize_path(&vibe_path);
+        if !vibe_fs::is_path_within(&target, &vibe_dir) {
+            return Err(VibeError::Path(
+                "preview_skill 拒绝读取 vibe 目录外的文件".to_string(),
+            ));
+        }
         return fs::read_to_string(&vibe_path).map_err(VibeError::Io);
     }
 
@@ -1193,14 +961,19 @@ fn preview_skill_sync(skill_id: String) -> Result<String, VibeError> {
         if !agent.detected {
             continue;
         }
-        let agent_path = Path::new(&agent.skills_dir)
-            .join(&skill_id)
-            .join("SKILL.md");
+        let agent_dir = Path::new(&agent.skills_dir);
+        let agent_path = agent_dir.join(&skill_id).join("SKILL.md");
         if agent_path.exists() {
+            let target = vibe_fs::normalize_path(&agent_path);
+            if !vibe_fs::is_path_within(&target, agent_dir) {
+                return Err(VibeError::Path(
+                    "preview_skill 拒绝读取 agent 目录外的文件".to_string(),
+                ));
+            }
             return fs::read_to_string(&agent_path).map_err(VibeError::Io);
         }
         if let Ok(content) = find_skill_md_recursive(
-            &Path::new(&agent.skills_dir),
+            agent_dir,
             &skill_id,
             0,
             &mut std::collections::HashSet::new(),
@@ -1720,6 +1493,7 @@ fn install_skill_from_materialized_source(
         from_plugin: false,
         plugin_source: None,
         plugin_enabled: None,
+        adopted: false,
     })
 }
 

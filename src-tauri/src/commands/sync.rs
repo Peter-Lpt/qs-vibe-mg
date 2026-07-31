@@ -612,14 +612,7 @@ fn sync_agent_to_vibe_sync(agent_id: String) -> Result<SyncResult, VibeError> {
 
     sync_directory_recursive(source_dir, &target_dir, &mut result)?;
 
-    if let Err(e) = record_action(
-        HistoryAction::BatchLink,
-        &format!("agent:{}", agent_id),
-        Some(&agent_id),
-        Some("symlink"),
-    ) {
-        warn!("Failed to record sync_agent_to_vibe action: {}", e);
-    }
+    // 镜像同步类操作不进 undo 链：undo 按 agent 重链与删除镜像链接的目标对不上，撤销结果不可预期
 
     Ok(result)
 }
@@ -670,14 +663,7 @@ fn sync_category_to_vibe_sync(
 
     sync_directory_recursive(&category_dir, &target_dir, &mut result)?;
 
-    if let Err(e) = record_action(
-        HistoryAction::BatchLink,
-        &format!("category:{}:{}", agent_id, category_path),
-        Some(&agent_id),
-        Some("symlink"),
-    ) {
-        warn!("Failed to record sync_category_to_vibe action: {}", e);
-    }
+    // 镜像同步类操作不进 undo 链
 
     Ok(result)
 }
@@ -698,11 +684,6 @@ fn remove_sync_sync(agent_id: String, path: Option<String>) -> Result<(), VibeEr
         return Ok(());
     }
 
-    let action_desc = match &path {
-        Some(p) => format!("remove-sync:{}:{}", agent_id, p),
-        None => format!("remove-sync:{}:all", agent_id),
-    };
-
     match &path {
         Some(p) => {
             // M1：拒绝 `..` 父目录组件与绝对路径
@@ -718,14 +699,7 @@ fn remove_sync_sync(agent_id: String, path: Option<String>) -> Result<(), VibeEr
         }
     }
 
-    if let Err(e) = record_action(
-        HistoryAction::BatchUnlink,
-        &action_desc,
-        Some(&agent_id),
-        Some("symlink"),
-    ) {
-        warn!("Failed to record remove_sync action: {}", e);
-    }
+    // 镜像同步类操作不进 undo 链：undo 按 agent 遍历重链与删除镜像链接的目标对不上，撤销结果不可预期
 
     Ok(())
 }
@@ -827,14 +801,7 @@ fn remove_sync_skills_sync(
         }
     }
 
-    if let Err(e) = record_action(
-        HistoryAction::BatchUnlink,
-        &format!("remove-sync-skills:{}:{}", agent_id, skill_names.len()),
-        Some(&agent_id),
-        Some("symlink"),
-    ) {
-        warn!("Failed to record remove_sync_skills action: {}", e);
-    }
+    // 镜像同步类操作不进 undo 链
 
     Ok(result)
 }
@@ -1099,8 +1066,7 @@ fn batch_skill_action_sync(
         let op_result: Result<LinkCreationReport, VibeError> = match action.as_str() {
             "link" => link_skill(&skill_id, agent),
             "unlink" => unlink_skill(&skill_id, agent, None).map(|_| action_report("unlink")),
-            "sync_to_vibe" => sync_to_vibe_impl(&skill_id, agent, false, None),
-            "replace_with_link" => sync_to_vibe_impl(&skill_id, agent, false, None),
+            "sync_to_vibe" => sync_to_vibe_impl(&skill_id, agent, true, None),
             "replace_with_library" => replace_with_library_impl(&skill_id, agent, None),
             "relink" => relink_impl(&skill_id, agent, None),
             "remove_dangling" => {
@@ -1124,7 +1090,7 @@ fn batch_skill_action_sync(
                 push_link_warning(&mut result, agent_id, &report);
                 // 链接方向（创建链接）记为 Link，移除方向记为 Unlink
                 let history_action = match action.as_str() {
-                    "link" | "relink" | "sync_to_vibe" | "replace_with_link" => HistoryAction::Link,
+                    "link" | "relink" | "sync_to_vibe" => HistoryAction::Link,
                     _ => HistoryAction::Unlink,
                 };
                 if let Err(e) = record_action(

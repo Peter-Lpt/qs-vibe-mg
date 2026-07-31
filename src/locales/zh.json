@@ -369,7 +369,8 @@
     "install_git_placeholder": "https://github.com/owner/repo.git",
     "install_git_hint": "填写 Git 仓库地址，系统会先克隆到受管源目录，再安装到中心库。",
     "install_command_placeholder": "npx your-skill-installer",
-    "install_command_hint": "填写可在 shell 中执行的命令，命令应在临时源目录中生成或拉取出一个包含 SKILL.md 的技能目录。"
+    "install_command_hint": "填写可在 shell 中执行的命令，命令应在临时源目录中生成或拉取出一个包含 SKILL.md 的技能目录。",
+    "install_command_running": "命令运行中…"
   },
   "agents": {
     "add": "添加 Agent",
@@ -458,6 +459,9 @@
     "title": "设置",
     "version_info": "版本信息",
     "check_updates": "检查更新",
+    "auto_check_updates": "启动时自动检查技能更新",
+    "auto_check_enabled": "已开启启动时自动检查",
+    "auto_check_disabled": "已关闭启动时自动检查",
     "update_check_unavailable": "当前版本暂未配置自动更新源，请通过发布渠道获取新版。",
     "theme": "主题",
     "theme_system": "跟随系统",
@@ -476,11 +480,7 @@
     "migrate_confirm": "是否将旧目录中的数据迁移到新目录？",
     "migrate_yes": "迁移",
     "migrate_no": "不迁移",
-    "data_management": "数据管理",
-    "export_data": "导出配置",
-    "import_data": "导入配置",
-    "export_success": "配置已导出",
-    "import_success": "配置已导入",
+    "migrate_relink_hint": "迁移完成。所有 Agent 链接已指向旧目录而失效，请在技能列表中重新链接。",
     "save": "保存",
     "cancel": "取消",
     "project_roots": "项目根目录",

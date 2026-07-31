@@ -1,7 +1,6 @@
 export type AgentAction =
   | "none"
   | "sync_to_vibe"
-  | "replace_with_link"
   | "relink"
   | "remove_dangling"
   | "link"
@@ -60,16 +59,6 @@ export const SKILL_ACTIONS: Record<AgentAction, SkillActionDefinition> = {
     priority: 3,
     mutatesLibrary: false,
     removesTarget: false,
-  },
-  replace_with_link: {
-    id: "replace_with_link",
-    labelKey: "manage.btn_replace",
-    successKey: "manage.replaced_with_link",
-    color: "var(--c-text)",
-    style: "background: var(--c-surface-hover); color: var(--c-text); border: 1px solid var(--c-border);",
-    priority: 4,
-    mutatesLibrary: false,
-    removesTarget: true,
   },
   remove_dangling: {
     id: "remove_dangling",

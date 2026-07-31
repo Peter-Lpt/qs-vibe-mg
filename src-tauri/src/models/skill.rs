@@ -59,6 +59,9 @@ pub struct Skill {
     /// Some(true) = 已启用, Some(false) = 已禁用, None = 未配置（默认启用）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plugin_enabled: Option<bool>,
+    /// 是否已认领到中心库（仅对 plugin skills 有效）
+    #[serde(default)]
+    pub adopted: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

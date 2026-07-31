@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useAppStore, type Locale, type ThemeMode } from "../../stores/app";
 import { useAgentsStore } from "../../stores/agents";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import { useToast } from "../../composables/useToast";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 
@@ -150,6 +150,8 @@ async function handleMigrate(migrate: boolean) {
     await agentsStore.setVibeSkillsPath(pendingPath.value, migrate);
     showMigrateConfirm.value = false;
     pendingPath.value = "";
+    // 迁移后旧 agent 链接全部失效，提示用户重新链接
+    if (migrate) toast.show(t("settings.migrate_relink_hint"), "info");
   } catch (e: unknown) {
     pathError.value = String(e);
   } finally {
@@ -161,38 +163,6 @@ async function handleMigrate(migrate: boolean) {
 function cancelMigrate() {
   showMigrateConfirm.value = false;
   pendingPath.value = "";
-}
-
-async function handleExport() {
-  try {
-    const json = await appStore.exportData();
-    const filePath = await save({
-      defaultPath: "vibe-config-backup.json",
-      filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-    if (filePath) {
-      await appStore.writeFileToPath(filePath, json);
-      toast.show(t("settings.export_success"), "success");
-    }
-  } catch (e: unknown) {
-    toast.show(String(e), "error");
-  }
-}
-
-async function handleImport() {
-  try {
-    const selected = await open({
-      multiple: false,
-      filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-    if (selected) {
-      const content = await appStore.readFileFromPath(selected);
-      await appStore.importData(content);
-      toast.show(t("settings.import_success"), "success");
-    }
-  } catch (e: unknown) {
-    toast.show(String(e), "error");
-  }
 }
 
 const projectRootsCount = computed(() => projectRootsList.value.length);
@@ -298,6 +268,19 @@ async function toggleAgentEnabled(agent: { id: string; enabled: boolean; name: s
 onMounted(() => {
   void loadProjectRoots();
 });
+
+// 启动时自动检查更新开关（U11）
+async function handleAutoCheckUpdatesChange(enabled: boolean) {
+  try {
+    await appStore.updateUiConfig({ autoCheckUpdates: enabled });
+    toast.show(
+      enabled ? t("settings.auto_check_enabled") : t("settings.auto_check_disabled"),
+      "success"
+    );
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
 </script>
 
 <template>
@@ -320,6 +303,15 @@ onMounted(() => {
             {{ t('settings.check_updates') }}
           </button>
         </div>
+        <label class="mt-3 flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            class="accent-[var(--c-primary)]"
+            :checked="appStore.config?.ui?.auto_check_updates !== false"
+            @change="handleAutoCheckUpdatesChange(($event.target as HTMLInputElement).checked)"
+          />
+          <span class="text-[11px]" style="color: var(--c-text-secondary);">{{ t('settings.auto_check_updates') }}</span>
+        </label>
       </section>
 
       <!-- 主题 -->
@@ -647,27 +639,6 @@ onMounted(() => {
           </div>
         </div>
         <p v-else class="text-[11px]" style="color: var(--c-text-tertiary);">{{ t('agents.no_agents') }}</p>
-      </div>
-
-      <!-- 数据管理 -->
-      <div>
-        <label class="text-xs font-medium block mb-2" style="color: var(--c-text);">{{ t('settings.data_management') }}</label>
-        <div class="flex gap-2">
-          <button
-            class="flex-1 px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80 transition-colors"
-            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
-            @click="handleExport"
-          >
-            {{ t('settings.export_data') }}
-          </button>
-          <button
-            class="flex-1 px-3 py-2 text-xs rounded-md border cursor-pointer hover:opacity-80 transition-colors"
-            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
-            @click="handleImport"
-          >
-            {{ t('settings.import_data') }}
-          </button>
-        </div>
       </div>
     </div>
 

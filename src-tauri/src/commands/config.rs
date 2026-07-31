@@ -1,7 +1,5 @@
 use std::fs;
 
-use serde::{Deserialize, Serialize};
-
 use crate::errors::VibeError;
 use crate::utils::config::{
     invalidate_agents_cache,
@@ -13,7 +11,6 @@ use crate::utils::config::{
     ProjectRootSuggestion,
 };
 use crate::utils::fs::copy_dir_all;
-use crate::utils::history::load_history;
 use crate::utils::path::{expand_tilde, vibe_skills_dir};
 
 /// 获取配置
@@ -39,9 +36,10 @@ pub async fn update_config(
     sync_mode_default: Option<String>,
     max_history: Option<u32>,
     project_roots: Option<Vec<String>>,
+    auto_check_updates: Option<bool>,
 ) -> Result<Config, VibeError> {
     tauri::async_runtime::spawn_blocking(move || {
-        update_config_sync(theme, locale, sync_mode_default, max_history, project_roots)
+        update_config_sync(theme, locale, sync_mode_default, max_history, project_roots, auto_check_updates)
     })
     .await
     .map_err(|error| VibeError::Path(format!("update_config task failed: {}", error)))?
@@ -53,6 +51,7 @@ fn update_config_sync(
     sync_mode_default: Option<String>,
     max_history: Option<u32>,
     project_roots: Option<Vec<String>>,
+    auto_check_updates: Option<bool>,
 ) -> Result<Config, VibeError> {
     let mut config = load_config()?;
 
@@ -71,6 +70,9 @@ fn update_config_sync(
     }
     if let Some(roots) = project_roots {
         config.project_roots = normalize_project_roots(roots);
+    }
+    if let Some(auto) = auto_check_updates {
+        config.ui.auto_check_updates = auto;
     }
 
     save_config(&config)?;
@@ -111,6 +113,13 @@ fn set_vibe_skills_path_sync(new_path: String, migrate: bool) -> Result<Config, 
             fs::copy(&old_history_path, &new_history_path)?;
         }
 
+        // 迁移 .trash 回收站（含可恢复的删除快照），避免迁移后历史删除无法找回
+        let old_trash = old_dir.join(".trash");
+        let new_trash = expanded.join(".trash");
+        if old_trash.exists() && !new_trash.exists() {
+            copy_dir_all(&old_trash, &new_trash)?;
+        }
+
         // 迁移 skill 目录
         for entry in fs::read_dir(&old_dir)? {
             let entry = entry?;
@@ -120,7 +129,7 @@ fn set_vibe_skills_path_sync(new_path: String, migrate: bool) -> Result<Config, 
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
 
-            // 跳过配置和历史文件
+            // 跳过配置和历史文件（.trash 已在上面单独迁移）
             if name.starts_with('.') {
                 continue;
             }
@@ -142,83 +151,4 @@ fn set_vibe_skills_path_sync(new_path: String, migrate: bool) -> Result<Config, 
     invalidate_agents_cache(); // vibe 目录可能变更，agent 缓存失效（P5）
 
     Ok(config)
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ExportData {
-    pub config: Config,
-    pub history: crate::models::history::HistoryStore,
-}
-
-/// Export config and history as JSON string
-#[tauri::command]
-pub async fn export_data() -> Result<String, VibeError> {
-    tauri::async_runtime::spawn_blocking(export_data_sync)
-        .await
-        .map_err(|error| VibeError::Path(format!("export_data task failed: {}", error)))?
-}
-
-fn export_data_sync() -> Result<String, VibeError> {
-    let config = load_config()?;
-    let history = load_history()?;
-    let data = ExportData { config, history };
-    serde_json::to_string_pretty(&data).map_err(|e| VibeError::History(e.to_string()))
-}
-
-/// Import config and history from JSON string
-#[tauri::command]
-pub async fn import_data(json: String) -> Result<(), VibeError> {
-    tauri::async_runtime::spawn_blocking(move || import_data_sync(json))
-        .await
-        .map_err(|error| VibeError::Path(format!("import_data task failed: {}", error)))?
-}
-
-fn import_data_sync(json: String) -> Result<(), VibeError> {
-    let data: ExportData =
-        serde_json::from_str(&json).map_err(|e| VibeError::History(e.to_string()))?;
-    save_config(&data.config)?;
-    crate::utils::history::save_history(&data.history)?;
-    invalidate_agents_cache();
-    Ok(())
-}
-
-/// 路径是否含 `..` 父目录组件（组件级判定，避免误伤含 `..` 子串的正常路径）
-fn has_parent_dir_component(path: &str) -> bool {
-    std::path::Path::new(path)
-        .components()
-        .any(|c| matches!(c, std::path::Component::ParentDir))
-}
-
-/// Write content to a file path (used by export)（P6：拒绝 `..` 路径逃逸）
-#[tauri::command]
-pub async fn write_file_to_path(path: String, content: String) -> Result<(), VibeError> {
-    tauri::async_runtime::spawn_blocking(move || write_file_to_path_sync(path, content))
-        .await
-        .map_err(|error| VibeError::Path(format!("write_file_to_path task failed: {}", error)))?
-}
-
-fn write_file_to_path_sync(path: String, content: String) -> Result<(), VibeError> {
-    if has_parent_dir_component(&path) {
-        return Err(VibeError::Path(
-            "write_file_to_path 不允许路径包含 '..' 父目录组件".to_string(),
-        ));
-    }
-    fs::write(&path, content).map_err(VibeError::Io)
-}
-
-/// Read content from a file path (used by import)（P6：拒绝 `..` 路径逃逸）
-#[tauri::command]
-pub async fn read_file_from_path(path: String) -> Result<String, VibeError> {
-    tauri::async_runtime::spawn_blocking(move || read_file_from_path_sync(path))
-        .await
-        .map_err(|error| VibeError::Path(format!("read_file_from_path task failed: {}", error)))?
-}
-
-fn read_file_from_path_sync(path: String) -> Result<String, VibeError> {
-    if has_parent_dir_component(&path) {
-        return Err(VibeError::Path(
-            "read_file_from_path 不允许路径包含 '..' 父目录组件".to_string(),
-        ));
-    }
-    fs::read_to_string(&path).map_err(VibeError::Io)
 }

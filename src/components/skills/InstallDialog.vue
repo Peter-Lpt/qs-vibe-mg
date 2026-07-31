@@ -54,6 +54,7 @@ async function pickFolder() {
 }
 
 async function handleInstall() {
+  if (installing.value) return; // 防重复触发
   if (!sourceValue.value.trim()) {
     installError.value = t("skills.source_path_required");
     return;
@@ -75,6 +76,13 @@ async function handleInstall() {
     installing.value = false;
   }
 }
+
+const submitLabel = computed(() => {
+  if (!installing.value) return t("skills.install");
+  return sourceMode.value === "command"
+    ? t("skills.install_command_running")
+    : t("app.loading");
+});
 </script>
 
 <template>
@@ -98,10 +106,13 @@ async function handleInstall() {
               type="button"
               class="install-mode-tab"
               :class="sourceMode === option.key ? 'font-medium' : ''"
+              :disabled="installing"
               :style="{
                 background: sourceMode === option.key ? 'var(--c-primary)' : 'var(--c-surface)',
                 borderColor: 'var(--c-border)',
                 color: sourceMode === option.key ? 'white' : 'var(--c-text)',
+                opacity: installing ? 0.6 : 1,
+                cursor: installing ? 'not-allowed' : 'pointer',
               }"
               @click="sourceMode = option.key as 'folder' | 'git' | 'command'"
             >
@@ -116,6 +127,7 @@ async function handleInstall() {
             <input
               v-model="sourceValue"
               :placeholder="currentPlaceholder"
+              :disabled="installing"
               class="install-source-input"
               style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
               @keyup.enter="handleInstall"
@@ -123,6 +135,7 @@ async function handleInstall() {
             <button
               v-if="sourceMode === 'folder'"
               class="install-browse-button"
+              :disabled="installing"
               @click="pickFolder"
             >
               {{ t("skills.select_folder") }}
@@ -135,6 +148,7 @@ async function handleInstall() {
             <input
               v-model="referenceInstall"
               type="checkbox"
+              :disabled="installing"
               class="h-3.5 w-3.5 cursor-pointer rounded"
               style="accent-color: var(--c-primary);"
             />
@@ -163,7 +177,7 @@ async function handleInstall() {
             @click="handleInstall"
             :disabled="installing"
           >
-            {{ installing ? t("app.loading") : t("skills.install") }}
+            {{ submitLabel }}
           </button>
         </div>
       </div>

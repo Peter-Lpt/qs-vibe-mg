@@ -60,6 +60,8 @@ export interface Skill {
   plugin_source?: string;
   /** Plugin 启用状态：true=已启用, false=已禁用, undefined=未配置（默认启用） */
   plugin_enabled?: boolean;
+  /** 是否已认领到中心库（仅对 plugin skills 有效） */
+  adopted?: boolean;
 }
 
 export interface Agent {
@@ -95,6 +97,7 @@ export interface AppConfig {
     theme: string;
     locale: string;
     close_behavior: "ask" | "minimize_to_tray" | "close";
+    auto_check_updates?: boolean;
   };
   history: {
     max_entries: number;
@@ -134,35 +137,4 @@ export interface SkillIssue {
   skill_id: string;
   issue_type: ConflictType;
   description: string;
-}
-
-export interface DashboardData {
-  agents: DashboardAgent[];
-  shared_skills: SharedSkillInfo[];
-  stats: DashboardStats;
-}
-
-export interface DashboardAgent {
-  agent_id: string;
-  agent_name: string;
-  skill_count: number;
-  skills: DashboardSkill[];
-}
-
-export interface DashboardSkill {
-  skill_id: string;
-  skill_name: string;
-  shared_with: string[];
-}
-
-export interface SharedSkillInfo {
-  skill_id: string;
-  skill_name: string;
-  agent_ids: string[];
-}
-
-export interface DashboardStats {
-  total_skills: number;
-  shared_count: number;
-  per_agent_count: Record<string, number>;
 }

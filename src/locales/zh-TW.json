@@ -369,7 +369,8 @@
     "install_git_placeholder": "https://github.com/owner/repo.git",
     "install_git_hint": "填寫 Git 倉庫地址，系統會先克隆到受管源目錄，再安裝到中心庫。",
     "install_command_placeholder": "npx your-skill-installer",
-    "install_command_hint": "填寫可在 shell 中執行的命令，命令應在臨時源目錄中生成或拉取出一個包含 SKILL.md 的技能目錄。"
+    "install_command_hint": "填寫可在 shell 中執行的命令，命令應在臨時源目錄中生成或拉取出一個包含 SKILL.md 的技能目錄。",
+    "install_command_running": "命令執行中…"
   },
   "agents": {
     "add": "添加 Agent",
@@ -458,6 +459,9 @@
     "title": "設定",
     "version_info": "版本資訊",
     "check_updates": "檢查更新",
+    "auto_check_updates": "啟動時自動檢查技能更新",
+    "auto_check_enabled": "已開啟啟動時自動檢查",
+    "auto_check_disabled": "已關閉啟動時自動檢查",
     "update_check_unavailable": "目前版本尚未配置自動更新源，請透過發布渠道取得新版。",
     "theme": "主題",
     "theme_system": "跟隨系統",
@@ -476,11 +480,7 @@
     "migrate_confirm": "是否將舊目錄中的資料遷移到新目錄？",
     "migrate_yes": "遷移",
     "migrate_no": "不遷移",
-    "data_management": "資料管理",
-    "export_data": "匯出設定",
-    "import_data": "匯入設定",
-    "export_success": "設定已匯出",
-    "import_success": "設定已匯入",
+    "migrate_relink_hint": "遷移完成。所有 Agent 連結已指向舊目錄而失效，請在技能清單中重新連結。",
     "save": "儲存",
     "cancel": "取消",
     "project_roots": "專案根目錄",

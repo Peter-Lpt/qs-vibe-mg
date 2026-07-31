@@ -35,6 +35,9 @@ pub struct UiConfig {
     /// 关闭按钮行为：minimize_to_tray 或 close
     #[serde(default = "default_close_behavior")]
     pub close_behavior: String,
+    /// 启动时后台静默检查技能更新（默认开启）
+    #[serde(default = "default_true")]
+    pub auto_check_updates: bool,
 }
 
 impl Default for UiConfig {
@@ -43,6 +46,7 @@ impl Default for UiConfig {
             theme: default_theme(),
             locale: default_locale(),
             close_behavior: default_close_behavior(),
+            auto_check_updates: default_true(),
         }
     }
 }

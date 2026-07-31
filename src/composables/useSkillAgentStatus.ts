@@ -76,114 +76,9 @@ export function useSkillAgentStatus(
     skill.value.sources.find((s) => s.from === "vibe-lib")
   );
 
-  const allAgentStatuses = computed<AgentStatus[]>(() => {
-    const detected = agents.value.filter((a) => a.detected);
-    const result: AgentStatus[] = [];
-    for (const agent of detected) {
-      // 查找属于该 agent 的 source（包括 plugin 来源）
-      const source = skill.value.sources.find((s) => sourceBelongsToAgent(s, agent.id));
-      if (!source) {
-        result.push({
-          agent,
-          source: null,
-          status: "unlinked",
-          action: vibeSource.value ? "link" : "none",
-          ...meta("unlinked", t),
-        });
-        continue;
-      }
-      if (source.from === "vibe-lib") {
-        result.push({
-          agent,
-          source,
-          status: "origin",
-          action: "none",
-          ...meta("origin", t),
-        });
-        continue;
-      }
-      // Plugin 来源的 skill 显示为已同步，可从 plugin 同步到中心库
-      if (source.source_kind === "marketplace" || source.from.startsWith("claude-plugin:") || source.from.startsWith("codex-plugin:")) {
-        result.push({
-          agent,
-          source,
-          status: "synced",
-          action: vibeSource.value ? "none" : "sync_from_plugin",
-          statusLabel: t("manage.status_plugin"),
-          statusColor: "var(--c-plugin, #8b5cf6)",
-          statusIcon: "🧩",
-        });
-        continue;
-      }
-      if (!source.is_symlink) {
-        if (vibeSource.value) {
-          if (source.content_hash === vibeSource.value.content_hash) {
-            result.push({
-              agent,
-              source,
-              status: "independent",
-              action: "replace_with_link",
-              statusLabel: t("manage.status_independent_same"),
-              statusColor: "var(--c-text-secondary)",
-              statusIcon: "●",
-            });
-          } else {
-            result.push({
-              agent,
-              source,
-              status: "independent",
-              action: "sync_to_vibe",
-              statusLabel: t("manage.status_independent_conflict"),
-              statusColor: "var(--c-warning)",
-              statusIcon: "⚠",
-            });
-          }
-        } else {
-          result.push({
-            agent,
-            source,
-            status: "independent",
-            action: "sync_to_vibe",
-            statusLabel: t("manage.status_independent"),
-            statusColor: "var(--c-text-secondary)",
-            statusIcon: "●",
-          });
-        }
-        continue;
-      }
-      if (!source.symlink_target || source.content_hash === "") {
-        result.push({
-          agent,
-          source,
-          status: "dangling",
-          action: "remove_dangling",
-          ...meta("dangling", t),
-        });
-        continue;
-      }
-      if (
-        vibeSource.value?.path &&
-        samePath(source.symlink_target, vibeSource.value.path)
-      ) {
-        result.push({
-          agent,
-          source,
-          status: "synced",
-          action: "unlink",
-          ...meta("synced", t),
-        });
-      } else {
-        result.push({
-          agent,
-          source,
-          status: "linked_elsewhere",
-          action: "relink",
-          ...meta("linked_elsewhere", t),
-        });
-      }
-    }
-    return result;
-  });
+  const allAgentStatuses = computed<AgentStatus[]>(() =>
+    getAgentStatuses(skill.value, agents.value, t)
+  );
 
   interface StatusGroup {
     label: string;
@@ -337,7 +232,7 @@ export function getAgentStatuses(skill: Skill, agents: Agent[], t: TFunc): Agent
       if (vibeSource) {
         if (source.content_hash === vibeSource.content_hash) {
           result.push({
-            agent, source, status: "independent", action: "replace_with_link",
+            agent, source, status: "independent", action: "sync_to_vibe",
             statusLabel: t("manage.status_independent_same"),
             statusColor: "var(--c-text-secondary)",
             statusIcon: "●",
