@@ -224,6 +224,7 @@
     "replaced_with_link": "Replaced {agent} with link",
     "select_agents": "Select All Agents",
     "batch_apply": "Apply to Selected",
+    "requires_confirm": "Needs confirm",
     "no_batch_actions": "No actions available for selected agents",
     "batch_success": "Batch processed {count} agents",
     "batch_result": "Batch complete: {success} success, {error} failed",
@@ -231,6 +232,7 @@
     "conflict_resolution": "Conflict Resolution",
     "current_library_version": "Current library version",
     "conflict_apply_plan": "Apply resolution",
+    "align_all_to_library": "Align all to library",
     "conflict_plan_title": "Impact preview",
     "conflict_plan_overwrite_library": "Overwrite the library with the {source} version.",
     "conflict_plan_keep_library": "Keep the current library version.",
@@ -370,7 +372,12 @@
     "install_git_hint": "Enter a Git repository URL. QS VIBE will clone it into a managed source directory before installing it into the library.",
     "install_command_placeholder": "npx your-skill-installer",
     "install_command_hint": "Enter a shell command. The command should create or fetch a skill directory containing SKILL.md inside a temporary managed source directory.",
-    "install_command_running": "Command running…"
+    "install_command_running": "Command running…",
+    "install_target_label": "Install target",
+    "install_target_all": "Select all",
+    "install_target_hint": "Checked agents will be linked to this skill automatically after install.",
+    "install_linking": "Linking…",
+    "install_link_failed": "Installed, but {count} agent link(s) failed"
   },
   "agents": {
     "add": "Add Agent",

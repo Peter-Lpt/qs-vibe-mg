@@ -79,87 +79,8 @@ export function useBatchActions(
     return pairs;
   });
 
-  // 按意图分组
-  const intents = computed<BatchIntent[]>(() => {
-    const pairs = allPairs.value;
-    const result: BatchIntent[] = [];
-
-    // 修复问题：dangling + 错链
-    const repair = pairs.filter(
-      (p) => p.action === "remove_dangling" || p.action === "relink"
-    );
-    if (repair.length > 0) {
-      result.push({
-        id: "repair",
-        labelKey: "batch.intent_repair",
-        icon: "Wrench",
-        count: repair.length,
-        pairs: repair,
-        actions: groupByAction(repair),
-        needsConfirm: true,
-      });
-    }
-
-    // 统一副本：independent 副本同步入库（sync_to_vibe）
-    const unify = pairs.filter(
-      (p) => p.action === "sync_to_vibe" && p.statusType === "independent"
-    );
-    if (unify.length > 0) {
-      result.push({
-        id: "unify",
-        labelKey: "batch.intent_unify",
-        icon: "Package",
-        count: unify.length,
-        pairs: unify,
-        actions: groupByAction(unify),
-        needsConfirm: true,
-      });
-    }
-
-    // 链接到 Agent
-    const link = pairs.filter((p) => p.action === "link");
-    if (link.length > 0) {
-      result.push({
-        id: "link",
-        labelKey: "batch.intent_link",
-        icon: "Link2",
-        count: link.length,
-        pairs: link,
-        actions: groupByAction(link),
-        needsConfirm: false,
-      });
-    }
-
-    // 断开链接
-    const unlink = pairs.filter((p) => p.action === "unlink");
-    if (unlink.length > 0) {
-      result.push({
-        id: "unlink",
-        labelKey: "batch.intent_unlink",
-        icon: "Unlink",
-        count: unlink.length,
-        pairs: unlink,
-        actions: groupByAction(unlink),
-        needsConfirm: true,
-      });
-    }
-
-    // 导入插件
-    const plugin = pairs.filter((p) => p.action === "sync_from_plugin");
-    if (plugin.length > 0) {
-      result.push({
-        id: "plugin",
-        labelKey: "batch.intent_plugin",
-        icon: "Puzzle",
-        count: plugin.length,
-        pairs: plugin,
-        actions: groupByAction(plugin),
-        needsConfirm: true,
-      });
-    }
-
-    return result;
-  });
+  // 按意图分组（共享纯函数，列表级与 skill 级批量共用）
+  const intents = computed<BatchIntent[]>(() => buildIntents(allPairs.value));
 
   // 执行某个意图
   async function execute(intent: BatchIntent): Promise<BatchResult> {
@@ -259,4 +180,85 @@ function groupByAction(pairs: BatchPair[]): Record<string, BatchPair[]> {
     groups[pair.action].push(pair);
   }
   return groups;
+}
+
+// 纯函数：把 (skill, agent, action) 对按意图分组（修复/统一/链接/断开/插件）
+export function buildIntents(pairs: BatchPair[]): BatchIntent[] {
+  const result: BatchIntent[] = [];
+
+  // 修复问题：dangling + 错链
+  const repair = pairs.filter(
+    (p) => p.action === "remove_dangling" || p.action === "relink"
+  );
+  if (repair.length > 0) {
+    result.push({
+      id: "repair",
+      labelKey: "batch.intent_repair",
+      icon: "Wrench",
+      count: repair.length,
+      pairs: repair,
+      actions: groupByAction(repair),
+      needsConfirm: true,
+    });
+  }
+
+  // 统一副本：independent 副本同步入库（sync_to_vibe）
+  const unify = pairs.filter(
+    (p) => p.action === "sync_to_vibe" && p.statusType === "independent"
+  );
+  if (unify.length > 0) {
+    result.push({
+      id: "unify",
+      labelKey: "batch.intent_unify",
+      icon: "Package",
+      count: unify.length,
+      pairs: unify,
+      actions: groupByAction(unify),
+      needsConfirm: true,
+    });
+  }
+
+  // 链接到 Agent
+  const link = pairs.filter((p) => p.action === "link");
+  if (link.length > 0) {
+    result.push({
+      id: "link",
+      labelKey: "batch.intent_link",
+      icon: "Link2",
+      count: link.length,
+      pairs: link,
+      actions: groupByAction(link),
+      needsConfirm: false,
+    });
+  }
+
+  // 断开链接
+  const unlink = pairs.filter((p) => p.action === "unlink");
+  if (unlink.length > 0) {
+    result.push({
+      id: "unlink",
+      labelKey: "batch.intent_unlink",
+      icon: "Unlink",
+      count: unlink.length,
+      pairs: unlink,
+      actions: groupByAction(unlink),
+      needsConfirm: true,
+    });
+  }
+
+  // 导入插件
+  const plugin = pairs.filter((p) => p.action === "sync_from_plugin");
+  if (plugin.length > 0) {
+    result.push({
+      id: "plugin",
+      labelKey: "batch.intent_plugin",
+      icon: "Puzzle",
+      count: plugin.length,
+      pairs: plugin,
+      actions: groupByAction(plugin),
+      needsConfirm: true,
+    });
+  }
+
+  return result;
 }

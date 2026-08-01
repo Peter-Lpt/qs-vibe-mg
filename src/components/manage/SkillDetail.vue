@@ -11,7 +11,7 @@ import {
   cellBtnLabel as registryCellBtnLabel,
   type AgentStatus,
 } from "../../composables/useSkillAgentStatus";
-import { ACTION_PRIORITY, actionColor } from "../../composables/skillActionRegistry";
+import { buildIntents, type BatchIntent, type BatchPair } from "../../composables/useBatchActions";
 import type { Skill, Agent, SkillSource } from "../../types";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 
@@ -43,6 +43,8 @@ const { allAgentStatuses, groupedStatuses, vibeSource } =
 const selectedAgents = ref<Set<string>>(new Set());
 const showBatchMenu = ref(false);
 const batchOperating = ref(false);
+const pendingSkillIntent = ref<BatchIntent | null>(null);
+const showIntentConfirm = ref(false);
 const resolvingConflict = ref<string | null>(null);
 const pendingOverwrite = ref<AgentStatus | null>(null);
 const pendingPlanOverwrite = ref(false);
@@ -204,21 +206,24 @@ const planWillOverwriteLibrary = computed(() => {
 
 const planWillReplaceDifferentCopies = computed(() => differentAgentSources.value.length > 0);
 
-const batchAvailableActions = computed(() => {
-  const selected = allAgentStatuses.value.filter((s) =>
-    selectedAgents.value.has(s.agent.id)
-  );
-  if (selected.length === 0) return [];
-
-  return ACTION_PRIORITY.filter((action) => action !== "none")
-    .filter((action) => selected.some((s) => s.action === action))
-    .filter((action) => action !== "sync_to_vibe" || !props.skill.has_conflict)
-    .map((action) => ({
-      action,
-      label: registryCellBtnLabel((k, p) => t(k, p as Record<string, unknown>), action, ""),
-      color: actionColor(action),
-    }));
+// 所选 agent 的 (skill, agent, action) 对 → 意图分组（与列表级批量同一套语义）
+const skillBatchPairs = computed<BatchPair[]>(() => {
+  const pairs: BatchPair[] = [];
+  for (const st of allAgentStatuses.value) {
+    if (!selectedAgents.value.has(st.agent.id) || st.action === "none") continue;
+    pairs.push({
+      skillId: props.skill.id,
+      skillName: props.skill.name || props.skill.id,
+      agentId: st.agent.id,
+      agentName: st.agent.name,
+      action: st.action,
+      statusType: st.status,
+    });
+  }
+  return pairs;
 });
+
+const skillIntents = computed(() => buildIntents(skillBatchPairs.value));
 
 const comparableSources = computed(() =>
   props.skill.sources.filter((source) => source.content_hash)
@@ -452,10 +457,6 @@ function isProjectSource(source: SkillSource): boolean {
   return source.source_kind === "project" || source.from.startsWith("project:");
 }
 
-function isPluginSource(source: SkillSource): boolean {
-  return source.source_kind === "marketplace" || source.from.startsWith("claude-plugin:") || source.from.startsWith("codex-plugin:");
-}
-
 function canDeleteAgentSource(source: SkillSource): boolean {
   return source.from !== "vibe-lib" && !isProjectSource(source) && props.agents.some((agent) => agent.id === source.from);
 }
@@ -521,11 +522,17 @@ async function handleUpdateSkill() {
   }
 }
 
+// 一键"全部以库为准"：选中库版本并走既有冲突解决流程（含覆盖确认）
+function alignAllToLibrary() {
+  const library = vibeSource.value;
+  if (!library || resolvingPlan.value) return;
+  selectedConflictPath.value = library.path;
+  executeConflictResolution();
+}
+
 async function executeConflictResolution() {
   const selected = selectedConflictSource.value;
-  if (!selected || resolvingPlan.value) return;
-
-  if ((planWillOverwriteLibrary.value || planWillReplaceDifferentCopies.value) && selected.from !== "vibe-lib") {
+  if (!selected || resolvingPlan.value) return;  if ((planWillOverwriteLibrary.value || planWillReplaceDifferentCopies.value) && selected.from !== "vibe-lib") {
     const agent = selectedConflictAgent.value;
     if (agent) {
       pendingOverwrite.value = {
@@ -637,24 +644,47 @@ function cancelPendingOverwrite() {
   pendingPlanOverwrite.value = false;
 }
 
-async function handleBatchAction(action: string) {
-  const selected = allAgentStatuses.value.filter(
-    (s) => selectedAgents.value.has(s.agent.id) && s.action === action
-  );
-  if (selected.length === 0) return;
+function onSkillIntentClick(intent: BatchIntent) {
+  if (intent.needsConfirm) {
+    pendingSkillIntent.value = intent;
+    showIntentConfirm.value = true;
+  } else {
+    runSkillIntent(intent);
+  }
+}
 
+function onSkillIntentConfirm() {
+  const intent = pendingSkillIntent.value;
+  pendingSkillIntent.value = null;
+  showIntentConfirm.value = false;
+  if (intent) runSkillIntent(intent);
+}
+
+async function runSkillIntent(intent: BatchIntent) {
   batchOperating.value = true;
-
   try {
-    const agentIds = selected.map((s) => s.agent.id);
-    const result = await skillsStore.batchSkillAction(props.skill.id, agentIds, action);
+    const byAction = new Map<string, string[]>();
+    for (const pair of intent.pairs) {
+      const ids = byAction.get(pair.action) ?? [];
+      ids.push(pair.agentId);
+      byAction.set(pair.action, ids);
+    }
+    let success = 0;
+    let errors = 0;
+    let warnings = 0;
+    for (const [action, agentIds] of byAction) {
+      const result = await skillsStore.batchSkillAction(props.skill.id, agentIds, action);
+      success += result.synced_count;
+      errors += result.errors.length;
+      warnings += result.warnings.length;
+    }
 
-    if (result.errors.length > 0) {
-      toast.show(t("manage.batch_result", { success: result.synced_count, error: result.errors.length }), "info");
-    } else if (result.warnings.length > 0) {
-      toast.show(t("manage.batch_panel_result_warning", { success: result.synced_count, warning: result.warnings.length }), "warning");
+    if (errors > 0) {
+      toast.show(t("manage.batch_result", { success, error: errors }), "info");
+    } else if (warnings > 0) {
+      toast.show(t("manage.batch_panel_result_warning", { success, warning: warnings }), "warning");
     } else {
-      toast.show(t("manage.batch_success", { count: result.synced_count }), "success");
+      toast.show(t("manage.batch_success", { count: success }), "success");
     }
   } catch (e: unknown) {
     toast.show(String(e), "error");
@@ -854,15 +884,26 @@ function getAgentNameFromPath(path: string): string {
         <div class="text-[10px] font-medium uppercase tracking-wide" style="color: var(--c-warning);">
           {{ t("manage.conflict_resolution") }}
         </div>
-        <button
-          v-if="!isSingleAgentPathConflict"
-          class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
-          :disabled="!selectedConflictSource || resolvingPlan"
-          style="background: var(--c-primary); color: white;"
-          @click.stop="executeConflictResolution"
-        >
-          {{ resolvingPlan ? "..." : t("manage.conflict_apply_plan") }}
-        </button>
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            v-if="vibeSource"
+            class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+            :disabled="resolvingPlan"
+            style="background: var(--c-surface); border: 1px solid var(--c-primary); color: var(--c-primary);"
+            @click.stop="alignAllToLibrary"
+          >
+            {{ resolvingPlan ? "..." : t("manage.align_all_to_library") }}
+          </button>
+          <button
+            v-if="!isSingleAgentPathConflict"
+            class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
+            :disabled="!selectedConflictSource || resolvingPlan"
+            style="background: var(--c-primary); color: white;"
+            @click.stop="executeConflictResolution"
+          >
+            {{ resolvingPlan ? "..." : t("manage.conflict_apply_plan") }}
+          </button>
+        </div>
       </div>
       <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
         <div
@@ -997,26 +1038,33 @@ function getAgentNameFromPath(path: string): string {
         <button
           class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
           style="background: var(--c-primary); color: white;"
-          :disabled="batchOperating || batchAvailableActions.length === 0"
+          :disabled="batchOperating || skillIntents.length === 0"
           @click.stop="showBatchMenu = !showBatchMenu"
         >
           {{ t("manage.batch_apply") }} ({{ selectedAgents.size }})
         </button>
         <div
           v-if="showBatchMenu"
-          class="absolute top-full right-0 mt-1 rounded-md border shadow-lg z-10 py-1 min-w-[140px]"
+          class="absolute top-full right-0 mt-1 rounded-md border shadow-lg z-10 py-1 min-w-[170px]"
           style="background: var(--c-surface); border-color: var(--c-border);"
         >
           <button
-            v-for="act in batchAvailableActions"
-            :key="act.action"
-            class="block w-full text-left px-3 py-1.5 text-xs hover:bg-[var(--c-surface-hover)] cursor-pointer"
-            :style="{ color: act.color }"
-            @click.stop="handleBatchAction(act.action)"
+            v-for="intent in skillIntents"
+            :key="intent.id"
+            class="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-xs hover:bg-[var(--c-surface-hover)] cursor-pointer disabled:opacity-50"
+            style="color: var(--c-text);"
+            :disabled="batchOperating"
+            @click.stop="onSkillIntentClick(intent)"
           >
-            {{ act.label }}
+            <span class="inline-flex items-center gap-1.5 min-w-0">
+              <component :is="intent.icon" :size="12" class="shrink-0" />
+              <span class="truncate">{{ t(intent.labelKey, { count: intent.count }) }}</span>
+            </span>
+            <span v-if="intent.needsConfirm" class="shrink-0 text-[10px]" style="color: var(--c-warning);">
+              {{ t("manage.requires_confirm") }}
+            </span>
           </button>
-          <div v-if="batchAvailableActions.length === 0" class="px-3 py-1.5 text-xs" style="color: var(--c-text-secondary);">
+          <div v-if="skillIntents.length === 0" class="px-3 py-1.5 text-xs" style="color: var(--c-text-secondary);">
             {{ t("manage.no_batch_actions") }}
           </div>
         </div>
@@ -1132,7 +1180,7 @@ function getAgentNameFromPath(path: string): string {
           </button>
 
           <button
-            v-if="item.action !== 'none' && item.source && (isPluginSource(item.source) || item.status === 'linked_elsewhere')"
+            v-if="item.action !== 'none' && (item.source || item.action === 'link') && !(item.action === 'sync_to_vibe' && skill.has_conflict)"
             class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors shrink-0 whitespace-nowrap"
             :style="actionStyle(item.action)"
             :disabled="resolvingConflict === item.agent.id"
@@ -1171,6 +1219,15 @@ function getAgentNameFromPath(path: string): string {
       :danger="true"
       @confirm="confirmPendingOverwrite"
       @cancel="cancelPendingOverwrite"
+    />
+    <ConfirmDialog
+      v-if="showIntentConfirm && pendingSkillIntent"
+      :title="t(`batch.confirm_${pendingSkillIntent.id}_title`)"
+      :message="t(`batch.confirm_${pendingSkillIntent.id}_msg`, { count: pendingSkillIntent.count })"
+      :confirm-text="t('manage.batch_panel_execute')"
+      :danger="pendingSkillIntent.id === 'unlink' || pendingSkillIntent.id === 'repair'"
+      @confirm="onSkillIntentConfirm"
+      @cancel="showIntentConfirm = false; pendingSkillIntent = null"
     />
   </div>
 </template>

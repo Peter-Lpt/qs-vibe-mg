@@ -1237,6 +1237,53 @@ input:focus, textarea:focus, select:focus {
   margin-left: 23px;
 }
 
+.install-target-section {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--c-border);
+}
+
+.install-target-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.install-target-label {
+  margin-bottom: 0;
+}
+
+.install-target-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.install-target-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.install-target-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
 .install-error {
   margin-top: 12px;
   padding: 9px 10px;

@@ -220,6 +220,7 @@
     "replaced_with_link": "已替换 {agent} 为链接",
     "select_agents": "全选 Agent",
     "batch_apply": "应用到选中",
+    "requires_confirm": "需确认",
     "no_batch_actions": "所选 Agent 无可执行操作",
     "batch_success": "已批量处理 {count} 个 Agent",
     "batch_result": "批量处理完成：成功 {success}，失败 {error}",
@@ -227,6 +228,7 @@
     "conflict_resolution": "冲突解决",
     "current_library_version": "当前库版本",
     "conflict_apply_plan": "执行解决方案",
+    "align_all_to_library": "全部以库为准",
     "conflict_plan_title": "影响预览",
     "conflict_plan_overwrite_library": "将用 {source} 版本覆盖技能库。",
     "conflict_plan_keep_library": "保留当前技能库版本。",
@@ -370,7 +372,12 @@
     "install_git_hint": "填写 Git 仓库地址，系统会先克隆到受管源目录，再安装到中心库。",
     "install_command_placeholder": "npx your-skill-installer",
     "install_command_hint": "填写可在 shell 中执行的命令，命令应在临时源目录中生成或拉取出一个包含 SKILL.md 的技能目录。",
-    "install_command_running": "命令运行中…"
+    "install_command_running": "命令运行中…",
+    "install_target_label": "安装目标",
+    "install_target_all": "全选",
+    "install_target_hint": "勾选的 Agent 将在安装完成后自动链接该技能。",
+    "install_linking": "正在链接…",
+    "install_link_failed": "安装完成，但有 {count} 个 Agent 链接失败"
   },
   "agents": {
     "add": "添加 Agent",

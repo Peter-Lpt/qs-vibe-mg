@@ -73,10 +73,12 @@ export const useSkillsStore = defineStore("skills", () => {
     }
   }
 
-  async function createLink(skillId: string, agentId: string): Promise<string> {
+  async function createLink(skillId: string, agentId: string, silent = false): Promise<string> {
     const result = await invoke<string>("create_link", { skillId, agentId });
-    refreshSkills();
-    useAgentsStore().fetchAgents();
+    if (!silent) {
+      refreshSkills();
+      useAgentsStore().fetchAgents();
+    }
     return result;
   }
 
