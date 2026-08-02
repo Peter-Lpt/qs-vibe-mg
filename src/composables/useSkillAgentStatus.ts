@@ -102,6 +102,18 @@ export function useSkillAgentStatus(
       });
     }
 
+    // 可链接（最高频操作）紧跟需处理组之后
+    const unlinked = allAgentStatuses.value.filter(
+      (s) => s.status === "unlinked"
+    );
+    if (unlinked.length > 0) {
+      groups.push({
+        label: t("manage.group_unlinked"),
+        items: unlinked,
+        color: "var(--c-text-secondary)",
+      });
+    }
+
     const optionalSync = allAgentStatuses.value.filter((s) => s.status === "independent");
     if (optionalSync.length > 0) {
       groups.push({
@@ -120,17 +132,6 @@ export function useSkillAgentStatus(
         label: t("manage.group_normal"),
         items: normal,
         color: "var(--c-success)",
-      });
-    }
-
-    const unlinked = allAgentStatuses.value.filter(
-      (s) => s.status === "unlinked"
-    );
-    if (unlinked.length > 0) {
-      groups.push({
-        label: t("manage.group_unlinked"),
-        items: unlinked,
-        color: "var(--c-text-secondary)",
       });
     }
 

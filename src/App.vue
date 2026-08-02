@@ -202,6 +202,7 @@ onUnmounted(() => {
         :filter-model="filterModel"
         :agents="detectedAgents"
         :facet-counts="filterModel.facetCounts.value"
+        :agent-counts="filterModel.agentCounts.value"
         @select="appStore.setActiveView"
       />
     </template>

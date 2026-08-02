@@ -87,6 +87,16 @@ const stats = computed(() => {
   };
 });
 
+// 统计卡 → 视图/筛选快捷入口
+function goToStats(kind: "all" | "linked" | "unlinked" | "issues") {
+  if (kind === "issues") {
+    appStore.setActiveView("attention");
+    filterModel.issues.value = new Set(["conflict", "dangling", "duplicate"]);
+  } else {
+    appStore.setActiveView(kind);
+  }
+}
+
 const selectedSkills = selectionModel.selectedIds;
 const allDisplayedSelected = selectionModel.allVisibleSelected;
 const someDisplayedSelected = selectionModel.partiallyVisibleSelected;
@@ -362,28 +372,28 @@ defineExpose({
 
 <template>
   <div class="space-y-4">
-    <!-- 顶部统计概览 -->
+    <!-- 顶部统计概览（可点击跳转对应视图/筛选） -->
     <section class="workspace-panel !p-3">
       <div class="stats-overview">
-        <div class="stats-overview__item">
+        <button type="button" class="stats-overview__item" @click="goToStats('all')">
           <span class="stats-overview__value">{{ stats.total }}</span>
           <span class="stats-overview__label">{{ t("sidebar.view_all") }}</span>
-        </div>
+        </button>
         <div class="stats-overview__divider" />
-        <div class="stats-overview__item">
+        <button type="button" class="stats-overview__item" @click="goToStats('linked')">
           <span class="stats-overview__value stats-overview__value--linked">{{ stats.linked }}</span>
           <span class="stats-overview__label">{{ t("sidebar.view_linked") }}</span>
-        </div>
+        </button>
         <div class="stats-overview__divider" />
-        <div class="stats-overview__item">
+        <button type="button" class="stats-overview__item" @click="goToStats('unlinked')">
           <span class="stats-overview__value stats-overview__value--unlinked">{{ stats.unlinked }}</span>
           <span class="stats-overview__label">{{ t("sidebar.view_unlinked") }}</span>
-        </div>
+        </button>
         <div class="stats-overview__divider" />
-        <div class="stats-overview__item">
+        <button type="button" class="stats-overview__item" @click="goToStats('issues')">
           <span class="stats-overview__value stats-overview__value--issues">{{ stats.issues }}</span>
           <span class="stats-overview__label">{{ t("sidebar.view_attention") }}</span>
-        </div>
+        </button>
       </div>
     </section>
 
@@ -533,7 +543,6 @@ defineExpose({
         >
           {{ token.label }} <X :size="11" />
         </button>
-        <span class="manage-filter-result-count">{{ displaySkills.length }} / {{ totalSkills }}</span>
       </div>
     </section>
 
@@ -632,7 +641,7 @@ defineExpose({
 
       <!-- 浮动批量操作条（sticky 底部） -->
       <div
-        v-if="selectedSkills.size > 0 && intents.length > 0"
+        v-if="selectedSkills.size > 0"
         class="sticky bottom-0 z-10 rounded-lg border px-4 py-3"
         style="background: var(--c-surface); border-color: var(--c-border); box-shadow: 0 -4px 12px rgba(0,0,0,0.08);"
       >
@@ -640,6 +649,7 @@ defineExpose({
         <div class="flex items-center gap-2 text-[11px] mb-2" style="color: var(--c-text-secondary);">
           <span>{{ t("batch.selected_summary", { skills: selectedSkills.size, pairs: intents.reduce((s, i) => s + i.count, 0) }) }}</span>
           <button
+            v-if="intents.length > 0"
             class="ml-auto text-[10px] cursor-pointer hover:underline"
             style="color: var(--c-text-tertiary);"
             type="button"
@@ -649,28 +659,12 @@ defineExpose({
           </button>
         </div>
 
-        <!-- 意图按钮 -->
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="intent in intents"
-            :key="intent.id"
-            type="button"
-            class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-medium cursor-pointer transition-colors border disabled:opacity-50"
-            :style="{
-              background: 'var(--c-primary-light)',
-              borderColor: 'var(--c-primary)',
-              color: 'var(--c-primary)',
-            }"
-            :disabled="batchOperating"
-            @click="onIntentClick(intent)"
-          >
-            <component :is="intent.icon" :size="13" />
-            {{ t(intent.labelKey, { count: intent.count }) }}
-          </button>
-
+        <!-- 无可执行操作：仅提示 + 取消选择，避免选中后无任何反馈 -->
+        <div v-if="intents.length === 0" class="flex items-center gap-2 text-[11px]">
+          <span style="color: var(--c-text-secondary);">{{ t("manage.batch_no_actions") }}</span>
           <button
             type="button"
-            class="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] cursor-pointer"
+            class="ml-auto inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] cursor-pointer"
             style="color: var(--c-text-secondary);"
             @click="deselectAllSkills"
           >
@@ -678,27 +672,64 @@ defineExpose({
           </button>
         </div>
 
-        <!-- 展开详情 -->
-        <div v-if="batchExpandDetails" class="mt-2 rounded border text-[10px] overflow-hidden" style="border-color: var(--c-border);">
-          <div class="max-h-32 overflow-y-auto">
-            <div
-              v-for="(pair, i) in allPairs.slice(0, 100)"
-              :key="i"
-              class="flex items-center gap-2 px-2.5 py-1"
-              :style="{ background: i % 2 ? 'var(--c-surface)' : 'transparent' }"
+        <!-- 意图按钮 -->
+        <template v-else>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="intent in intents"
+              :key="intent.id"
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-medium cursor-pointer transition-colors border disabled:opacity-50"
+              :style="intent.needsConfirm
+                ? {
+                    background: 'var(--c-warning-light)',
+                    borderColor: 'var(--c-warning)',
+                    color: 'var(--c-warning)',
+                  }
+                : {
+                    background: 'var(--c-primary-light)',
+                    borderColor: 'var(--c-primary)',
+                    color: 'var(--c-primary)',
+                  }"
+              :disabled="batchOperating"
+              @click="onIntentClick(intent)"
             >
-              <span class="truncate flex-1" style="color: var(--c-text);">{{ pair.skillName }}</span>
-              <span style="color: var(--c-text-tertiary);">→</span>
-              <span class="truncate" style="color: var(--c-text-secondary);">{{ pair.agentName }}</span>
-              <span class="shrink-0 rounded px-1 text-[9px]" style="background: var(--c-surface-hover); color: var(--c-text-tertiary);">
-                {{ actionLabel(pair.action) }}
-              </span>
-            </div>
-            <div v-if="allPairs.length > 100" class="px-2.5 py-1 text-[10px]" style="color: var(--c-text-tertiary);">
-              ... {{ allPairs.length - 100 }} {{ t("manage.batch_detail_more") }}
+              <component :is="intent.icon" :size="13" />
+              {{ t(intent.labelKey, { count: intent.count }) }}
+            </button>
+
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] cursor-pointer"
+              style="color: var(--c-text-secondary);"
+              @click="deselectAllSkills"
+            >
+              {{ t("manage.deselect_all") }}
+            </button>
+          </div>
+
+          <!-- 展开详情 -->
+          <div v-if="batchExpandDetails" class="mt-2 rounded border text-[10px] overflow-hidden" style="border-color: var(--c-border);">
+            <div class="max-h-32 overflow-y-auto">
+              <div
+                v-for="(pair, i) in allPairs.slice(0, 100)"
+                :key="i"
+                class="flex items-center gap-2 px-2.5 py-1"
+                :style="{ background: i % 2 ? 'var(--c-surface)' : 'transparent' }"
+              >
+                <span class="truncate flex-1" style="color: var(--c-text);">{{ pair.skillName }}</span>
+                <span style="color: var(--c-text-tertiary);">→</span>
+                <span class="truncate" style="color: var(--c-text-secondary);">{{ pair.agentName }}</span>
+                <span class="shrink-0 rounded px-1 text-[9px]" style="background: var(--c-surface-hover); color: var(--c-text-tertiary);">
+                  {{ actionLabel(pair.action) }}
+                </span>
+              </div>
+              <div v-if="allPairs.length > 100" class="px-2.5 py-1 text-[10px]" style="color: var(--c-text-tertiary);">
+                ... {{ allPairs.length - 100 }} {{ t("manage.batch_detail_more") }}
+              </div>
             </div>
           </div>
-        </div>
+        </template>
       </div>
     </template>
   </div>
@@ -872,6 +903,15 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  transition: opacity 0.15s ease;
+}
+
+.stats-overview__item:hover {
+  opacity: 0.7;
 }
 
 .stats-overview__value {

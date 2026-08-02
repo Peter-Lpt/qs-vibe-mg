@@ -1379,12 +1379,6 @@ input:focus, textarea:focus, select:focus {
   flex: 0 0 auto;
 }
 
-.manage-filter-result-count {
-  margin-left: auto;
-  color: var(--c-text-secondary);
-  font-size: 10px;
-}
-
 .manage-filter-expanded {
   display: grid;
   gap: 10px;
@@ -1501,11 +1495,6 @@ input:focus, textarea:focus, select:focus {
 
   .manage-filter-toolbar > :first-child {
     grid-column: 1 / -1;
-  }
-
-  .manage-filter-result-count {
-    width: 100%;
-    margin-left: 0;
   }
 
   .manage-filter-group-label {

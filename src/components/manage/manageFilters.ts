@@ -249,6 +249,21 @@ export function computeFacetCounts(
   };
 }
 
+// 每个 agent 单独筛选时的匹配数（侧边栏 agent chips 计数）
+export function computeAgentCounts(
+  skills: readonly Skill[],
+  state: ManageFilterState,
+  agents: readonly Agent[],
+  updateChecks?: Record<string, SkillUpdateCheck>
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const agent of agents) {
+    const candidate = { ...state, agentIds: new Set([agent.id]), agentMatch: "any" as const };
+    counts[agent.id] = filterSkills(skills, candidate, agents, updateChecks).length;
+  }
+  return counts;
+}
+
 export function useManageFilters(
   skills: ComputedRef<Skill[]> | Ref<Skill[]>,
   agents: ComputedRef<Agent[]> | Ref<Agent[]>,
@@ -283,6 +298,7 @@ export function useManageFilters(
   }));
   const filteredSkills = computed(() => filterSkills(skills.value, state.value, agents.value, updateChecks?.value));
   const facetCounts = computed(() => computeFacetCounts(skills.value, state.value, agents.value, updateChecks?.value));
+  const agentCounts = computed(() => computeAgentCounts(skills.value, state.value, agents.value, updateChecks?.value));
   const activeFilterCount = computed(() =>
     Number(Boolean(query.value.trim())) +
     Number(statusPreset.value !== "all") +
@@ -367,6 +383,7 @@ export function useManageFilters(
     state,
     filteredSkills,
     facetCounts,
+    agentCounts,
     activeFilterCount,
     hasActiveFilters,
     clearQuery,
@@ -409,20 +426,13 @@ export function useManageSelection(visibleSkills: ComputedRef<Skill[]> | Ref<Ski
     selectedIds.value = new Set();
   }
 
-  function pruneInvisible() {
-    const next = new Set([...selectedIds.value].filter((id) => visibleIds.value.has(id)));
-    if (next.size !== selectedIds.value.size) selectedIds.value = next;
-  }
-
   function pruneMissing(allSkills: readonly Skill[]) {
     const validIds = new Set(allSkills.map((skill) => skill.id));
     const next = new Set([...selectedIds.value].filter((id) => validIds.has(id)));
     if (next.size !== selectedIds.value.size) selectedIds.value = next;
   }
 
-  // M12：filteredSkills 每次重算返回新数组，浅 watch 即可
-  watch(visibleSkills, pruneInvisible);
-
+  // 选择是独立工作集：筛选/视图变化不清除，仅删除 skill 时 pruneMissing 兜底
   return {
     selectedIds,
     selectedVisibleCount,
@@ -431,7 +441,6 @@ export function useManageSelection(visibleSkills: ComputedRef<Skill[]> | Ref<Ski
     toggleOne,
     toggleAllVisible,
     clearSelection,
-    pruneInvisible,
     pruneMissing,
   };
 }

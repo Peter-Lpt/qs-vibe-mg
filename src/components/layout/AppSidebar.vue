@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { Agent, SmartViewId, ViewId } from "../../types";
 import { SMART_VIEWS, type SmartViewDef } from "../../composables/useSmartViews";
@@ -24,6 +24,7 @@ const props = defineProps<{
   filterModel: ManageFilterModel;
   agents: Agent[];
   facetCounts: FacetCounts;
+  agentCounts: Record<string, number>;
 }>();
 
 const emit = defineEmits<{
@@ -80,12 +81,16 @@ function itemStyle(view: SmartViewDef) {
 }
 
 // --- filter section ---
-const filterExpanded = ref(false);
+// 默认展开，新用户可见 issues/agent 筛选入口；有激活条件时强制展开
+const filterExpanded = ref(true);
 const activeFilterCount = computed(() =>
   props.filterModel.issues.value.size +
   props.filterModel.libraryScope.value.size +
   props.filterModel.agentIds.value.size
 );
+watch(activeFilterCount, (count) => {
+  if (count > 0) filterExpanded.value = true;
+});
 </script>
 
 <style scoped>
@@ -267,6 +272,7 @@ const activeFilterCount = computed(() =>
             >
               <span class="sidebar-chip__dot" />
               <span class="sidebar-chip__label">{{ agent.name }}</span>
+              <span class="sidebar-chip__count">{{ agentCounts[agent.id] ?? 0 }}</span>
             </button>
             <span v-if="agents.length === 0" class="text-[10px] px-1" style="color: var(--c-text-tertiary);">
               {{ t("manage.no_agent_filter") }}

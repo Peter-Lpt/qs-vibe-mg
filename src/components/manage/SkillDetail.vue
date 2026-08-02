@@ -355,12 +355,28 @@ function toggleAgentSelect(agentId: string) {
   }
 }
 
+// 可批量操作的 agent（action ≠ none）；全选/计数均以此为准，
+// 避免勾选 origin/synced 等无操作项导致「应用到选中 (N)」与意图计数对不上
+const actionableAgentIds = computed(() =>
+  allAgentStatuses.value.filter((s) => s.action !== "none").map((s) => s.agent.id)
+);
+const allActionableSelected = computed(() =>
+  actionableAgentIds.value.length > 0 &&
+  actionableAgentIds.value.every((id) => selectedAgents.value.has(id))
+);
+const partiallyActionableSelected = computed(() =>
+  actionableAgentIds.value.some((id) => selectedAgents.value.has(id)) &&
+  !allActionableSelected.value
+);
+const actionableSelectedCount = computed(() =>
+  actionableAgentIds.value.filter((id) => selectedAgents.value.has(id)).length
+);
+
 function toggleSelectAllAgents() {
-  const allIds = allAgentStatuses.value.map((s) => s.agent.id);
-  if (selectedAgents.value.size === allIds.length) {
-    selectedAgents.value.clear();
+  if (allActionableSelected.value) {
+    actionableAgentIds.value.forEach((id) => selectedAgents.value.delete(id));
   } else {
-    allIds.forEach((id) => selectedAgents.value.add(id));
+    actionableAgentIds.value.forEach((id) => selectedAgents.value.add(id));
   }
 }
 
@@ -1025,7 +1041,8 @@ function getAgentNameFromPath(path: string): string {
     >
       <input
         type="checkbox"
-        :checked="selectedAgents.size === allAgentStatuses.length && allAgentStatuses.length > 0"
+        :checked="allActionableSelected"
+        :indeterminate="partiallyActionableSelected"
         class="w-3.5 h-3.5 rounded cursor-pointer"
         style="accent-color: var(--c-primary);"
         @change="toggleSelectAllAgents"
@@ -1034,14 +1051,14 @@ function getAgentNameFromPath(path: string): string {
         {{ t("manage.select_agents") }}
       </span>
 
-      <div v-if="selectedAgents.size > 0" class="relative ml-auto">
+      <div v-if="actionableSelectedCount > 0" class="relative ml-auto">
         <button
           class="text-[10px] px-2 py-1 rounded cursor-pointer transition-colors"
           style="background: var(--c-primary); color: white;"
           :disabled="batchOperating || skillIntents.length === 0"
           @click.stop="showBatchMenu = !showBatchMenu"
         >
-          {{ t("manage.batch_apply") }} ({{ selectedAgents.size }})
+          {{ t("manage.batch_apply") }} ({{ actionableSelectedCount }})
         </button>
         <div
           v-if="showBatchMenu"

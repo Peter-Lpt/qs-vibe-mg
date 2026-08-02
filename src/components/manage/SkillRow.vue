@@ -208,7 +208,11 @@ onUnmounted(() => {
                 : isExpanded
                   ? 'var(--c-primary)'
                   : 'var(--c-border)',
-      background: skill.from_plugin ? 'var(--c-plugin-light, rgba(139, 92, 246, 0.05))' : undefined,
+      background: skill.from_plugin
+        ? 'var(--c-plugin-light, rgba(139, 92, 246, 0.05))'
+        : selected
+          ? 'var(--c-primary-light)'
+          : undefined,
     }"
   >
     <!-- Collapsed header -->
@@ -228,11 +232,6 @@ onUnmounted(() => {
         :size="14"
         :style="{ color: 'var(--c-text-secondary)', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }"
       />
-
-      <TriangleAlert v-if="skill.has_conflict" class="shrink-0" :size="14" style="color: var(--c-warning);" />
-      <CircleX v-else-if="skill.has_dangling" class="shrink-0" :size="14" style="color: var(--c-danger);" />
-      <Copy v-else-if="skill.is_duplicate" class="shrink-0" :size="14" style="color: var(--c-info);" />
-      <Puzzle v-else-if="skill.from_plugin" class="shrink-0" :size="14" style="color: var(--c-plugin, #8b5cf6);" />
 
       <span class="text-sm font-semibold truncate" style="color: var(--c-text-strong);">
         {{ skill.name || skill.id }}
@@ -322,6 +321,13 @@ onUnmounted(() => {
       >
         {{ t("manage.status_dangling") }}
       </span>
+      <span
+        v-else-if="skill.is_duplicate"
+        class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+        style="background: var(--c-info-light); color: var(--c-info);"
+      >
+        {{ t("manage.status_duplicate") }}
+      </span>
 
       <div class="flex items-center gap-1 ml-auto shrink-0">
         <button
@@ -370,9 +376,18 @@ onUnmounted(() => {
     </div>
 
 <!-- Expanded per-agent detail (shared with card via SkillDetail) -->
-    <div v-if="isExpanded" class="border-t" style="border-color: var(--c-border);">
-      <SkillDetail :skill="skill" :agents="agents" embedded />
-    </div>
+    <Transition
+      enter-active-class="transition-all duration-200 ease-out"
+      leave-active-class="transition-all duration-200 ease-in"
+      enter-from-class="opacity-0 max-h-0 overflow-hidden"
+      enter-to-class="opacity-100 max-h-[2000px] overflow-hidden"
+      leave-from-class="opacity-100 max-h-[2000px] overflow-hidden"
+      leave-to-class="opacity-0 max-h-0 overflow-hidden"
+    >
+      <div v-if="isExpanded" class="border-t" style="border-color: var(--c-border);">
+        <SkillDetail :skill="skill" :agents="agents" embedded />
+      </div>
+    </Transition>
 
     <ConfirmDialog
       v-if="showDeleteConfirm"
