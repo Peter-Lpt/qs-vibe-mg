@@ -40,16 +40,6 @@ export const useAgentsStore = defineStore("agents", () => {
     }
   }
 
-  async function addCustomAgent(name: string, skillsDir: string): Promise<Agent> {
-    try {
-      const agent = await invoke<Agent>("add_custom_agent", { name, skillsDir });
-      await fetchAgents();
-      return agent;
-    } catch (e: unknown) {
-      throw new Error(String(e));
-    }
-  }
-
   async function addCustomAgentWithOptions(
     name: string,
     skillsDir: string,
@@ -116,7 +106,6 @@ export const useAgentsStore = defineStore("agents", () => {
     loading,
     error,
     fetchAgents,
-    addCustomAgent,
     addCustomAgentWithOptions,
     updateAgent,
     removeCustomAgent,

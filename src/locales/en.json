@@ -521,6 +521,24 @@
     "agent_enable": "Enable",
     "agent_disable": "Disable",
     "agent_enabled_toast": "Enabled {name}",
-    "agent_disabled_toast": "Disabled {name}"
+    "agent_disabled_toast": "Disabled {name}",
+    "section_general": "General",
+    "section_library": "Library & Projects",
+    "section_agents": "Agent Management",
+    "agent_detected": "Detected",
+    "agent_not_detected": "Not detected",
+    "agent_tool_only": "Installed, no skills dir",
+    "agent_detect_dir": "Detect directory",
+    "agent_detect_dir_placeholder": "Detect directory (optional, e.g. ~/.gemini)",
+    "agent_add_title": "Add Agent",
+    "agent_rescan": "Rescan",
+    "agent_rescan_done": "Agents rescanned",
+    "group_builtin": "Built-in Agents",
+    "group_custom": "Custom Agents",
+    "linked_skills": "{count} skills linked",
+    "agent_disabled_badge": "Disabled",
+    "agent_col_agent": "Agent",
+    "agent_col_status": "Status",
+    "agent_col_actions": "Actions"
   }
 }

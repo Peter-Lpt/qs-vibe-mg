@@ -521,6 +521,24 @@
     "agent_enable": "启用",
     "agent_disable": "禁用",
     "agent_enabled_toast": "已启用 {name}",
-    "agent_disabled_toast": "已禁用 {name}"
+    "agent_disabled_toast": "已禁用 {name}",
+    "section_general": "通用设置",
+    "section_library": "技能库与项目",
+    "section_agents": "Agent 管理",
+    "agent_detected": "已检测",
+    "agent_not_detected": "未检测",
+    "agent_tool_only": "已安装 · 无技能目录",
+    "agent_detect_dir": "检测目录",
+    "agent_detect_dir_placeholder": "检测目录路径（可选，如 ~/.gemini）",
+    "agent_add_title": "添加 Agent",
+    "agent_rescan": "重新扫描",
+    "agent_rescan_done": "已重新扫描 Agent",
+    "group_builtin": "内置 Agent",
+    "group_custom": "自定义 Agent",
+    "linked_skills": "已链接 {count} 个技能",
+    "agent_disabled_badge": "已禁用",
+    "agent_col_agent": "Agent",
+    "agent_col_status": "状态",
+    "agent_col_actions": "操作"
   }
 }

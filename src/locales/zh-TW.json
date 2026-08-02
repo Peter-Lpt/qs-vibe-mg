@@ -521,6 +521,24 @@
     "agent_enable": "啟用",
     "agent_disable": "停用",
     "agent_enabled_toast": "已啟用 {name}",
-    "agent_disabled_toast": "已停用 {name}"
+    "agent_disabled_toast": "已停用 {name}",
+    "section_general": "一般設定",
+    "section_library": "技能庫與專案",
+    "section_agents": "Agent 管理",
+    "agent_detected": "已偵測",
+    "agent_not_detected": "未偵測",
+    "agent_tool_only": "已安裝 · 無技能目錄",
+    "agent_detect_dir": "偵測目錄",
+    "agent_detect_dir_placeholder": "偵測目錄路徑（可選，如 ~/.gemini）",
+    "agent_add_title": "新增 Agent",
+    "agent_rescan": "重新掃描",
+    "agent_rescan_done": "已重新掃描 Agent",
+    "group_builtin": "內建 Agent",
+    "group_custom": "自訂 Agent",
+    "linked_skills": "已連結 {count} 個技能",
+    "agent_disabled_badge": "已停用",
+    "agent_col_agent": "Agent",
+    "agent_col_status": "狀態",
+    "agent_col_actions": "操作"
   }
 }

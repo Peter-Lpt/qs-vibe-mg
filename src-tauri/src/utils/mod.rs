@@ -1,3 +1,4 @@
+pub mod builtin_agents;
 pub mod config;
 pub mod datetime;
 pub mod fs;

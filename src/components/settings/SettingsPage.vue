@@ -6,6 +6,7 @@ import { useAgentsStore } from "../../stores/agents";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useToast } from "../../composables/useToast";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
+import AgentCard from "./AgentCard.vue";
 
 const { t } = useI18n();
 const appStore = useAppStore();
@@ -171,14 +172,14 @@ const projectRootsCount = computed(() => projectRootsList.value.length);
 const showAddAgent = ref(false);
 const addAgentName = ref("");
 const addAgentPath = ref("");
+const addAgentDetectDir = ref("");
 const editingAgentId = ref<string | null>(null);
-const editName = ref("");
-const editPath = ref("");
 
 function startAddAgent() {
   showAddAgent.value = true;
   addAgentName.value = "";
   addAgentPath.value = "";
+  addAgentDetectDir.value = "";
 }
 
 function cancelAddAgent() {
@@ -188,7 +189,11 @@ function cancelAddAgent() {
 async function confirmAddAgent() {
   if (!addAgentName.value.trim() || !addAgentPath.value.trim()) return;
   try {
-    await agentsStore.addCustomAgent(addAgentName.value.trim(), addAgentPath.value.trim());
+    await agentsStore.addCustomAgentWithOptions(
+      addAgentName.value.trim(),
+      addAgentPath.value.trim(),
+      addAgentDetectDir.value.trim() || undefined
+    );
     showAddAgent.value = false;
     toast.show(t("settings.save") + " ✓", "success");
   } catch (e: unknown) {
@@ -208,38 +213,40 @@ async function pickAddAgentDir() {
   }
 }
 
-function startEditAgent(agent: { id: string; name: string; skills_dir: string }) {
-  editingAgentId.value = agent.id;
-  editName.value = agent.name;
-  editPath.value = agent.skills_dir;
+async function pickAddAgentDetectDir() {
+  try {
+    const selected = await open({ directory: true, multiple: false, title: t("settings.agent_detect_dir") });
+    if (selected) {
+      const path = Array.isArray(selected) ? selected[0] : selected;
+      addAgentDetectDir.value = String(path).replace(/\\/g, "/");
+    }
+  } catch (e: unknown) {
+    console.error(e);
+  }
 }
 
-function cancelEditAgent() {
+function handleEditAgent(agentId: string) {
+  editingAgentId.value = agentId;
+}
+
+function handleCancelEdit() {
   editingAgentId.value = null;
 }
 
-async function saveEditAgent(agentId: string) {
-  if (!editName.value.trim() || !editPath.value.trim()) return;
+async function handleSaveAgent(
+  agentId: string,
+  updates: { name: string; skillsDir: string; detectDir: string | null }
+) {
+  if (!updates.name.trim() || !updates.skillsDir.trim()) return;
   try {
     await agentsStore.updateAgent(agentId, {
-      name: editName.value.trim(),
-      skillsDir: editPath.value.trim(),
+      name: updates.name,
+      skillsDir: updates.skillsDir,
+      detectDir: updates.detectDir,
     });
     editingAgentId.value = null;
   } catch (e: unknown) {
     toast.show(String(e), "error");
-  }
-}
-
-async function pickEditAgentDir() {
-  try {
-    const selected = await open({ directory: true, multiple: false, title: t("settings.agent_pick_dir") });
-    if (selected) {
-      const path = Array.isArray(selected) ? selected[0] : selected;
-      editPath.value = String(path).replace(/\\/g, "/");
-    }
-  } catch (e: unknown) {
-    console.error(e);
   }
 }
 
@@ -260,6 +267,26 @@ async function toggleAgentEnabled(agent: { id: string; enabled: boolean; name: s
         : t("settings.agent_enabled_toast", { name: agent.name }),
       "success"
     );
+  } catch (e: unknown) {
+    toast.show(String(e), "error");
+  }
+}
+
+// 内置 / 自定义分组（组内：已检测优先、启用优先）
+function rankAgent(a: { detected: boolean; enabled: boolean }) {
+  return (a.detected ? 0 : 1) * 2 + (a.enabled ? 0 : 1);
+}
+const builtinAgents = computed(() =>
+  agentsStore.agents.filter((a) => a.auto_detected).sort((a, b) => rankAgent(a) - rankAgent(b))
+);
+const customAgents = computed(() =>
+  agentsStore.agents.filter((a) => !a.auto_detected).sort((a, b) => rankAgent(a) - rankAgent(b))
+);
+
+async function rescanAgents() {
+  try {
+    await agentsStore.fetchAgents();
+    toast.show(t("settings.agent_rescan_done"), "success");
   } catch (e: unknown) {
     toast.show(String(e), "error");
   }
@@ -288,6 +315,10 @@ async function handleAutoCheckUpdatesChange(enabled: boolean) {
     <h2 class="text-base font-semibold mb-5" style="color: var(--c-text);">{{ t('settings.title') }}</h2>
 
     <div class="space-y-5">
+      <!-- ── 通用设置 ── -->
+      <div class="settings-group">
+        <div class="settings-group-title">{{ t('settings.section_general') }}</div>
+        <div class="space-y-4">
       <!-- 版本 -->
       <section class="workspace-panel !p-3">
         <div class="flex items-center justify-between gap-3">
@@ -374,6 +405,13 @@ async function handleAutoCheckUpdatesChange(enabled: boolean) {
           </button>
         </div>
       </div>
+        </div>
+      </div>
+
+      <!-- ── 技能库与项目 ── -->
+      <div class="settings-group">
+        <div class="settings-group-title">{{ t('settings.section_library') }}</div>
+        <div class="space-y-4">
 
       <!-- 技能库路径 -->
       <div>
@@ -477,170 +515,163 @@ async function handleAutoCheckUpdatesChange(enabled: boolean) {
         </div>
         <p v-if="!projectRootsLoaded" class="text-[11px] mt-1" style="color: var(--c-text-tertiary);">{{ t('settings.project_roots_loading') }}</p>
       </div>
+        </div>
+      </div>
+
+      <!-- ── Agent 管理 ── -->
+      <div class="settings-group">
+        <div class="settings-group-title">{{ t('settings.section_agents') }}</div>
 
       <!-- Agents -->
       <div>
-        <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center justify-between gap-2 mb-2">
           <div>
             <label class="text-xs font-medium" style="color: var(--c-text);">{{ t('settings.agents') }}</label>
             <p class="text-[11px] mt-0.5" style="color: var(--c-text-secondary);">{{ t('settings.agents_hint') }}</p>
           </div>
-          <button
-            v-if="!showAddAgent"
-            class="px-2.5 py-1 text-[11px] rounded-md border cursor-pointer hover:opacity-80 transition-colors"
-            style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
-            @click="startAddAgent"
-          >
-            + {{ t('agents.add') }}
-          </button>
+          <div class="flex gap-2 shrink-0">
+            <button
+              class="px-2.5 py-1 text-[11px] rounded-md border cursor-pointer hover:opacity-80 transition-colors"
+              style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
+              @click="rescanAgents"
+            >
+              <RefreshCw :size="11" class="inline mr-1" />
+              {{ t('settings.agent_rescan') }}
+            </button>
+            <button
+              class="px-2.5 py-1 text-[11px] rounded-md cursor-pointer font-medium transition-colors"
+              style="background: var(--c-primary); color: white;"
+              @click="startAddAgent"
+            >
+              + {{ t('agents.add') }}
+            </button>
+          </div>
         </div>
 
-        <div v-if="agentsStore.agents.length > 0 || showAddAgent" class="space-y-1.5">
-          <!-- 已有 agent 行 -->
-          <div
-            v-for="agent in agentsStore.agents"
-            :key="agent.id"
-            class="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-[11px]"
-            style="border-color: var(--c-border); background: var(--c-surface);"
-          >
-            <!-- 查看态 -->
-            <template v-if="editingAgentId !== agent.id">
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <span
-                    class="font-medium"
-                    style="color: var(--c-text);"
-                    :title="agent.name"
-                  >{{ agent.name }}</span>
-                  <span
-                    class="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
-                    :style="{
-                      background: agent.detected ? 'var(--c-success-light)' : 'var(--c-danger-light)',
-                      color: agent.detected ? 'var(--c-success)' : 'var(--c-danger)',
-                    }"
-                  >{{ agent.detected ? '●' : '○' }}</span>
-                  <span
-                    v-if="!agent.auto_detected"
-                    class="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
-                    style="background: var(--c-warning-light); color: var(--c-warning);"
-                  >{{ t('agents.custom') }}</span>
-                </div>
-                <div class="truncate mt-0.5" style="color: var(--c-text-tertiary);" :title="agent.skills_dir">{{ agent.skills_dir }}</div>
+        <template v-if="agentsStore.agents.length > 0">
+          <!-- 内置 Agent -->
+          <div v-if="builtinAgents.length > 0" class="mb-3">
+            <div class="agent-group-title">{{ t('settings.group_builtin') }} · {{ builtinAgents.length }}</div>
+            <div class="agent-table">
+              <div class="agent-table-grid agent-table__head px-3 py-1.5">
+                <span>{{ t('settings.agent_col_agent') }}</span>
+                <span>{{ t('settings.agent_col_status') }}</span>
+                <span>{{ t('settings.agent_skills_dir') }}</span>
+                <span class="text-right">{{ t('settings.agent_col_actions') }}</span>
               </div>
-              <div class="flex gap-1 shrink-0">
-                <button
-                  class="text-[11px] px-2 py-1 rounded-md cursor-pointer hover:opacity-80 transition-colors"
-                  style="color: var(--c-primary);"
-                  :title="t('agents.edit')"
-                  @click="startEditAgent(agent)"
-                ><Wrench :size="13" /></button>
-                <button
-                  class="text-[11px] px-2 py-1 rounded-md cursor-pointer hover:opacity-80 transition-colors"
-                  :style="{ color: agent.enabled ? 'var(--c-warning)' : 'var(--c-success)' }"
-                  :title="agent.enabled ? t('settings.agent_disable') : t('settings.agent_enable')"
-                  @click="toggleAgentEnabled(agent)"
-                ><Circle :size="13" /></button>
-                <button
-                  v-if="!agent.auto_detected"
-                  class="text-[11px] px-2 py-1 rounded-md cursor-pointer hover:opacity-80 transition-colors"
-                  style="color: var(--c-danger);"
-                  :title="t('agents.remove')"
-                  @click="removeAgent(agent.id)"
-                ><Trash2 :size="13" /></button>
-              </div>
-            </template>
-
-            <!-- 编辑态 -->
-            <template v-else>
-              <div class="flex-1 space-y-1.5">
-                <input
-                  v-model="editName"
-                  class="w-full px-2.5 py-1.5 text-[11px] rounded-md border outline-none transition-colors"
-                  style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
-                  :placeholder="t('settings.agent_name_placeholder')"
-                  @keydown.enter="saveEditAgent(agent.id)"
-                  @keydown.escape="cancelEditAgent"
-                />
-                <div class="flex gap-1.5">
-                  <input
-                    v-model="editPath"
-                    class="flex-1 px-2.5 py-1.5 text-[11px] rounded-md border outline-none transition-colors"
-                    style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
-                    :placeholder="t('settings.agent_path_placeholder')"
-                    @keydown.enter="saveEditAgent(agent.id)"
-                    @keydown.escape="cancelEditAgent"
-                  />
-                  <button
-                    class="px-2 py-1 text-[11px] rounded-md border cursor-pointer shrink-0 hover:opacity-80 transition-colors"
-                    style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
-                    @click="pickEditAgentDir"
-                  >{{ t('settings.agent_pick_dir') }}</button>
-                </div>
-                <div class="flex gap-1.5">
-                  <button
-                    class="text-[11px] px-2.5 py-1 rounded-md cursor-pointer font-medium"
-                    style="background: var(--c-primary); color: white;"
-                    @click="saveEditAgent(agent.id)"
-                  >{{ t('settings.save') }}</button>
-                  <button
-                    class="text-[11px] px-2.5 py-1 rounded-md border cursor-pointer hover:opacity-80 transition-colors"
-                    style="border-color: var(--c-border); color: var(--c-text);"
-                    @click="cancelEditAgent"
-                  >{{ t('settings.cancel') }}</button>
-                </div>
-              </div>
-            </template>
-          </div>
-
-          <!-- 添加新 agent 行 -->
-          <div
-            v-if="showAddAgent"
-            class="flex items-center gap-3 rounded-md border px-3 py-2 text-[11px]"
-            style="border-color: var(--c-primary); background: var(--c-surface);"
-          >
-            <div class="flex-1 space-y-1.5">
-              <input
-                v-model="addAgentName"
-                class="w-full px-2.5 py-1.5 text-[11px] rounded-md border outline-none transition-colors"
-                style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
-                :placeholder="t('settings.agent_name_placeholder')"
-                autofocus
-                @keydown.enter="confirmAddAgent"
-                @keydown.escape="cancelAddAgent"
+              <AgentCard
+                v-for="agent in builtinAgents"
+                :key="agent.id"
+                :agent="agent"
+                :editing="editingAgentId === agent.id"
+                @edit="handleEditAgent(agent.id)"
+                @cancel-edit="handleCancelEdit"
+                @save="(updates) => handleSaveAgent(agent.id, updates)"
+                @toggle-enabled="toggleAgentEnabled(agent)"
+                @remove="removeAgent(agent.id)"
               />
-              <div class="flex gap-1.5">
-                <input
-                  v-model="addAgentPath"
-                  class="flex-1 px-2.5 py-1.5 text-[11px] rounded-md border outline-none transition-colors"
-                  style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
-                  :placeholder="t('settings.agent_path_placeholder')"
-                  @keydown.enter="confirmAddAgent"
-                  @keydown.escape="cancelAddAgent"
-                />
-                <button
-                  class="px-2 py-1 text-[11px] rounded-md border cursor-pointer shrink-0 hover:opacity-80 transition-colors"
-                  style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
-                  @click="pickAddAgentDir"
-                >{{ t('settings.agent_pick_dir') }}</button>
-              </div>
-              <div class="flex gap-1.5">
-                <button
-                  class="text-[11px] px-2.5 py-1 rounded-md cursor-pointer font-medium"
-                  style="background: var(--c-primary); color: white;"
-                  @click="confirmAddAgent"
-                >{{ t('settings.agent_add_confirm') }}</button>
-                <button
-                  class="text-[11px] px-2.5 py-1 rounded-md border cursor-pointer hover:opacity-80 transition-colors"
-                  style="border-color: var(--c-border); color: var(--c-text);"
-                  @click="cancelAddAgent"
-                >{{ t('settings.agent_add_cancel') }}</button>
-              </div>
             </div>
           </div>
-        </div>
+
+          <!-- 自定义 Agent -->
+          <div v-if="customAgents.length > 0">
+            <div class="agent-group-title">{{ t('settings.group_custom') }} · {{ customAgents.length }}</div>
+            <div class="agent-table">
+              <div class="agent-table-grid agent-table__head px-3 py-1.5">
+                <span>{{ t('settings.agent_col_agent') }}</span>
+                <span>{{ t('settings.agent_col_status') }}</span>
+                <span>{{ t('settings.agent_skills_dir') }}</span>
+                <span class="text-right">{{ t('settings.agent_col_actions') }}</span>
+              </div>
+              <AgentCard
+                v-for="agent in customAgents"
+                :key="agent.id"
+                :agent="agent"
+                :editing="editingAgentId === agent.id"
+                @edit="handleEditAgent(agent.id)"
+                @cancel-edit="handleCancelEdit"
+                @save="(updates) => handleSaveAgent(agent.id, updates)"
+                @toggle-enabled="toggleAgentEnabled(agent)"
+                @remove="removeAgent(agent.id)"
+              />
+            </div>
+          </div>
+        </template>
         <p v-else class="text-[11px]" style="color: var(--c-text-tertiary);">{{ t('agents.no_agents') }}</p>
       </div>
+      </div>
     </div>
+
+    <!-- 添加 Agent 弹窗 -->
+    <Teleport to="body">
+      <div
+        v-if="showAddAgent"
+        class="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+        @click.self="cancelAddAgent"
+      >
+        <div class="modal-shell flex w-full max-w-md flex-col">
+          <div class="modal-header shrink-0">
+            <h3 class="text-sm font-semibold" style="color: var(--c-text);">{{ t('settings.agent_add_title') }}</h3>
+            <button
+              class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md"
+              style="color: var(--c-text-secondary);"
+              type="button"
+              @click="cancelAddAgent"
+            >&times;</button>
+          </div>
+          <div class="min-h-0 flex-1 overflow-y-auto p-4 space-y-2">
+            <input
+              v-model="addAgentName"
+              class="w-full px-2.5 py-2 text-xs rounded-md border outline-none transition-colors"
+              style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+              :placeholder="t('settings.agent_name_placeholder')"
+              autofocus
+              @keydown.enter="confirmAddAgent"
+            />
+            <div class="flex gap-1.5">
+              <input
+                v-model="addAgentPath"
+                class="flex-1 px-2.5 py-2 text-xs rounded-md border outline-none transition-colors"
+                style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+                :placeholder="t('settings.agent_path_placeholder')"
+                @keydown.enter="confirmAddAgent"
+              />
+              <button
+                class="px-2.5 py-1.5 text-[11px] rounded-md border cursor-pointer shrink-0 hover:opacity-80 transition-colors"
+                style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
+                @click="pickAddAgentDir"
+              >{{ t('settings.agent_pick_dir') }}</button>
+            </div>
+            <div class="flex gap-1.5">
+              <input
+                v-model="addAgentDetectDir"
+                class="flex-1 px-2.5 py-2 text-xs rounded-md border outline-none transition-colors"
+                style="background: var(--c-bg); border-color: var(--c-border); color: var(--c-text);"
+                :placeholder="t('settings.agent_detect_dir_placeholder')"
+                @keydown.enter="confirmAddAgent"
+              />
+              <button
+                class="px-2.5 py-1.5 text-[11px] rounded-md border cursor-pointer shrink-0 hover:opacity-80 transition-colors"
+                style="border-color: var(--c-border); color: var(--c-text); background: var(--c-surface);"
+                @click="pickAddAgentDetectDir"
+              >{{ t('settings.agent_pick_dir') }}</button>
+            </div>
+          </div>
+          <div class="flex shrink-0 items-center justify-end gap-2 border-t px-4 py-2.5" style="border-color: var(--c-border);">
+            <button
+              class="rounded-md px-3 py-1.5 text-[11px] cursor-pointer"
+              style="color: var(--c-text-secondary); border: 1px solid var(--c-border);"
+              @click="cancelAddAgent"
+            >{{ t('settings.agent_add_cancel') }}</button>
+            <button
+              class="rounded-md px-4 py-1.5 text-[11px] font-medium cursor-pointer"
+              style="background: var(--c-primary); color: white;"
+              @click="confirmAddAgent"
+            >{{ t('settings.agent_add_confirm') }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <ConfirmDialog
       v-if="showMigrateConfirm"
@@ -655,3 +686,25 @@ async function handleAutoCheckUpdatesChange(enabled: boolean) {
     />
   </div>
 </template>
+
+<style scoped>
+.settings-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--c-text-tertiary);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--c-border-subtle);
+  margin-bottom: 10px;
+}
+
+.agent-group-title {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-text-tertiary);
+  margin-bottom: 6px;
+}
+</style>

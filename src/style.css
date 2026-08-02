@@ -1379,6 +1379,31 @@ input:focus, textarea:focus, select:focus {
   flex: 0 0 auto;
 }
 
+/* Agent 管理表格（表头与行共用列模板） */
+.agent-table {
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface);
+  overflow: hidden;
+}
+
+.agent-table__head {
+  background: var(--c-surface-hover);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-text-tertiary);
+  border-bottom: 1px solid var(--c-border-subtle);
+}
+
+.agent-table-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1.6fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
 .manage-filter-expanded {
   display: grid;
   gap: 10px;

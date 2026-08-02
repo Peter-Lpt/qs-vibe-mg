@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::VibeError;
 use crate::models::agent::Agent;
+use crate::utils::builtin_agents::default_agents;
 use crate::utils::path::{display_path, expand_tilde, vibe_skills_dir};
 
 const CONFIG_FILE: &str = ".vibe-config.json";
@@ -156,115 +157,9 @@ fn normalize_agent_kind(id: &str, kind: &str) -> String {
     }
 }
 
-pub fn default_agents() -> Vec<AgentConfig> {
-    vec![
-        AgentConfig {
-            id: "claude-code".to_string(),
-            name: "Claude Code".to_string(),
-            skills_dir: "~/.claude/skills".to_string(),
-            kind: "agent".to_string(),
-            detect_dir: Some("~/.claude".to_string()),
-            additional_scan_dirs: Vec::new(),
-            enabled: true,
-            auto_detected: true,
-        },
-        AgentConfig {
-            id: "hermes".to_string(),
-            name: "Hermes".to_string(),
-            skills_dir: hermes_skills_dir(),
-            kind: "agent".to_string(),
-            detect_dir: Some(hermes_detect_dir()),
-            additional_scan_dirs: Vec::new(),
-            enabled: true,
-            auto_detected: true,
-        },
-        AgentConfig {
-            id: "pi-agent".to_string(),
-            name: "Pi Agent".to_string(),
-            skills_dir: "~/.pi/agent/skills".to_string(),
-            kind: "agent".to_string(),
-            detect_dir: Some("~/.pi/agent".to_string()),
-            additional_scan_dirs: Vec::new(),
-            enabled: true,
-            auto_detected: true,
-        },
-        AgentConfig {
-            id: "opencode".to_string(),
-            name: "OpenCode".to_string(),
-            skills_dir: "~/.config/opencode/skills".to_string(),
-            kind: "agent".to_string(),
-            detect_dir: Some("~/.config/opencode".to_string()),
-            additional_scan_dirs: Vec::new(),
-            enabled: true,
-            auto_detected: true,
-        },
-        AgentConfig {
-            id: "codex".to_string(),
-            name: "Codex CLI".to_string(),
-            skills_dir: "~/.codex/skills".to_string(),
-            kind: "agent".to_string(),
-            detect_dir: Some("~/.codex".to_string()),
-            additional_scan_dirs: vec!["~/.agents/skills".to_string()],
-            enabled: true,
-            auto_detected: true,
-        },
-        AgentConfig {
-            id: "mimocode".to_string(),
-            name: "MiMo Code".to_string(),
-            skills_dir: "~/.config/mimocode/skills".to_string(),
-            kind: "agent".to_string(),
-            detect_dir: Some("~/.config/mimocode".to_string()),
-            additional_scan_dirs: Vec::new(),
-            enabled: true,
-            auto_detected: true,
-        },
-        AgentConfig {
-            id: "agents-shared".to_string(),
-            name: "Agents Common".to_string(),
-            skills_dir: "~/.agents/skills".to_string(),
-            kind: "common".to_string(),
-            detect_dir: None,
-            additional_scan_dirs: Vec::new(),
-            enabled: true,
-            auto_detected: true,
-        },
-    ]
-}
 
-/// 根据平台返回 hermes skills 目录
-fn hermes_skills_dir() -> String {
-    #[cfg(windows)]
-    {
-        // Windows: %LOCALAPPDATA%\hermes\skills
-        if let Some(local) = dirs::data_local_dir() {
-            let path = local.join("hermes").join("skills");
-            if path.exists() {
-                return path.to_string_lossy().to_string();
-            }
-        }
-        "~/.hermes/skills".to_string()
-    }
-    #[cfg(not(windows))]
-    {
-        "~/.hermes/skills".to_string()
-    }
-}
-
-fn hermes_detect_dir() -> String {
-    #[cfg(windows)]
-    {
-        if let Some(local) = dirs::data_local_dir() {
-            return local.join("hermes").to_string_lossy().to_string();
-        }
-        "~/.hermes".to_string()
-    }
-    #[cfg(not(windows))]
-    {
-        "~/.hermes".to_string()
-    }
-}
-
-/// 读取配置文件，不存在则返回默认配置；损坏时回退默认而非中断（P5）
+/// 读取配置文件，不存在则返回默认配置；损坏时回退默认而非中断（P5）。
+/// 已有配置会补齐缺失的内置 agent（仅 auto_detected 项，不覆盖用户自定义）。
 pub fn load_config() -> Result<Config, VibeError> {
     let config_path = vibe_skills_dir()?.join(CONFIG_FILE);
 
@@ -279,17 +174,56 @@ pub fn load_config() -> Result<Config, VibeError> {
         Err(e) => return Err(VibeError::Config(e.to_string())),
     };
 
-    match serde_json::from_str::<Config>(&content) {
-        Ok(config) => Ok(config),
+    let mut config = match serde_json::from_str::<Config>(&content) {
+        Ok(config) => config,
         Err(e) => {
-            // 配置损坏：先备份原文件再回退默认写回，避免用户自定义配置（agents/project_roots）静默丢失
             tracing::warn!("Config corrupt, falling back to default: {}", e);
             let backup_path = config_path.with_extension("json.bak");
             let _ = fs::copy(&config_path, &backup_path);
             let config = default_config();
             let _ = save_config(&config);
-            Ok(config)
+            return Ok(config);
         }
+    };
+
+    ensure_builtin_agents(&mut config)?;
+    Ok(config)
+}
+
+/// 同步内置 agent：补齐缺失的新内置，并移除已下架的内置（auto_detected 项）。
+fn ensure_builtin_agents(config: &mut Config) -> Result<(), VibeError> {
+    let builtin = default_agents();
+    let builtin_ids: std::collections::HashSet<&str> =
+        builtin.iter().map(|agent| agent.id.as_str()).collect();
+    let mut changed = false;
+
+    let before = config.agents.len();
+    config.agents.retain(|agent| {
+        !(agent.auto_detected && !builtin_ids.contains(agent.id.as_str()))
+    });
+    if config.agents.len() != before {
+        changed = true;
+    }
+
+    let existing: std::collections::HashSet<&str> =
+        config.agents.iter().map(|agent| agent.id.as_str()).collect();
+    let missing: Vec<AgentConfig> = builtin
+        .into_iter()
+        .filter(|agent| agent.auto_detected && !existing.contains(agent.id.as_str()))
+        .collect();
+    if !missing.is_empty() {
+        tracing::info!(
+            "Adding missing built-in agents: {:?}",
+            missing.iter().map(|a| &a.id).collect::<Vec<_>>()
+        );
+        config.agents.extend(missing);
+        changed = true;
+    }
+
+    if changed {
+        save_config(config)
+    } else {
+        Ok(())
     }
 }
 
