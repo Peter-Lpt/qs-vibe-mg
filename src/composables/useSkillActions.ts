@@ -55,6 +55,11 @@ export function useSkillActions(t: (key: string, params?: Record<string, unknown
     toast.show(t("skills.deleted_from_library", { skill: skill.name || skill.id }), "success");
   }
 
+  async function deleteProjectSkill(skill: Skill, source: SkillActionSource) {
+    await skillsStore.deleteProjectSource(skill.id, source.path);
+    toast.show(t("skills.deleted_from_library", { skill: skill.name || skill.id }), "success");
+  }
+
   async function link(skill: Skill, agentId: string) {
     await skillsStore.createLink(skill.id, agentId);
   }
@@ -102,6 +107,7 @@ export function useSkillActions(t: (key: string, params?: Record<string, unknown
     reveal,
     copyPath,
     deleteLibrarySkill,
+    deleteProjectSkill,
     link,
     unlink,
     syncToLibrary,

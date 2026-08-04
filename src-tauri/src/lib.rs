@@ -153,6 +153,7 @@ pub fn run() {
             commands::skills::install_skill_from_source,
             commands::skills::update_skill,
             commands::skills::delete_library_skill,
+            commands::skills::delete_project_source,
             commands::skills::detect_issues,
             commands::sync::create_link,
             commands::sync::remove_link,

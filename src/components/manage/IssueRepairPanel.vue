@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { Agent, Skill } from "../../types";
 import { classifySkillSources } from "./manageFilters";
@@ -51,17 +51,6 @@ const groups = computed(() => {
       actionable: true,
     },
     {
-      id: "only_project" as const,
-      label: t("manage.repair_only_project"),
-      icon: "FileBox",
-      color: "var(--c-text-secondary)",
-      skills: props.skills.filter((skill) => {
-        const c = classifySkillSources(skill, props.agents);
-        return !c.hasLibrary && c.hasProject && !c.hasAgent;
-      }),
-      actionable: false, // "仅项目"首期不写 filter state，视图内名单展示
-    },
-    {
       id: "linked_elsewhere" as const,
       label: t("manage.repair_linked_elsewhere"),
       icon: "Share2",
@@ -85,14 +74,7 @@ const totalIssueSkills = computed(() => {
   return ids.size;
 });
 
-const projectListExpanded = ref(false);
-const onlyProjectGroup = computed(() => groups.value.find((g) => g.id === "only_project"));
-
 function handleGroupClick(group: (typeof groups.value)[number]) {
-  if (group.id === "only_project") {
-    projectListExpanded.value = !projectListExpanded.value;
-    return;
-  }
   emit("filter-group", group.id);
 }
 </script>
@@ -128,31 +110,8 @@ function handleGroupClick(group: (typeof groups.value)[number]) {
           <component :is="group.icon" :size="13" :style="{ color: group.color }" />
           <span class="truncate text-[10px] font-medium" style="color: var(--c-text);">{{ group.label }}</span>
           <span class="ml-auto text-[11px]" :style="{ color: group.color }">{{ group.skills.length }}</span>
-          <ChevronRight
-            v-if="group.id === 'only_project'"
-            :size="11"
-            class="transition-transform"
-            :style="{ color: 'var(--c-text-tertiary)', transform: projectListExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }"
-          />
         </div>
       </button>
-    </div>
-
-    <!-- "仅项目"组：视图内名单展示，不写 filter state -->
-    <div
-      v-if="projectListExpanded && onlyProjectGroup"
-      class="mt-2 rounded-md border p-2"
-      style="border-color: var(--c-border-subtle); background: var(--c-bg);"
-    >
-      <div
-        v-for="skill in onlyProjectGroup.skills"
-        :key="skill.id"
-        class="truncate py-0.5 text-[10px]"
-        style="color: var(--c-text-secondary);"
-        :title="skill.path"
-      >
-        {{ skill.name || skill.id }}
-      </div>
     </div>
   </div>
 </template>

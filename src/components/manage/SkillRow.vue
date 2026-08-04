@@ -5,6 +5,7 @@ import { useToast } from "../../composables/useToast";
 import { useSkillAgentStatus } from "../../composables/useSkillAgentStatus";
 import { useSkillActions } from "../../composables/useSkillActions";
 import type { Skill, Agent } from "../../types";
+import { classifySkillSources } from "./manageFilters";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
 import SkillDetail from "./SkillDetail.vue";
 
@@ -54,6 +55,21 @@ const legendStyle = ref<Record<string, string>>({});
 let legendHideTimer: ReturnType<typeof setTimeout> | null = null;
 const hasLibrarySource = computed(() => props.skill.sources.some((s) => s.from === "vibe-lib"));
 
+// 项目作用域来源（可多个，不同项目目录不同）
+const projectSources = computed(() =>
+  props.skill.sources.filter((s) => s.source_kind === "project" || s.from.startsWith("project:"))
+);
+const projectLabels = computed(() =>
+  projectSources.value.map((s) => {
+    const raw = s.from.replace(/^project:/, "");
+    const parts = raw.split(/[\\/]/).filter(Boolean);
+    return { name: parts[parts.length - 1] || "Project", key: s.from };
+  })
+);
+const hasLinkedElsewhere = computed(
+  () => classifySkillSources(props.skill, props.agents).hasLinkedElsewhere
+);
+
 // 检查是否从 Plugin 认领过来的
 const isAdoptedFromPlugin = computed(() => {
   return props.skill.sources.some((s) => s.origin?.method === "marketplace");
@@ -74,7 +90,11 @@ async function togglePreview() {
 
 async function handleDelete() {
   try {
-    await actions.deleteLibrarySkill(props.skill);
+    if (hasLibrarySource.value) {
+      await actions.deleteLibrarySkill(props.skill);
+    } else if (projectSources.value.length === 1) {
+      await actions.deleteProjectSkill(props.skill, projectSources.value[0]);
+    }
     showDeleteConfirm.value = false;
   } catch (e: unknown) {
     toast.show(String(e), "error");
@@ -238,6 +258,16 @@ onUnmounted(() => {
       </span>
 
       <span
+        v-for="project in projectLabels"
+        :key="project.key"
+        class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+        style="background: var(--c-primary-light); color: var(--c-primary);"
+        :title="project.name + ' (project)'"
+      >
+        {{ project.name }}
+      </span>
+
+      <span
         v-if="skill.from_plugin && skill.plugin_source"
         class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
         style="background: var(--c-plugin-light, rgba(139, 92, 246, 0.15)); color: var(--c-plugin, #8b5cf6);"
@@ -328,6 +358,13 @@ onUnmounted(() => {
       >
         {{ t("manage.status_duplicate") }}
       </span>
+      <span
+        v-if="hasLinkedElsewhere"
+        class="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
+        style="background: var(--c-warning-light); color: var(--c-warning);"
+      >
+        {{ t("manage.repair_linked_elsewhere") }}
+      </span>
 
       <div class="flex items-center gap-1 ml-auto shrink-0">
         <button
@@ -352,11 +389,11 @@ onUnmounted(() => {
           <Eye :size="14" />
         </button>
         <button
-          v-if="hasLibrarySource"
+          v-if="hasLibrarySource || projectSources.length === 1"
           class="w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-colors hover:bg-[var(--c-danger-light)]"
           style="color: var(--c-danger);"
           @click.stop="showDeleteConfirm = true"
-          :title="t('skills.delete_library')"
+          :title="hasLibrarySource ? t('skills.delete_library') : t('skills.delete_project')"
         >
           <Trash2 :size="14" />
         </button>
@@ -391,9 +428,9 @@ onUnmounted(() => {
 
     <ConfirmDialog
       v-if="showDeleteConfirm"
-      :title="t('skills.delete_library')"
-      :message="t('skills.delete_library_confirm', { name: skill.name })"
-      :confirm-text="t('skills.delete_library')"
+      :title="hasLibrarySource ? t('skills.delete_library') : t('skills.delete_project')"
+      :message="hasLibrarySource ? t('skills.delete_library_confirm', { name: skill.name }) : t('skills.delete_project_confirm', { name: skill.name })"
+      :confirm-text="hasLibrarySource ? t('skills.delete_library') : t('skills.delete_project')"
       :danger="true"
       @confirm="handleDelete"
       @cancel="showDeleteConfirm = false"

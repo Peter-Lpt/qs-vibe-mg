@@ -53,6 +53,8 @@ const resolvingPlan = ref(false);
 const cleaningDanglingPath = ref<string | null>(null);
 const pendingAgentDelete = ref<SkillSource | null>(null);
 const deletingAgentPath = ref<string | null>(null);
+const pendingProjectDelete = ref<SkillSource | null>(null);
+const deletingProjectPath = ref<string | null>(null);
 const detachingPath = ref<string | null>(null);
 const updatingSkill = ref(false);
 const showMarkdownPreview = ref(false);
@@ -485,6 +487,25 @@ function requestDeleteAgentSource(source: SkillSource) {
   if (canDeleteAgentSource(source)) pendingAgentDelete.value = source;
 }
 
+function requestDeleteProjectSource(source: SkillSource) {
+  if (isProjectSource(source)) pendingProjectDelete.value = source;
+}
+
+async function confirmDeleteProjectSource() {
+  const source = pendingProjectDelete.value;
+  if (!source || deletingProjectPath.value) return;
+  deletingProjectPath.value = source.path;
+  try {
+    await skillsStore.deleteProjectSource(props.skill.id, source.path);
+    toast.show(t("skills.deleted", { skill: sourceLabel(source) }), "success");
+    pendingProjectDelete.value = null;
+  } catch (error: unknown) {
+    toast.show(String(error), "error");
+  } finally {
+    deletingProjectPath.value = null;
+  }
+}
+
 async function confirmDeleteAgentSource() {
   const source = pendingAgentDelete.value;
   if (!source || deletingAgentPath.value) return;
@@ -860,6 +881,17 @@ function getAgentNameFromPath(path: string): string {
             <RefreshCw v-if="deletingAgentPath === row.source.path" :size="12" class="animate-spin" />
             <Trash2 v-else :size="12" />
           </button>
+          <button
+            v-if="isProjectSource(row.source)"
+            class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer"
+            style="color: var(--c-danger);"
+            :disabled="deletingProjectPath === row.source.path"
+            :title="t('manage.action_delete')"
+            @click.stop="requestDeleteProjectSource(row.source)"
+          >
+            <RefreshCw v-if="deletingProjectPath === row.source.path" :size="12" class="animate-spin" />
+            <Trash2 v-else :size="12" />
+          </button>
           <button class="w-5 h-5 inline-flex items-center justify-center rounded cursor-pointer" style="color: var(--c-text-secondary);" :title="t('manage.copy_path')" @click.stop="actions.copyPath(row.source)">
             <Copy :size="12" />
           </button>
@@ -1225,6 +1257,14 @@ function getAgentNameFromPath(path: string): string {
       :danger="true"
       @confirm="confirmDeleteAgentSource"
       @cancel="pendingAgentDelete = null"
+    />    <ConfirmDialog
+      v-if="pendingProjectDelete"
+      :title="t('manage.action_delete')"
+      :message="t('skills.delete_project_confirm', { name: `${skill.name || skill.id} (${sourceLabel(pendingProjectDelete)})` })"
+      :confirm-text="t('skills.delete')"
+      :danger="true"
+      @confirm="confirmDeleteProjectSource"
+      @cancel="pendingProjectDelete = null"
     />    <ConfirmDialog
       v-if="pendingOverwrite"
       :title="t('manage.overwrite_confirm_title')"

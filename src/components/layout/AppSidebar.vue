@@ -13,7 +13,7 @@ import type {
 type ManageFilterModel = ReturnType<typeof useManageFilters>;
 
 const ISSUES: IssueFilter[] = ["conflict", "dangling", "duplicate"];
-const LIBRARY_SCOPES: LibraryScope[] = ["missing_library", "library_only"];
+const LIBRARY_SCOPES: LibraryScope[] = ["missing_library", "library_only", "project"];
 
 const SIDEBAR_MIN = 180;
 const SIDEBAR_MAX = 360;
@@ -255,7 +255,7 @@ watch(activeFilterCount, (count) => {
               :disabled="facetCounts.library[scope] === 0 && !filterModel.libraryScope.value.has(scope)"
               @click="filterModel.toggleLibraryScope(scope)"
             >
-              <span class="sidebar-chip__label">{{ t(scope === 'missing_library' ? 'manage.quick_filter_missing_lib' : 'manage.quick_filter_only_lib') }}</span>
+              <span class="sidebar-chip__label">{{ t(scope === 'missing_library' ? 'manage.quick_filter_missing_lib' : scope === 'project' ? 'manage.quick_filter_project' : 'manage.quick_filter_only_lib') }}</span>
               <span class="sidebar-chip__count">{{ facetCounts.library[scope] }}</span>
             </button>
           </div>

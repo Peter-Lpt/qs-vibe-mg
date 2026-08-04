@@ -216,6 +216,12 @@ export const useSkillsStore = defineStore("skills", () => {
     useAgentsStore().fetchAgents();
   }
 
+  async function deleteProjectSource(skillId: string, sourcePath: string) {
+    await invoke("delete_project_source", { skillId, sourcePath });
+    refreshSkills();
+    useAgentsStore().fetchAgents();
+  }
+
   async function previewSkill(skillId: string): Promise<string> {
     return await invoke<string>("preview_skill", { skillId });
   }
@@ -317,6 +323,7 @@ export const useSkillsStore = defineStore("skills", () => {
     updateErrors,
     updateErrorCount,
     deleteSkill,
+    deleteProjectSource,
     previewSkill,
     previewSkillAtPath,
     syncToVibe,

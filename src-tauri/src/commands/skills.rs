@@ -1829,6 +1829,73 @@ fn delete_library_skill_sync(skill_id: String) -> Result<(), VibeError> {
     Ok(())
 }
 
+/// 删除一个项目作用域来源的 skill 目录（移入 trash，可找回）。
+/// 仅允许删除配置的项目根下的 skill 目录，路径做沙箱校验。
+#[tauri::command]
+pub async fn delete_project_source(skill_id: String, source_path: String) -> Result<(), VibeError> {
+    tauri::async_runtime::spawn_blocking(move || delete_project_source_sync(&skill_id, &source_path))
+        .await
+        .map_err(|error| VibeError::Path(format!("delete_project_source task failed: {}", error)))?
+}
+
+fn delete_project_source_sync(skill_id: &str, source_path: &str) -> Result<(), VibeError> {
+    // 1. 路径沙箱：仅允许删除配置的项目根下的 skill 目录
+    let config = load_config()?;
+    let target = Path::new(source_path);
+    let within_project = project_skill_roots(&config)
+        .iter()
+        .any(|root| vibe_fs::is_path_within(target, root));
+    if !within_project {
+        return Err(VibeError::Path(format!(
+            "Refusing to delete source outside project roots: {}",
+            source_path
+        )));
+    }
+
+    // 2. 目标必须是 skill 目录，且目录名与 skill_id 一致
+    if target.file_name().and_then(|name| name.to_str()) != Some(skill_id) {
+        return Err(VibeError::Path(format!(
+            "Source path does not point to skill folder '{}': {}",
+            skill_id, source_path
+        )));
+    }
+    if !target.is_dir() {
+        return Err(VibeError::SkillNotFound {
+            skill_id: skill_id.to_string(),
+        });
+    }
+
+    // 3. 移入 trash（可恢复）
+    trash_project_source(target, skill_id)?;
+    Ok(())
+}
+
+/// 将项目来源的 skill 目录移入 trash（优先 rename，跨卷退化为复制+删除）。
+fn trash_project_source(target: &Path, skill_id: &str) -> Result<(), VibeError> {
+    let vibe_dir = vibe_skills_dir()?;
+    let trash_root = vibe_dir.join(".trash").join("project-sources");
+    fs::create_dir_all(&trash_root)?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let mut trash_path = trash_root.join(format!("{}-{}", skill_id, stamp));
+    let mut suffix = 1;
+    while trash_path.exists() {
+        trash_path = trash_root.join(format!("{}-{}-{}", skill_id, stamp, suffix));
+        suffix += 1;
+    }
+
+    match fs::rename(target, &trash_path) {
+        Ok(()) => Ok(()),
+        Err(rename_error) => {
+            copy_skill_dir_all(target, &trash_path).map_err(|_| VibeError::Io(rename_error))?;
+            fs::remove_dir_all(target)?;
+            Ok(())
+        }
+    }
+}
+
 /// Restore a deleted skill from trash snapshot
 pub fn restore_from_trash(skill_id: &str) -> Result<(), VibeError> {
     let vibe_dir = vibe_skills_dir()?;

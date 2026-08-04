@@ -15,6 +15,8 @@ import SkeletonCard from "../common/SkeletonCard.vue";
 import {
   useManageFilters,
   useManageSelection,
+  classifySkillSources,
+  isNeedsAttention,
   type LibraryScope,
 } from "./manageFilters";
 import type { SmartViewId } from "../../types";
@@ -78,7 +80,7 @@ const stats = computed(() => {
   const all = skillsStore.skills;
   const linked = all.filter((s) => s.linked_agents.length > 0);
   const unlinked = all.filter((s) => s.linked_agents.length === 0);
-  const issues = all.filter((s) => s.has_conflict || s.has_dangling || s.is_duplicate);
+  const issues = all.filter((s) => isNeedsAttention(s, classifySkillSources(s, detectedAgents.value)));
   return {
     total: all.length,
     linked: linked.length,
@@ -90,8 +92,9 @@ const stats = computed(() => {
 // 统计卡 → 视图/筛选快捷入口
 function goToStats(kind: "all" | "linked" | "unlinked" | "issues") {
   if (kind === "issues") {
+    // 待处理口径统一走 attention 视图的 needs_attention 预设（含缺字段/链接到其他位置），
+    // 不再叠加 issues 过滤，避免口径不一。
     appStore.setActiveView("attention");
-    filterModel.issues.value = new Set(["conflict", "dangling", "duplicate"]);
   } else {
     appStore.setActiveView(kind);
   }
@@ -204,7 +207,7 @@ const tokens = computed<Token[]>(() => {
   for (const scope of userScopes.value) {
     list.push({
       key: `scope-${scope}`,
-      label: t(scope === "missing_library" ? "manage.quick_filter_missing_lib" : "manage.quick_filter_only_lib"),
+      label: t(scope === "missing_library" ? "manage.quick_filter_missing_lib" : scope === "project" ? "manage.quick_filter_project" : "manage.quick_filter_only_lib"),
       onRemove: () => filterModel.removeLibraryScope(scope),
     });
   }

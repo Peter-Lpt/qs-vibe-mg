@@ -3,7 +3,7 @@ import type { Agent, Skill, SkillSource, SkillUpdateCheck } from "../../types";
 
 export type StatusPreset = "all" | "needs_attention" | "linked_any" | "unlinked_all";
 export type IssueFilter = "conflict" | "dangling" | "duplicate" | "update_error";
-export type LibraryScope = "missing_library" | "library_only";
+export type LibraryScope = "missing_library" | "library_only" | "project";
 export type AgentMatch = "any" | "exclude";
 export type SortMode = "status" | "updated" | "name" | "linked_agents";
 
@@ -93,6 +93,18 @@ export function classifySkillSources(skill: Skill, agents: readonly Agent[] = []
   return classification;
 }
 
+// 统一"待处理"判定：冲突 / 断链 / 重复 / 缺字段 / 链接到其他位置。
+// 供「待处理」筛选、统计卡、侧边栏计数共用，保证口径一致。
+export function isNeedsAttention(skill: Skill, sources: SourceClassification): boolean {
+  return (
+    skill.has_conflict ||
+    skill.has_dangling ||
+    skill.is_duplicate ||
+    skill.missing_name ||
+    sources.hasLinkedElsewhere
+  );
+}
+
 export function matchesStatusPreset(
   skill: Skill,
   preset: StatusPreset,
@@ -102,7 +114,7 @@ export function matchesStatusPreset(
   // Plugin skills 由独立 API 处理，这里只处理 regular skills
   const sources = classifySkillSources(skill, agents);
   if (preset === "needs_attention") {
-    return skill.has_conflict || skill.has_dangling || sources.hasLinkedElsewhere;
+    return isNeedsAttention(skill, sources);
   }
   if (preset === "linked_any") return sources.hasAgentSymlink;
   return !sources.hasAgentSymlink;
@@ -128,7 +140,8 @@ export function matchesLibraryScope(
   // Plugin skills 由独立 API 处理，hasMarketplace 总是 false
   return (
     (scopes.has("missing_library") && !sourceInfo.hasLibrary) ||
-    (scopes.has("library_only") && sourceInfo.hasLibrary && !sourceInfo.hasAgent && !sourceInfo.hasProject && !sourceInfo.hasExternal)
+    (scopes.has("library_only") && sourceInfo.hasLibrary && !sourceInfo.hasAgent && !sourceInfo.hasProject && !sourceInfo.hasExternal) ||
+    (scopes.has("project") && sourceInfo.hasProject)
   );
 }
 
@@ -245,6 +258,7 @@ export function computeFacetCounts(
     library: {
       missing_library: count({ ...withoutLibrary, libraryScope: new Set(["missing_library"]) }),
       library_only: count({ ...withoutLibrary, libraryScope: new Set(["library_only"]) }),
+      project: count({ ...withoutLibrary, libraryScope: new Set(["project"]) }),
     },
   };
 }
